@@ -6,7 +6,8 @@ Flask-Cors==5.0.0
 flask_mail
 
 # Database
-psycopg2-binary==2.9.10  # PostgreSQL database driver 
+psycopg2-binary==2.9.10  # PostgreSQL database driver
+Flask-Migrate==4.0.7  # Database migrations 
 
 # Data Processing and Analysis
 pandas
