@@ -1,21 +1,24 @@
+import uuid
+from sqlalchemy.dialects.postgresql import UUID
 from app import db
 
 
+
 class Feedback(db.Model):
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    userID = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    userID = db.Column(UUID(as_uuid=True), db.ForeignKey('user.id'), nullable=False)
     assessment = db.Column(db.String(50), nullable=False) # e.g Bullish, Bearish, Neutral
-    newsID = db.Column(db.Integer, db.ForeignKey('news.id'), nullable=False)
+    newsID = db.Column(UUID(as_uuid=True), db.ForeignKey('news.id'), nullable=False)
 
     def __repr__(self):
         return f"<Feedback {self.assessment}>"
     
     def to_dict(self):
         return {
-            "id": self.id,
-            "userID": self.userID,
+            "id": str(self.id),
+            "userID": str(self.userID),
             "assessment": self.assessment,
-            "newsID": self.newsID
+            "newsID": str(self.newsID)
         }
     
 
