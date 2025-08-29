@@ -19,4 +19,18 @@ def get_users():
             "created_at": user.created_at,
         })
     return format_response(users, "Users fetched successfully", 200)
-    # return "User route is working"
+
+@user_bp.route('/<id>', methods=['GET'])
+def get_user(id):
+    user = User.query.get(id)
+    if user is None:
+        return format_response(None, "User not found", 404)
+    user_data = {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "role": user.role,
+        "rm_id": user.rm_id,
+        "created_at": user.created_at,
+    }
+    return format_response(user_data, "User fetched successfully", 200)
