@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>	
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd
+        http://www.liquibase.org/xml/ns/pro
+        http://www.liquibase.org/xml/ns/pro/liquibase-pro-latest.xsd">
+    <!-- ChangeSet to create 'feedback' table -->
+    <changeSet id="create-feedback-table" author="Shang Wee">
+        <createTable tableName="feedback">
+            <column name="id" type="SERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="userID" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_feedback_user" referencedTableName="user" referencedColumnNames="id"/>
+            </column>
+            <column name="assessment" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="newsID" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_feedback_news" referencedTableName="news" referencedColumnNames="id"/>
+            </column>
+        </createTable>
+
+        <rollback>
+            <dropTable tableName="feedback"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

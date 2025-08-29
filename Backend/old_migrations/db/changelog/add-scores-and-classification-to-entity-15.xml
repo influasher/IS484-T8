@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>	
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd
+        http://www.liquibase.org/xml/ns/pro
+        http://www.liquibase.org/xml/ns/pro/liquibase-pro-latest.xsd">
+
+  <!-- ChangeSet to add scoring and classification columns to entity -->
+  <changeSet id="add-scores-and-classification-to-entity" author="Shang Wee">
+
+    <addColumn tableName="entity">
+      <column name="finbert_score" type="FLOAT"/>
+      <column name="gemini_score" type="FLOAT"/>
+      <column name="open_ai_score" type="FLOAT"/>
+      <column name="confidence_score" type="FLOAT"/>
+      <column name="time_decay" type="FLOAT"/>
+      <column name="simple_average" type="FLOAT"/>
+      <column name="classification" type="VARCHAR(50)"/>
+    </addColumn>
+
+    <rollback>
+      <dropColumn tableName="entity" columnName="finbert_score"/>
+      <dropColumn tableName="entity" columnName="gemini_score"/>
+      <dropColumn tableName="entity" columnName="open_ai_score"/>
+      <dropColumn tableName="entity" columnName="confidence_score"/>
+      <dropColumn tableName="entity" columnName="time_decay"/>
+      <dropColumn tableName="entity" columnName="simple_average"/>
+      <dropColumn tableName="entity" columnName="classification"/>
+    </rollback>
+
+  </changeSet>
+
+</databaseChangeLog>

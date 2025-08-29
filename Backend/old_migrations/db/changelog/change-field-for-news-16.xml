@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>	
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd
+        http://www.liquibase.org/xml/ns/pro
+        http://www.liquibase.org/xml/ns/pro/liquibase-pro-latest.xsd">
+
+  <!-- ChangeSet to add scoring and classification columns to entity -->
+  <changeSet id="change-field-for-news-16" author="Shang Wee">
+
+    <addColumn tableName="news">
+      <column name="company_names" type="TEXT[]"/>
+      <column name="regions" type="TEXT[]"/>
+      <column name="sectors" type="TEXT[]"/>
+      <column name="third_model_score" type="FLOAT"/>
+    </addColumn>
+
+    <rollback>
+      <dropColumn tableName="news" columnName="company_names"/>
+      <dropColumn tableName="news" columnName="regions"/>
+      <dropColumn tableName="news" columnName="sectors"/>
+      <dropColumn tableName="news" columnName="third_model_score"/>
+    </rollback>
+
+  </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>	
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd
+        http://www.liquibase.org/xml/ns/pro
+        http://www.liquibase.org/xml/ns/pro/liquibase-pro-latest.xsd">
+  <!-- ChangeSet to add 'finbert_score', 'second_model_score', and 'agreement_rate' to 'news' table -->
+    <changeSet id="add-model-scores-to-news" author="Shang Wee">
+        <addColumn tableName="news">
+            <column name="finbert_score" type="FLOAT"/>
+            <column name="second_model_score" type="FLOAT"/>
+            <column name="agreement_rate" type="FLOAT"/>
+        </addColumn>
+
+        <rollback>
+            <!-- Rollback: Drop the added columns -->
+            <dropColumn tableName="news" columnName="finbert_score"/>
+            <dropColumn tableName="news" columnName="second_model_score"/>
+            <dropColumn tableName="news" columnName="agreement_rate"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

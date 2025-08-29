@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!-- ChangeSet to add 'score' column to 'news' table -->
+    <changeSet id="add-score-column-to-news" author="Shang Wee">
+        <addColumn tableName="news">
+            <column name="score" type="FLOAT"/>
+        </addColumn>
+
+        <rollback>
+            <!-- Rollback: Drop the 'score' column -->
+            <dropColumn tableName="news" columnName="score"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

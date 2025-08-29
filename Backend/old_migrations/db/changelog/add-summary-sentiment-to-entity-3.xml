@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>	
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd
+        http://www.liquibase.org/xml/ns/pro
+        http://www.liquibase.org/xml/ns/pro/liquibase-pro-latest.xsd">
+    <changeSet id="4" author="Shang Wee">
+       <!-- Add the 'summary' column as TEXT, allowing NULL -->
+        <addColumn tableName="entity">
+            <column name="summary" type="TEXT" />
+        </addColumn>
+        <!-- Add the 'sentiment_score' column as DOUBLE, allowing NULL -->
+        <addColumn tableName="entity">
+            <column name="sentiment_score" type="DOUBLE" />
+        </addColumn>
+        <rollback>
+            <!-- Rollback changes: Drop the 'summary' column -->
+            <dropColumn tableName="entity" columnName="summary" />
+            <!-- Rollback changes: Drop the 'sentiment_score' column -->
+            <dropColumn tableName="entity" columnName="sentiment_score" />
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>	
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd
+        http://www.liquibase.org/xml/ns/pro
+        http://www.liquibase.org/xml/ns/pro/liquibase-pro-latest.xsd">
+    <!-- ChangeSet to add 'confidence' column to 'news' table -->
+    <changeSet id="add-confidence-column-to-news" author="Shang Wee">
+        <addColumn tableName="news">
+            <column name="confidence" type="FLOAT"/>
+        </addColumn>
+
+        <rollback>
+            <!-- Rollback: Drop the 'confidence' column -->
+            <dropColumn tableName="news" columnName="confidence"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

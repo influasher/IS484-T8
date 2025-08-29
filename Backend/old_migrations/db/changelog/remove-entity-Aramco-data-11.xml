@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>	
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd
+        http://www.liquibase.org/xml/ns/pro
+        http://www.liquibase.org/xml/ns/pro/liquibase-pro-latest.xsd">
+    <!-- ChangeSet to delete 'Aramco' from the 'entity' table -->
+    <changeSet id="delete-aramco-entity" author="your_name" runOnChange="true">
+        <delete tableName="entity">
+            <where>name = 'Aramco'</where>
+        </delete>
+
+        <rollback>
+            <!-- Rollback: Reinsert 'Aramco' entity if deleted -->
+            <insert tableName="entity">
+                <column name="name" value="Aramco"/>
+                <column name="summary" value="Saudi Aramco is the world's largest oil producer and one of the most valuable companies globally. It is a state-owned energy giant responsible for a significant portion of global crude oil production and refining."/>
+                <column name="ticker" value="2222.SR"/>
+            </insert>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

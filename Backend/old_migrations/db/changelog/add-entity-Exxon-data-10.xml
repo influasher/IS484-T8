@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>	
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd
+        http://www.liquibase.org/xml/ns/pro
+        http://www.liquibase.org/xml/ns/pro/liquibase-pro-latest.xsd">
+    <!-- ChangeSet to seed data into the news table from CSV -->
+     <changeSet id="add-new-entity" author="your_name">
+        <insert tableName="entity">
+            <column name="name" value="Exxon Mobil Corp"/>
+            <column name="summary" value="Exxon Mobil Corporation is a leading global oil and gas company, formed in 1999 through the merger of Exxon and Mobil. Headquartered in Irving, Texas, it operates in exploration, production, refining, and distribution across 60+ countries. ExxonMobil is a major player in LNG, offshore drilling, and energy technologies, with growing investments in carbon capture and lower-carbon solutions, despite its reliance on fossil fuels."/>
+            <column name="ticker" value="XOM"/>
+        </insert>
+
+        <rollback>
+            <!-- Rollback: Delete the inserted entity -->
+            <delete tableName="entity">
+                <where>name = 'Exxon Mobil Corp'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

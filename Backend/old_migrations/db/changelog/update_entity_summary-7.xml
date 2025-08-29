@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd
+        http://www.liquibase.org/xml/ns/pro
+        http://www.liquibase.org/xml/ns/pro/liquibase-pro-latest.xsd">
+    <!-- ChangeSet to update the 'summary' column in the 'entity' table -->
+    <changeSet id="update-entity-summary" author="Shang Wee" runOnChange="true">
+        <update tableName="entity">
+            <column name="summary" value="Tesla is a leading electric vehicle (EV) and clean energy company known for producing EVs, battery storage solutions, and solar energy products. It was founded by Elon Musk and others, revolutionizing the automobile industry with self-driving and AI-powered capabilities."/>
+            <where>name = 'Tesla'</where>
+        </update>
+
+        <update tableName="entity">
+            <column name="summary" value="TSMC is the world's largest contract semiconductor manufacturer, producing chips for major tech companies, including Apple, Nvidia, and AMD. It plays a crucial role in global semiconductor supply chains."/>
+            <where>name = 'TSMC'</where>
+        </update>
+
+        <update tableName="entity">
+            <column name="summary" value="Apple is a global leader in consumer electronics, known for its iPhones, Mac computers, iPads, and software ecosystem. It has a strong brand reputation and a loyal customer base, with significant revenue from hardware sales, services, and software."/>
+            <where>name = 'Apple'</where>
+        </update>
+
+        <update tableName="entity">
+            <column name="summary" value="HSBC is one of the largest multinational banks, offering a wide range of financial services, including retail and corporate banking, wealth management, and investment banking, with a strong presence in Asia, Europe, and the Americas."/>
+            <where>name = 'HSBC'</where>
+        </update>
+
+        <update tableName="entity">
+            <column name="summary" value="Saudi Aramco is the world's largest oil producer and one of the most valuable companies globally. It is a state-owned energy giant responsible for a significant portion of global crude oil production and refining."/>
+            <where>name = 'Aramco'</where>
+        </update>
+
+        <rollback>
+            <!-- Rollback: Reset summaries to NULL -->
+            <update tableName="entity">
+                <column name="summary" value="NULL"/>
+                <where>name IN ('Tesla', 'TSMC', 'Apple', 'HSBC', 'Aramco')</where>
+            </update>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
