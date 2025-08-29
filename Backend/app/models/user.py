@@ -13,6 +13,8 @@ class User(db.Model):
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     username = db.Column(db.String(80), nullable=False, unique=True)
     email = db.Column(db.String(120), nullable=False, unique=True)
+    first_name = db.Column(db.String(50), nullable=False)
+    last_name = db.Column(db.String(50), nullable=False)
     password = db.Column(db.String(256), nullable=False)
     role = db.Column(db.Enum(UserRole), nullable=False)
     rm_id = db.Column(UUID(as_uuid=True), db.ForeignKey('user.id'), nullable=True)
