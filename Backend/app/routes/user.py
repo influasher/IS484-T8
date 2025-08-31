@@ -14,7 +14,7 @@ def get_users():
             "id": user.id,
             "username": user.username,
             "email": user.email,
-            "role": user.role,
+            "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
             "rm_id": user.rm_id,
             "created_at": user.created_at,
         })
@@ -29,7 +29,7 @@ def get_clients():
             "id": user.id,
             "username": user.username,
             "email": user.email,
-            "role": user.role,
+            "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
             "rm_id": user.rm_id,
             "created_at": user.created_at,
         })
@@ -44,7 +44,7 @@ def get_user(id):
         "id": user.id,
         "username": user.username,
         "email": user.email,
-        "role": user.role,
+        "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
         "rm_id": user.rm_id,
         "created_at": user.created_at,
     }
