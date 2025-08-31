@@ -143,9 +143,3 @@ uv run flask db upgrade
 # Downgrade migrations
 uv run flask db downgrade
 ```
-git push origin feature/your-feature-name
-```
-
-4. Submit pull request
-
-
