@@ -59,7 +59,7 @@ Backend/
 
 1. **Clone the Repository:**
 ```bash
-git clone https://github.com/Shangwee/IS484-T2
+git clone https://github.com/influasher/IS484-T8
 cd IS484-T2/Backend
 ```
 
