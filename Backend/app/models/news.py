@@ -1,8 +1,9 @@
+import uuid
+from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from app import db
-from sqlalchemy.dialects.postgresql import ARRAY
 
 class News(db.Model):
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     publisher = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False)
     published_date = db.Column(db.DateTime, nullable=False)

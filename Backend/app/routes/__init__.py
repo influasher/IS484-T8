@@ -6,6 +6,8 @@ from .pdf import pdf_bp
 from app.routes.send_pdf import send_pdf_bp
 from app.routes.feedback import feedback_bp
 from .sentiment_history import sentiment_history_bp
+from .user import user_bp
+
 
 def register_routes(app):
     app.register_blueprint(auth_bp, url_prefix='/auth')
@@ -16,4 +18,5 @@ def register_routes(app):
     app.register_blueprint(send_pdf_bp, url_prefix='/send_pdf')
     app.register_blueprint(feedback_bp, url_prefix='/feedback')
     app.register_blueprint(sentiment_history_bp, url_prefix='/sentiment_history')
+    app.register_blueprint(user_bp, url_prefix='/user')
 

@@ -1,8 +1,10 @@
+import uuid
+from sqlalchemy.dialects.postgresql import UUID
 from app import db
 
 class SentimentHistory(db.Model):    
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    entity_id = db.Column(db.Integer, db.ForeignKey('entity.id'), nullable=False)
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entity_id = db.Column(UUID(as_uuid=True), db.ForeignKey('entity.id'), nullable=False)
     date = db.Column(db.Date, nullable=False)
     sentiment_score = db.Column(db.Float, nullable=False)
 
@@ -11,8 +13,8 @@ class SentimentHistory(db.Model):
     
     def to_dict(self):
         return {
-            'id': self.id,
-            'entity_id': self.entity_id,
+            'id': str(self.id),
+            'entity_id': str(self.entity_id),
             'date': self.date.strftime('%Y-%m-%d'),
             'sentiment_score': self.sentiment_score
         }

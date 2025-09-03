@@ -8,10 +8,9 @@ from app.utils.helpers import get_article_details
 from app.services.article_scraper import scrape_article
 from app.utils.scraping_quality import evaluate_scraping_quality
 
-
-
 def get_stock_price(ticker):
     stock = yf.Ticker(ticker)
+    stock.actions
     stock_info = stock.info
     stock_price = stock_info['currentPrice']
     return stock_price
