@@ -7,20 +7,17 @@ from app.models.news import News as NewsModel
 from app.utils.helpers import get_article_details
 from app.services.article_scraper import scrape_article
 from app.utils.scraping_quality import evaluate_scraping_quality
-session = requests_cache.CachedSession('yfinance.cache')
-session.headers['User-agent'] = 'my-program/1.0'
 
 
 
 def get_stock_price(ticker):
-    stock = yf.Ticker(ticker, session=session)
-    stock.actions
+    stock = yf.Ticker(ticker)
     stock_info = stock.info
     stock_price = stock_info['currentPrice']
     return stock_price
 
 def get_stock_history(ticker):
-    stock = yf.Ticker(ticker, session=session)
+    stock = yf.Ticker(ticker)
     df = stock.history(period='1mo')
 
     if df.empty:
@@ -34,7 +31,7 @@ def get_stock_history(ticker):
     return data
 
 def get_stock_news(ticker):
-    stock = yf.Search(ticker, session=session, enable_fuzzy_query=True, include_cb=False)
+    stock = yf.Search(ticker, enable_fuzzy_query=True, include_cb=False)
     news = stock.news
 
     newslist = []
@@ -125,8 +122,6 @@ def get_stock_news(ticker):
                 sectors=sectors
             )
 
-            db.session.add(news_db)
-            db.session.commit()
             success_count += 1
 
             newslist.append({

@@ -9,7 +9,7 @@ const Client = ({ client }) => {
     const navigate = useNavigate();
     const handleOpen = () => {
         const id = client.id ?? client.username;
-        navigate(`/clients/${encodeURIComponent(id)}`);
+        navigate(`/client/${encodeURIComponent(id)}`);
     };
 
     return (

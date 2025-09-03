@@ -6,6 +6,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Navbar from './components/Navbar';
 import './styles/App.css';
 import ClientCards from './components/clients/ClientCards';
+import ClientRecc from './components/clients/ClientRecc';
 import { useParams } from 'react-router-dom';
 
 function App() {
@@ -20,11 +21,9 @@ function App() {
       <main className="App-content">
         {/* Routes */}
         <Routes>
-          <Route path="/" element={<Navigate to="/" />} /> {/* Default route */}
+          <Route path="/" element={<ClientCards sx={{ pt: "84px" }} />} />
+          <Route path="/client/:id" element={<ClientRecc />} />
         </Routes>
-
-        <ClientCards sx={{ pt: "84px" }} />
-
       </main>
     </div>
   );

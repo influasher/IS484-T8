@@ -83,7 +83,6 @@ export const Searchbar = ({
         sx={{ flex: 1 }}
       />
 
-      {/* Clear button (always visible) */}
       <Tooltip title="Clear (Esc)">
         <IconButton
           size="small"
@@ -94,25 +93,6 @@ export const Searchbar = ({
           <CloseRoundedIcon />
         </IconButton>
       </Tooltip>
-
-      {/* Submit button (optional; rendered only if onSubmit provided) */}
-      {isSubmitFn && (
-        <>
-          <Divider orientation="vertical" flexItem />
-          <Tooltip title="Search (Enter)">
-            <span>
-              <IconButton
-                size="small"
-                aria-label="Submit search"
-                type="submit"
-                disabled={disabled}
-              >
-                <SearchRoundedIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </>
-      )}
     </Paper>
   );
 };
