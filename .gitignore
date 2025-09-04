@@ -59,4 +59,6 @@ data/
 Thumbs.db
 yfinance.cache
 Backend/app/test_summarisation.py
-Backend/migrations/liquibase.properties
+liquibase.properties
+Backend/old_migrations/liquibase.properties
+Backend/old_migrations/liquibase.properties

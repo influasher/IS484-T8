@@ -6,7 +6,7 @@ from app.utils.helpers import format_response
 feedback_bp = Blueprint('feedback', __name__)
 
 # ** Get Feedback by User ID
-@feedback_bp.route('/user/<int:userID>', methods=['GET'])
+@feedback_bp.route('/user/<uuuid:userID>', methods=['GET'])
 def get_feedback_by_user(userID):
     feedback = get_feedback_by_userID(userID)
     if feedback is None:
@@ -14,7 +14,7 @@ def get_feedback_by_user(userID):
     return format_response(feedback, "Feedback fetched successfully", 200)
 
 # ** Get Feedback by News ID
-@feedback_bp.route('/news/<int:newsID>', methods=['GET'])
+@feedback_bp.route('/news/<uuid:newsID>', methods=['GET'])
 def get_feedback_by_news(newsID):
     feedback = get_feedback_by_newsID(newsID)
     if feedback is None:
@@ -22,7 +22,7 @@ def get_feedback_by_news(newsID):
     return format_response(feedback, "Feedback fetched successfully", 200)
 
 # ** Get Feedback by User ID and News ID
-@feedback_bp.route('/user/<int:userID>/news/<int:newsID>', methods=['GET'])
+@feedback_bp.route('/user/<uuid:userID>/news/<uuid:newsID>', methods=['GET'])
 def get_feedback_by_user_and_news(userID, newsID):
     feedback = get_feedback_by_userID_and_newsID(userID, newsID)
     if feedback is None:
