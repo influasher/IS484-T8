@@ -1,7 +1,8 @@
-import React from 'react';
-import useFetch from '../../hooks/useFetch';
+import React from "react";
+import useFetch from "../../hooks/useFetch";
+import { Box, Typography } from "@mui/material";
 
-function Entity( {EntityTicker} ) {
+function Entity({ EntityTicker }) {
   const url = `/entities/${EntityTicker}`;
 
   const { data, loading, error } = useFetch(url);
@@ -9,11 +10,22 @@ function Entity( {EntityTicker} ) {
   const entity = data ? data.data : "N/A";
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.entityname}>
-        {loading ? "Loading..." : error ? "Error fetching data" : entity.name || "N/A"}
-      </h1>
-    </div>
+    <Box sx={styles.container}>
+      <Typography sx={styles.entityname} variant="h1">
+        {loading
+          ? "Loading..."
+          : error
+          ? "Error fetching data"
+          : (
+              <>
+                {entity.name}{" "}
+                <Typography component="span" sx={{ color: "grey.400", fontWeight: "500" }} variant="h5">
+                  ({EntityTicker})
+                </Typography>
+              </>
+            ) || "N/A"}
+      </Typography>
+    </Box>
   );
 }
 const styles = {
@@ -22,7 +34,7 @@ const styles = {
     flexDirection: "column", // Stack content vertically
     justifyContent: "center", // Center content vertically
     alignItems: "center", // Center content horizontally
-    padding: "10px", // Add padding for spacing
+    padding: "5px", // Add padding for spacing
     boxSizing: "border-box", // Include padding in width/height calculations
     maxWidth: "1200px", // Limit maximum width for larger screens
     margin: "0 auto", // Center the container horizontally
@@ -30,7 +42,7 @@ const styles = {
   entityname: {
     color: "black",
     fontWeight: "700",
-    fontSize: "clamp(1.5rem, 4vw, 3rem)", // Dynamic font size (min: 1.5rem, max: 3rem)
+    fontSize: "clamp(1rem, 4vw, 2.5rem)", // Dynamic font size (min: 1.5rem, max: 3rem)
     textAlign: "center", // Center text alignment
     margin: "0 auto", // Center horizontally
     maxWidth: "90vw", // Ensure it doesn't overflow on small screens
@@ -39,4 +51,3 @@ const styles = {
 };
 
 export default Entity;
-

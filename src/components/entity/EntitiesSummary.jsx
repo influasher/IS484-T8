@@ -64,8 +64,8 @@ const Entities = () => {
           boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
         }}
       >
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={4}>
+        <Grid container spacing={2} justifyContent="space-between" alignItems="center">
+          <Grid item size="grow">
             <TextField
               fullWidth
               variant="outlined"
@@ -86,7 +86,7 @@ const Entities = () => {
               }}
             />
           </Grid>
-          <Grid item xs={6} md={4}>
+          <Grid item size={{ xs: 6, sm: 4, md: 4, lg: 3, xl: 3 }}>
             <FormControl fullWidth variant="outlined">
               <InputLabel id="sort-select-label">Sort By</InputLabel>
               <Select
@@ -119,7 +119,7 @@ const Entities = () => {
         {/* Results Counter */}
         <Box sx={{ mt: 2 }}>
           <Typography variant="body2" color="text.secondary">
-            Showing {entityData.length} on page {currentPage} of {totalPages}
+            Showing {entityData.length} entities on page {currentPage} of {totalPages}
             {searchTerm && ` for "${searchTerm}"`}
           </Typography>
         </Box>
