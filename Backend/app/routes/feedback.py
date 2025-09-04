@@ -6,7 +6,7 @@ from app.utils.helpers import format_response
 feedback_bp = Blueprint('feedback', __name__)
 
 # ** Get Feedback by User ID
-@feedback_bp.route('/user/<uuuid:userID>', methods=['GET'])
+@feedback_bp.route('/user/<uuid:userID>', methods=['GET'])
 def get_feedback_by_user(userID):
     feedback = get_feedback_by_userID(userID)
     if feedback is None:
