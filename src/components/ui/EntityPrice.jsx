@@ -24,7 +24,7 @@ function EntityPrice(id) {
           wordWrap: "break-word",
         }}
       >
-        ${loading ? "Loading..." : error ? "Error" : price}
+        {loading ? "Loading..." : error ? "Error" : `$${price}`}
       </Typography>
     </div>
   );
