@@ -3,6 +3,7 @@ from app.models.entity import Entity
 from app.services.data_ingestion_finviz import get_stock_fundamentals
 from app.services.data_ingestion_yfinance import get_stock_price, get_stock_history
 from app.services.sentiment_history_services import get_sentiment_history_by_entity_id, create_sentiment_history
+from app.services.entities_service import get_all_entities
 from app import db
 from app.utils.decorators import jwt_required
 from app.utils.helpers import format_response
@@ -10,27 +11,20 @@ from app.utils.helpers import format_response
 entities_bp = Blueprint('entities', __name__)
 
 # ** Get Entities
-@entities_bp.route('/', methods=['GET'])
+@entities_bp.route("/", methods=['GET'])
 def get_entities():
-    db_entities = Entity.query.all()
-    entities = []
-    for entity in db_entities:
-        entities.append({
-            "id": entity.id,
-            "name": entity.name,
-            "ticker": entity.ticker,
-            "summary": entity.summary,
-            "sentiment_score": entity.sentiment_score,
-            "finbert_score": entity.finbert_score,
-            "gemini_score": entity.gemini_score,
-            "open_ai_score": entity.open_ai_score,
-            "confidence_score": entity.confidence_score,
-            "time_decay": entity.time_decay,
-            "simple_average": entity.simple_average,
-            "classification": entity.classification,
-            "sentiment_history": []
-        })
-    return format_response(entities, "Entities fetched successfully", 200)
+    """Get paginated entities"""
+    page = request.args.get('page', 1, type=int)  # Get the 'page' parameter from the request, default is 1
+    per_page = request.args.get('per_page', 4, type=int)  # Get 'per_page' parameter, default is 10
+
+    search_term = request.args.get('search', None)  # Get search term
+    sort_order = request.args.get('sort_order', 'name-asc')  # Get sorting params - Default to ascending
+
+    entities_list = get_all_entities(page, per_page, sort_order, search_term)
+
+    if not entities_list:
+        return format_response([], "Entities not found", 404)
+    return format_response(entities_list, "Entities fetched successfully", 200)
 
 # ** Create Entity
 @entities_bp.route('/', methods=['POST'])
