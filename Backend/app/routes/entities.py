@@ -50,7 +50,7 @@ def create_entity():
     }, "Entity created successfully", 201)
 
 # ** Update Entity
-@entities_bp.route('/<int:id>', methods=['PUT'])
+@entities_bp.route('/<uuid:id>', methods=['PUT'])
 @jwt_required
 def update_entity(id):
     entity = Entity.query.get(id)
@@ -102,7 +102,7 @@ def get_entity_details(ticker):
     }, "Entity fetched successfully", 200)
 
 # ** get entity stock price
-@entities_bp.route('/<int:id>/stock', methods=['GET'])
+@entities_bp.route('/<uuid:id>/stock', methods=['GET'])
 def get_entity_stock_price(id):
     entity = Entity.query.get(id)
     if entity is None:
@@ -117,8 +117,9 @@ def get_entity_stock_price(id):
     }, "Stock price fetched successfully", 200)
 
 # ** get stock chart data
-@entities_bp.route('/<int:id>/chart', methods=['GET'])
+@entities_bp.route('/<uuid:id>/chart', methods=['GET'])
 def get_entity_stock_chart(id):
+    print("Fetching stock chart for entity ID:", id)
     entity = Entity.query.get(id)
     if entity is None:
         return format_response(None, "Entity not found", 404)
