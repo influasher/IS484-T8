@@ -9,7 +9,7 @@ import { Tooltip, OverlayTrigger } from 'react-bootstrap';
 const NewsSources = () => {
   const location = useLocation();
   const { id } = location.state || { id: null };
-  const { data } = useFetch(`news/${id}`);
+  const { data } = useFetch(`news/id/${id}`);
 
   const newsData = data ? data.data : null;
 

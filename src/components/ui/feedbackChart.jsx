@@ -12,7 +12,7 @@ function PieChart({ key }) {
   const { data, loading, error } = useFetch(`feedback/news/${id}`, { key });
 
   // Fetch the agreement rate
-  const { data: agreementData } = useFetch(`/news/${id}`);  // Assuming a different endpoint
+  const { data: agreementData } = useFetch(`/news/id/${id}`);  // Assuming a different endpoint
   const agreementScore = agreementData?.data?.agreement_rate;
 
 

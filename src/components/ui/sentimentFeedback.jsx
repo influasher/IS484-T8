@@ -17,7 +17,7 @@ const SentimentFeedbackForm = ({ newsTitle, onFeedbackSubmit }) => {
   const location = useLocation();
   const { id } = location.state || { id: null }; // Retrieve the id from state
 
-  const { data, loading, error } = useFetch(`/news/${id}`); // Fetch news data from the API with the id parameter
+  const { data, loading, error } = useFetch(`/news/id/${id}`); // Fetch news data from the API with the id parameter
   const filteredNewsData = data ? data.data : []; // Extract news data from the response
   const agreementScore = filteredNewsData.agreement_rate;
 
