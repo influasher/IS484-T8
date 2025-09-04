@@ -249,7 +249,7 @@ def resync_news():
     
     return format_response([], "No news data found", 404)
 
-@news_bp.route("/<string:entity>", methods=['GET'])
+@news_bp.route("/entity/<string:entity>", methods=['GET'])
 def get_news(entity):
     """Get paginated news based on entity"""
     page = request.args.get('page', 1, type=int)  # Default to page 1
@@ -267,12 +267,12 @@ def get_news(entity):
     return format_response(news_list, "News fetched successfully", 200)
 
 # ** get news based on id
-@news_bp.route("/<uuid:id>", methods=['GET'])
+@news_bp.route("/id/<uuid:id>", methods=['GET'])
 def get_news_by_id(id):
     news = news_by_id(id)
     if news:
         return format_response(news, "News fetched successfully", 200)
-    return format_response([], "News not found", 404)   
+    return format_response([], "News not found", 404)
 
 # ** get all news
 @news_bp.route("/", methods=['GET'])

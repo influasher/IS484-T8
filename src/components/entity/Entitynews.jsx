@@ -66,7 +66,7 @@ const News = ( {EntityName} ) => {
   const newsPerPage = 3; // Matches backend
   
   // Construct API URL with pagination parameters
-  const url = `/news/${EntityName}?page=${currentPage}&per_page=${newsPerPage}`;
+  const url = `/news/entity/${EntityName}?page=${currentPage}&per_page=${newsPerPage}`;
   
   const { data, loading, error } = useFetch(url);
   
