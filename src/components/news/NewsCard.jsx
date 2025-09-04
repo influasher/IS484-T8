@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -11,6 +11,7 @@ import { Link } from "react-router-dom";
 
 // Main News Component
 const NewsCard = ({ news }) => {
+  const [selectedNews, setSelectedNews] = useState(null); // State to track selected news
   return (
     <Card
       sx={{
@@ -34,11 +35,7 @@ const NewsCard = ({ news }) => {
       <CardContent sx={{ p: 0, "&:last-child": { pb: 0 }, flexGrow: 1 }}>
         {/* News Header */}
         <Box sx={{ mb: 1 }}>
-          {" "}
-          {/* Reduced from mb: 2 */}
           <Typography variant="h6" sx={{ mb: 0.5 }}>
-            {" "}
-            {/* Reduced from mb: 1 */}
             <MuiLink
               component={Link}
               to="/Individualnewspage"
@@ -77,14 +74,10 @@ const NewsCard = ({ news }) => {
 
         {/* Publisher and Date */}
         <Typography variant="body2" sx={{ mb: 0.5, color: "#666" }}>
-          {" "}
-          {/* Reduced from mb: 1 */}
           <strong>Publisher:</strong> {news.publisher}
         </Typography>
 
         <Typography variant="body2" sx={{ mb: 1, color: "#666" }}>
-          {" "}
-          {/* Reduced from mb: 2 */}
           <strong>Date:</strong> {new Date(news.published_date).toDateString()}
         </Typography>
 
