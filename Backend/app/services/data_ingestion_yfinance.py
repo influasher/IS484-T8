@@ -121,8 +121,6 @@ def get_stock_news(ticker):
                 sectors=sectors
             )
 
-            db.session.add(news_db)
-            db.session.commit()
             success_count += 1
 
             newslist.append({

@@ -10,21 +10,46 @@ import AccountCircleRoundedIcon from "@mui/icons-material/AccountCircleRounded";
 import { useNavigate } from "react-router-dom";
 
 const NavBar = ({
-  searchValue,
-  onSearchChange,
   onSearchSubmit,
   placeholder = "Search…",
   elevation = 0,
   sticky = true,
 }) => {
+  const [query, setQuery] = React.useState("");
   const navigate = useNavigate();
+
   const handleHomeClick = (e) => {
-    navigate('/');
+    if (typeof onHomeClick === "function") return onHomeClick();
+    navigate("/");
   };
 
   const handleProfileClick = (e) => {
-    navigate('/profile');
+    if (typeof onProfileClick === "function") return onProfileClick();
+    navigate("/profile");
   };
+
+  const handleSearchChange = (newValue) => {
+    setQuery(newValue);
+  };
+
+  const handleClear = () => {
+    setQuery(""); // resets the search field
+  };
+
+  // const handleSearchSubmit = (submittedValue) => {
+  //   // 👇 your search logic here
+  //   console.log("Searching for:", submittedValue);
+
+  //   // Example: call an API
+  //   fetch(`/api/search?q=${encodeURIComponent(submittedValue)}`)
+  //     .then((res) => res.json())
+  //     .then((data) => {
+  //       console.log("Search results:", data);
+  //     })
+  //     .catch((err) => {
+  //       console.error("Search error:", err);
+  //     });
+  // };
 
   return (
     <AppBar
@@ -32,28 +57,31 @@ const NavBar = ({
       color="transparent"
       elevation={elevation}
       sx={{
-        bgcolor: (theme) => theme.palette.grey[200],
-        borderBottom: 1,
+        zIndex: (t) => t.zIndex.modal + 1,
+        bgcolor: (theme) => theme.palette.grey[300],
+        borderBottom: 1.5,
         borderColor: "divider",
+        boxShadow: (theme) => `0 1px 4px ${theme.palette.grey[400]}33`,
       }}
     >
       <Toolbar disableGutters sx={{ minHeight: 64 , mx: 3 }}>
         <Searchbar
-          value={searchValue}
-          onChange={onSearchChange}
+          value={query}
+          onChange={handleSearchChange}
           onSubmit={onSearchSubmit}
+          onClear={handleClear}
           placeholder={placeholder}
         />
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: "auto", pr: 0.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: "auto" }}>
           <Tooltip title="Home">
             <IconButton aria-label="Go to Home" onClick={handleHomeClick} size="large">
-              <HomeRoundedIcon />
+              <HomeRoundedIcon sx={{ color: "black" }}/>
             </IconButton>
           </Tooltip>
           <Tooltip title="Profile">
             <IconButton aria-label="Open profile" onClick={handleProfileClick} size="large">
-              <AccountCircleRoundedIcon />
+              <AccountCircleRoundedIcon sx={{ color: "black" }}/>
             </IconButton>
           </Tooltip>
         </Box>
