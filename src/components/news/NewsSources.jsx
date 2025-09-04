@@ -1,10 +1,17 @@
 import React from 'react';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import { Container, Row, Col, Button } from 'react-bootstrap';
+import {
+  Container,
+  Grid,
+  Typography,
+  Chip,
+  Box,
+  Tooltip,
+  Link,
+  Paper,
+} from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch';
 import SentimentScore from '../ui/Sentimentscore';
-import { Tooltip, OverlayTrigger } from 'react-bootstrap';
 
 const NewsSources = () => {
   const location = useLocation();
@@ -21,8 +28,8 @@ const NewsSources = () => {
 
   const getColor = (score) => {
     if (score > 0) return 'success';
-    if (score < 0) return 'danger';
-    return 'secondary';
+    if (score < 0) return 'error';
+    return 'default';
   };
 
   // Ensure that region_list is an array before calling map
@@ -44,195 +51,225 @@ const NewsSources = () => {
     ? newsData.company_names.split(',').map((item) => item.trim())
     : [];
 
-  const styles = {
-    newsHeader: {
-      fontSize: 'calc(7px + 1vw)',
-      fontWeight: 'bold',
-      color: '#007BFF',
-      textDecoration: 'none',
-    },
-    metaInfo: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      fontSize: 'calc(8px + 0.5vw)',
-      color: '#777',
-      marginBottom: '5px',
-    },
-    badge: {
-      fontSize: '1em',
-      padding: '6px 12px',
-      borderRadius: '20px',
-      fontWeight: '500',
-    },
-    sentimentContainer: {
-      display: 'flex',
-      justifyContent: 'flex-end',
-      alignItems: 'center',
-    },
-  };
-
   // Use navigate hook from react-router-dom
   const navigate = useNavigate();
 
-  const handleButtonClick = (badgeKey) => {
+  const handleChipClick = (badgeKey) => {
     // Navigate to /NewsPage and pass the badgeKey as state
     navigate('/NewsPage', {
       state: { search: badgeKey }, // Pass the badgeKey in the state
     });
   };
 
-  if (!id) return <p>No ID provided. Please navigate correctly.</p>;
-  if (!newsData) return <p>Loading...</p>;
+  if (!id) return <Typography>No ID provided. Please navigate correctly.</Typography>;
+  if (!newsData) return <Typography>Loading...</Typography>;
 
   return (
-    <Container fluid className="news-container">
+    <Container maxWidth="lg" sx={{ py: 2 }}>
       {/* News Title and Sentiment Row */}
-      <Row className="align-items-center">
-        <Col md={8}>
-          <a href={newsData.url} target="_blank" rel="noopener noreferrer" style={styles.newsHeader}>
-            <h4>{newsData.title}</h4>
-          </a>
-        </Col>
-        <Col md={4} style={styles.sentimentContainer}>
-          {/* Sentiment Score Pill */}
-          <SentimentScore score={newsData.score} sentiment={newsData.sentiment} />
-        </Col>
-      </Row>
+      <Grid container alignItems="center" spacing={2}>
+        <Grid item xs={12} md={8}>
+          <Link
+            href={newsData.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            underline="none"
+            sx={{
+              color: '#1976d2',
+              textDecoration: 'none',
+              '&:hover': {
+                textDecoration: 'underline',
+              },
+            }}
+          >
+            <Typography
+              variant="h5"
+              component="h4"
+              sx={{
+                fontSize: 'calc(7px + 1vw)',
+                fontWeight: 'bold',
+                color: '#1976d2',
+              }}
+            >
+              {newsData.title}
+            </Typography>
+          </Link>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Box display="flex" justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
+            {/* Sentiment Score Pill */}
+            <SentimentScore score={newsData.score} sentiment={newsData.sentiment} />
+          </Box>
+        </Grid>
+      </Grid>
 
-      {/* News date and publisher closer together */}
-      <div style={styles.metaInfo}>
-        <span>📅 {new Date(newsData.published_date).toLocaleDateString()}</span>
-        <span>📰 {newsData.publisher}</span>
-      </div>
+      {/* News date and publisher */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          fontSize: 'calc(8px + 0.5vw)',
+          color: 'text.secondary',
+          mb: 1,
+          mt: 1,
+        }}
+      >
+        <Typography variant="body2" color="text.secondary">
+          📅 {new Date(newsData.published_date).toLocaleDateString()}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          📰 {newsData.publisher}
+        </Typography>
+      </Box>
 
       {/* Entities */}
-      <div className="d-flex flex-wrap gap-2">
+      <Box sx={{ mb: 2 }}>
         {newsData.entities?.map((entity) => (
-          <Button
-            variant="link"
-            style={styles.badge}
+          <Chip
             key={entity}
-            onClick={() => handleButtonClick(entity)} // Pass the entity as search term
-          >
-            {entity}
-          </Button>
+            label={entity}
+            variant="outlined"
+            clickable
+            onClick={() => handleChipClick(entity)}
+            sx={{ 
+              m: 0.5,
+              fontSize: '1em',
+              fontWeight: '500',
+            }}
+          />
         ))}
-      </div>
+      </Box>
 
       {/* Sentiment Scores */}
-      <div>
-        <div>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <OverlayTrigger
-              placement="top"
-              overlay={
-                <Tooltip id="finbert-tooltip">
-                  Financial BERT model trained specifically on financial text to detect sentiment in financial news.
-                </Tooltip>
-              }
-            >
-              <Button
-                variant={getColor(scores.finbert)}
-                style={styles.badge}
-                onClick={() => handleButtonClick('FinBERT')}
-              >
-                FinBERT: {scores.finbert}
-              </Button>
-            </OverlayTrigger>
-            <OverlayTrigger
-              placement="top"
-              overlay={
-                <Tooltip id="gemini-tooltip">
-                  Google's Gemini model provides general language understanding for broader context analysis.
-                </Tooltip>
-              }
-            >
-              <Button
-                variant={getColor(scores.gemini)}
-                style={styles.badge}
-                onClick={() => handleButtonClick('Gemini')}
-              >
-                Gemini: {scores.gemini}
-              </Button>
-            </OverlayTrigger>
-            <OverlayTrigger
-              placement="top"
-              overlay={
-                <Tooltip id="combine-tooltip">
-                  Weighted average of both models with confidence factoring to provide the most accurate sentiment score.
-                </Tooltip>
-              }
-            >
-              <Button
-                variant={getColor(scores.combine_score)}
-                style={styles.badge}
-                onClick={() => handleButtonClick('Combine Score')}
-              >
-                Combine Score: {scores.combine_score}
-              </Button>
-            </OverlayTrigger>
-          </div>
-        </div>
-      </div>
+      <Box sx={{ mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Tooltip
+            title="Financial BERT model trained specifically on financial text to detect sentiment in financial news."
+            arrow
+          >
+            <Chip
+              label={`FinBERT: ${scores.finbert}`}
+              color={getColor(scores.finbert)}
+              clickable
+              onClick={() => handleChipClick('FinBERT')}
+              sx={{
+                fontSize: '1em',
+                fontWeight: '500',
+              }}
+            />
+          </Tooltip>
+          <Tooltip
+            title="Google's Gemini model provides general language understanding for broader context analysis."
+            arrow
+          >
+            <Chip
+              label={`Gemini: ${scores.gemini}`}
+              color={getColor(scores.gemini)}
+              clickable
+              onClick={() => handleChipClick('Gemini')}
+              sx={{
+                fontSize: '1em',
+                fontWeight: '500',
+              }}
+            />
+          </Tooltip>
+          <Tooltip
+            title="Weighted average of both models with confidence factoring to provide the most accurate sentiment score."
+            arrow
+          >
+            <Chip
+              label={`Combine Score: ${scores.combine_score}`}
+              color={getColor(scores.combine_score)}
+              clickable
+              onClick={() => handleChipClick('Combine Score')}
+              sx={{
+                fontSize: '1em',
+                fontWeight: '500',
+              }}
+            />
+          </Tooltip>
+        </Box>
+      </Box>
 
       {/* News Summary */}
-      <p>{newsData.summary}</p>
+      <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.6 }}>
+        {newsData.summary}
+      </Typography>
 
       {/* Region, Sectors, and Affected Companies in separate columns */}
-      <Row className="mt-3">
+      <Grid container spacing={3}>
         {region_list?.length > 0 && (
-          <Col md={4}>
-            <strong>🌍 Region:</strong>
-            <div className="d-flex flex-wrap gap-2 mt-2">
+          <Grid item xs={12} md={4}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+              🌍 Region:
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               {region_list.map((region) => (
-                <Button
-                  variant="info"
-                  style={styles.badge}
+                <Chip
                   key={region}
-                  onClick={() => handleButtonClick(region)}
-                >
-                  {region}
-                </Button>
+                  label={region}
+                  color="info"
+                  clickable
+                  onClick={() => handleChipClick(region)}
+                  sx={{
+                    fontSize: '1em',
+                    fontWeight: '500',
+                  }}
+                />
               ))}
-            </div>
-          </Col>
+            </Box>
+          </Grid>
         )}
         {sectors_list?.length > 0 && (
-          <Col md={4}>
-            <strong>🏢 Sectors:</strong>
-            <div className="d-flex flex-wrap gap-2 mt-2">
+          <Grid item xs={12} md={4}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+              🏢 Sectors:
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               {sectors_list.map((sector) => (
-                <Button
-                  variant="dark"
-                  style={styles.badge}
+                <Chip
                   key={sector}
-                  onClick={() => handleButtonClick(sector)}
-                >
-                  {sector}
-                </Button>
+                  label={sector}
+                  sx={{
+                    backgroundColor: '#424242',
+                    color: 'white',
+                    fontSize: '1em',
+                    fontWeight: '500',
+                    '&:hover': {
+                      backgroundColor: '#616161',
+                    },
+                  }}
+                  clickable
+                  onClick={() => handleChipClick(sector)}
+                />
               ))}
-            </div>
-          </Col>
+            </Box>
+          </Grid>
         )}
         {company_name_list?.length > 0 && (
-          <Col md={4}>
-            <strong>🏭 Affected Companies:</strong>
-            <div className="d-flex flex-wrap gap-2 mt-2">
+          <Grid item xs={12} md={4}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+              🏭 Affected Companies:
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               {company_name_list.map((company) => (
-                <Button
-                  variant="warning"
-                  style={styles.badge}
+                <Chip
                   key={company}
-                  onClick={() => handleButtonClick(company)}
-                >
-                  {company}
-                </Button>
+                  label={company}
+                  color="warning"
+                  clickable
+                  onClick={() => handleChipClick(company)}
+                  sx={{
+                    fontSize: '1em',
+                    fontWeight: '500',
+                  }}
+                />
               ))}
-            </div>
-          </Col>
+            </Box>
+          </Grid>
         )}
-      </Row>
+      </Grid>
     </Container>
   );
 };

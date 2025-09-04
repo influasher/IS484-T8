@@ -1,49 +1,32 @@
-// Sort.jsx
 import React from 'react';
+import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 
 const Sort = ({ onSortChange }) => {
-  const handleSortChange = (event) => {
-    onSortChange(event.target.value); // Pass the selected sort order back to parent component
+  const [sortOrder, setSortOrder] = React.useState('desc');
+
+  const handleChange = (event) => {
+    const value = event.target.value;
+    setSortOrder(value);
+    onSortChange(value);
   };
 
   return (
-    <div style={styles.filterContainer}>
-      {/* <label htmlFor="sort-select" style={styles.filterLabel}>Sort by Sentiment Score: </label> */}
-      <select id="sort-select" onChange={handleSortChange} style={styles.filterDropdown}>
-        <option value="asc">Ascending</option>
-        <option value="desc">Descending</option>
-      </select>
-    </div>
+    <FormControl fullWidth variant="outlined">
+      <InputLabel id="sort-select-label">Sort by</InputLabel>
+      <Select
+        labelId="sort-select-label"
+        value={sortOrder}
+        onChange={handleChange}
+        label="Sort by"
+        sx={{
+          backgroundColor: 'white',
+        }}
+      >
+        <MenuItem value="asc">Ascending</MenuItem>
+        <MenuItem value="desc">Descending</MenuItem>
+      </Select>
+    </FormControl>
   );
-};
-
-const styles = {
-  filterContainer: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px", // Space between label and dropdown
-    marginBottom: "20px",
-    flexWrap: "wrap", // Ensures the label and dropdown wrap on smaller screens
-    justifyContent: "center", // Centers the content on smaller screens
-
-
-  },
-  filterLabel: {
-    fontSize: "calc(0.8rem + 0.5vw)", // Dynamic font size for responsiveness
-    fontWeight: "bold",
-    color: "black",
-    margin: 0, // Prevents unnecessary margin
-    textAlign: "center", // Ensures text alignment is consistent
-  },
-  filterDropdown: {
-    padding: "8px", // Increased padding for better touch targets
-    fontSize: "calc(0.8rem + 0.5vw)", // Dynamic font size for responsiveness
-    borderRadius: "5px",
-    border: "1px solid #ccc", // Adds a subtle border for better visibility
-    minWidth: "150px", // Ensures the dropdown has a minimum width
-    maxWidth: "100%", // Ensures it doesn't overflow on smaller screens
-    boxSizing: "border-box", // Ensures padding and border are included in width
-  },
 };
 
 export default Sort;

@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import {
+  Box,
+  Chip,
+  Tooltip,
+  CircularProgress,
+  Typography,
+  Container,
+} from '@mui/material';
 import Entity from '../../components/entity/Entity';
 import Price from '../../components/ui/Price';
 import EntityVisuals from '../../components/entity/Entityvisuals';
@@ -8,14 +16,13 @@ import useFetch from '../../hooks/useFetch';
 import '../../styles/App.css';
 import ReportButton from '../../components/ui/export';
 import SendPDF from '../../components/ui/SendReport';
-import { Badge, Tooltip, OverlayTrigger } from 'react-bootstrap';
 
 const EntityPage = () => {
  
   const getColor = (sentimentType) => {
     if (sentimentType > 0) return 'success';
-    if (sentimentType < 0) return 'danger';
-    return 'secondary';
+    if (sentimentType < 0) return 'error';
+    return 'default';
   };
 
   const { ticker } = useParams();
@@ -32,60 +39,98 @@ const EntityPage = () => {
     TimeDecay: data ? parseFloat(data.data.time_decay).toFixed(1) : 0,
   };
 
-  if (loading) return <div style={styles.loading}>Loading...</div>;
-  if (error) return <div style={styles.error}>Error fetching entity data.</div>;
+  if (loading) return (
+    <Box sx={styles.loading}>
+      <CircularProgress size={60} />
+      <Typography variant="h6" sx={{ mt: 2 }}>
+        Loading...
+      </Typography>
+    </Box>
+  );
+  
+  if (error) return (
+    <Box sx={styles.error}>
+      <Typography variant="h6" color="error">
+        Error fetching entity data.
+      </Typography>
+    </Box>
+  );
 
   return (
     <div className="App">
       <main className="App-content">
 
         {/* Top Row for Entity and Price & Buttons */}
-        <div style={styles.topRow}>
+        <Box sx={styles.topRow}>
           {/* Entity Ticker */}
-          <div style={styles.entityWrapper}>
+          <Box sx={styles.entityWrapper}>
             <Entity EntityTicker={EntityTicker} />
-          </div>
+          </Box>
 
           {/* Price and Buttons */}
-          <div style={styles.priceAndButtonsContainer}>
-            <div style={styles.priceWrapper}>
+          <Box sx={styles.priceAndButtonsContainer}>
+            <Box sx={styles.priceWrapper}>
               <Price id={stockID} />
-            </div>
-            <div style={styles.buttonWrapper}>
+            </Box>
+            <Box sx={styles.buttonWrapper}>
               <ReportButton EntityName={EntityName} />
               <SendPDF EntityName={EntityName} />
-            </div>
-          </div>
-        </div>
+            </Box>
+          </Box>
+        </Box>
 
         {/* Sentiment Scores in a Centered Row */}
-        <div style={styles.sentimentRow}>
-          <div style={styles.sentimentWrapper}>
-            <div style={styles.sentimentToggle}>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <OverlayTrigger placement="top" overlay={<Tooltip id="finbert-tooltip">Weighted combination of multiple NLP models' sentiment predictions with confidence factored in.</Tooltip>}>
-                  <Badge bg={getColor(sentimentTypes.AvgSentiment)} style={styles.badge}>Confidence Weighted Sentiment Score: {sentimentTypes.AvgSentiment}</Badge>
-                </OverlayTrigger>
-                <OverlayTrigger placement="top" overlay={<Tooltip id="gemini-tooltip">Direct average of all article sentiment scores without weighting or adjustments.</Tooltip>}>
-                  <Badge bg={getColor(sentimentTypes.simpleAverage)} style={styles.badge}>Simple Average: {sentimentTypes.simpleAverage}</Badge>
-                </OverlayTrigger>
-                <OverlayTrigger placement="top" overlay={<Tooltip id="combined-tooltip">Recent articles weighted more heavily than older ones to reflect current market sentiment.</Tooltip>}>
-                  <Badge bg={getColor(sentimentTypes.TimeDecay)} style={styles.badge}>Time Decay: {sentimentTypes.TimeDecay}</Badge>
-                </OverlayTrigger>
-              </div>
-            </div> 
-          </div>
-        </div>
+        <Box sx={styles.sentimentRow}>
+          <Box sx={styles.sentimentWrapper}>
+            <Box sx={styles.sentimentToggle}>
+              <Box sx={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <Tooltip 
+                  title="Weighted combination of multiple NLP models' sentiment predictions with confidence factored in."
+                  arrow
+                  placement="top"
+                >
+                  <Chip
+                    label={`Confidence Weighted Sentiment Score: ${sentimentTypes.AvgSentiment}`}
+                    color={getColor(sentimentTypes.AvgSentiment)}
+                    sx={styles.badge}
+                  />
+                </Tooltip>
+                <Tooltip 
+                  title="Direct average of all article sentiment scores without weighting or adjustments."
+                  arrow
+                  placement="top"
+                >
+                  <Chip
+                    label={`Simple Average: ${sentimentTypes.simpleAverage}`}
+                    color={getColor(sentimentTypes.simpleAverage)}
+                    sx={styles.badge}
+                  />
+                </Tooltip>
+                <Tooltip 
+                  title="Recent articles weighted more heavily than older ones to reflect current market sentiment."
+                  arrow
+                  placement="top"
+                >
+                  <Chip
+                    label={`Time Decay: ${sentimentTypes.TimeDecay}`}
+                    color={getColor(sentimentTypes.TimeDecay)}
+                    sx={styles.badge}
+                  />
+                </Tooltip>
+              </Box>
+            </Box> 
+          </Box>
+        </Box>
 
         {/* Visuals Section */}
-        <div style={styles.visualsWrapper}>
+        <Box sx={styles.visualsWrapper}>
           <EntityVisuals id={stockID} />
-        </div>
+        </Box>
 
         {/* News Section */}
-        <div style={styles.newsWrapper}>
+        <Box sx={styles.newsWrapper}>
           <EntityNews EntityName={EntityName} />
-        </div>
+        </Box>
       </main>
     </div>
   );
@@ -133,6 +178,10 @@ const styles = {
     borderRadius: '20px',
     fontWeight: '500',
     cursor: 'pointer',
+    '&:hover': {
+      transform: 'scale(1.02)',
+      transition: 'transform 0.2s ease',
+    },
   },
 
   priceAndButtonsContainer: {
@@ -168,6 +217,7 @@ const styles = {
 
   loading: {
     display: 'flex',
+    flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
     height: '100vh',
@@ -180,7 +230,6 @@ const styles = {
     alignItems: 'center',
     height: '100vh',
     fontSize: '1.5rem',
-    color: 'red',
   },
 };
 
