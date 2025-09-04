@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { FaEnvelope } from 'react-icons/fa'; // Import email icon
 import { postData } from '../../services/api';
+import EmailIcon from '@mui/icons-material/Email';
+import { Button } from '@mui/material';
 
 const SendPDF = ({ EntityName }) => {
   const [loading, setLoading] = useState(false);
@@ -34,16 +36,16 @@ const SendPDF = ({ EntityName }) => {
 
   return (
     <>
-      <button
+      <Button 
+        variant="contained" 
+        startIcon={<EmailIcon />}
         onClick={sendEmail}
-        disabled={loading}
-        style={styles.button} // Add any button styles here
-        title="Send PDF via Email"
+        loading={loading}
+        loadingPosition="start"
       >
-        {/* Displaying only the email icon */}
-        <FaEnvelope size={20} />
-      </button>
-
+        Send PDF
+      </Button>
+      
       {/* Conditional rendering of the popup */}
       {showPopup && (
         <div style={styles.popupOverlay}>
