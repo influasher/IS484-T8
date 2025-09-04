@@ -19,7 +19,33 @@ import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import Chip from "@mui/material/Chip";
 import Client from "./Client";
+import useFetch from "../../hooks/useFetch";
 
+function normalize(u) {
+    const sectors = Array.isArray(u?.sectors) && u.sectors.length > 0 ? u.sectors : ["NA"];
+    return {
+        id: u?.id ?? "NA",
+        name: u?.username ?? "NA", // map backend username -> UI name for now
+        email: u?.email ?? "NA",
+        username: u?.username ?? "NA",
+        holdings: u?.holdings ?? "NA",
+        overallPL: u?.overallPL ?? "NA",
+        risk: u?.risk ?? "NA",
+        cap: u?.cap ?? "NA",
+        sectors,
+    };
+}
+
+function useClients() {
+    const { data, loading, error } = useFetch("/user/clients");
+
+    const list = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+    const clients = React.useMemo(() => list.map(normalize), [list]);
+
+    return { clients, loading, error };
+}
+
+// ---------- constants ----------
 const ALL_SECTORS = [
     "Information Technology",
     "Financials",
@@ -34,39 +60,35 @@ const ALL_SECTORS = [
     "Real Estate",
 ];
 
-const initialClients = [
-    { id: 1, name: "Michael Chen", email: "michael.chen@email.com", username: "mchen_client", holdings: "$124,500", overallPL: "$124,500", risk: "Moderate", cap: "Large-cap", sectors: ["Information Technology", "Financials"] },
-    { id: 2, name: "Emma Wilson", email: "emma.wilson@email.com", username: "ewilson_client", holdings: "$86,300", overallPL: "$84,900", risk: "Conservative", cap: "Large-cap", sectors: ["Health Care", "Consumer Staples"] },
-    { id: 3, name: "David Rodriguez", email: "david.rodriguez@email.com", username: "drodriguez_client", holdings: "$210,050", overallPL: "$212,300", risk: "Aggressive", cap: "Mid-cap", sectors: ["Industrials", "Materials"] },
-    { id: 4, name: "Lisa Thompson", email: "lisa.thompson@email.com", username: "lthompson_client", holdings: "$58,900", overallPL: "$58,900", risk: "Moderate", cap: "Small-cap", sectors: ["Communication Services", "Consumer Discretionary"] },
-    { id: 5, name: "James Anderson", email: "james.anderson@email.com", username: "janderson_client", holdings: "$142,780", overallPL: "$140,200", risk: "Conservative", cap: "Large-cap", sectors: ["Utilities", "Energy"] },
-    { id: 6, name: "Jennifer Martinez", email: "jennifer.martinez@email.com", username: "jmartinez_client", holdings: "$97,220", overallPL: "$97,220", risk: "Moderate", cap: "Mid-cap", sectors: ["Real Estate", "Financials"] },
-    { id: 7, name: "Robert Taylor", email: "robert.taylor@email.com", username: "rtaylor_client", holdings: "$75,340", overallPL: "$76,000", risk: "Conservative", cap: "Large-cap", sectors: ["Information Technology"] },
-    { id: 8, name: "Ashley Davis", email: "ashley.davis@email.com", username: "adavis_client", holdings: "$183,990", overallPL: "$183,990", risk: "Aggressive", cap: "Mid-cap", sectors: ["Health Care", "Industrials"] },
-    { id: 9, name: "Christopher Brown", email: "christopher.brown@email.com", username: "cbrown_client", holdings: "$134,610", overallPL: "$132,400", risk: "Moderate", cap: "Large-cap", sectors: ["Materials", "Energy"] },
-    { id: 10, name: "Amanda Garcia", email: "amanda.garcia@email.com", username: "agarcia_client", holdings: "$62,430", overallPL: "$62,430", risk: "Moderate", cap: "Small-cap", sectors: ["Consumer Discretionary"] },
-    { id: 11, name: "Daniel Miller", email: "daniel.miller@email.com", username: "dmiller_client", holdings: "$155,275", overallPL: "$156,000", risk: "Conservative", cap: "Large-cap", sectors: ["Financials", "Real Estate"] },
-    { id: 12, name: "Michelle Lee", email: "michelle.lee@email.com", username: "mlee_client", holdings: "$121,880", overallPL: "$121,880", risk: "Aggressive", cap: "Mid-cap", sectors: ["Information Technology", "Communication Services"] },
-];
-
-// === Auto dynamic pagination config ===
-const CARD_WIDTH = 320;    
-const GRID_GAP_SPACING = 2.5;  
-const PX_PER_SPACING_UNIT = 8;    
-const GAP_PX = GRID_GAP_SPACING * PX_PER_SPACING_UNIT; 
-const ROWS_PER_PAGE = 2;       
+const CARD_WIDTH = 320;
+const GRID_GAP_SPACING = 2.5;
+const PX_PER_SPACING_UNIT = 8;
+const GAP_PX = GRID_GAP_SPACING * PX_PER_SPACING_UNIT;
+const ROWS_PER_PAGE = 2;
 
 const ClientCards = () => {
-    const [clients, setClients] = React.useState(initialClients);
-    const [page, setPage] = React.useState(1);
+    const { clients: fetchedClients, loading, error } = useClients();
 
-    const gridRef = React.useRef(null);
-    const [containerWidth, setContainerWidth] = React.useState(0);
-    const [itemsPerPage, setItemsPerPage] = React.useState(ROWS_PER_PAGE); 
+    const [clients, setClients] = React.useState([]);
 
     React.useEffect(() => {
-        if (!gridRef.current) return;
+        if (
+            clients.length !== fetchedClients.length ||
+            (clients[0]?.id !== fetchedClients[0]?.id) ||
+            (clients[clients.length - 1]?.id !== fetchedClients[fetchedClients.length - 1]?.id)
+        ) {
+            setClients(fetchedClients);
+        }
+    }, [fetchedClients]);
 
+    const [page, setPage] = React.useState(1);
+    const gridRef = React.useRef(null);
+    const [containerWidth, setContainerWidth] = React.useState(0);
+    const [itemsPerPage, setItemsPerPage] = React.useState(ROWS_PER_PAGE);
+
+    // Resize observer to compute columns
+    React.useEffect(() => {
+        if (!gridRef.current) return;
         const ro = new ResizeObserver((entries) => {
             for (const entry of entries) {
                 const w =
@@ -77,23 +99,18 @@ const ClientCards = () => {
             }
         });
         ro.observe(gridRef.current);
-
         setContainerWidth(gridRef.current.getBoundingClientRect().width);
-
         return () => ro.disconnect();
     }, []);
 
     React.useEffect(() => {
         if (!containerWidth) return;
-
         const columns = Math.max(
             1,
             Math.floor((containerWidth + GAP_PX) / (CARD_WIDTH + GAP_PX))
         );
-
         const nextItemsPerPage = columns * ROWS_PER_PAGE;
         setItemsPerPage(nextItemsPerPage);
-
         const newPageCount = Math.max(1, Math.ceil(clients.length / nextItemsPerPage));
         setPage((prev) => Math.min(prev, newPageCount));
     }, [containerWidth, clients.length]);
@@ -102,6 +119,7 @@ const ClientCards = () => {
     const start = (page - 1) * itemsPerPage;
     const current = clients.slice(start, start + itemsPerPage);
 
+    // Add-Client modal state
     const [openAdd, setOpenAdd] = React.useState(false);
     const [formName, setFormName] = React.useState("");
     const [formEmail, setFormEmail] = React.useState("");
@@ -119,18 +137,22 @@ const ClientCards = () => {
 
     const handleSubmitAdd = (e) => {
         e.preventDefault();
-        const nextId = clients.reduce((max, c) => Math.max(max, c.id), 0) + 1;
+        const nextId =
+            clients.reduce((max, c) => Math.max(max, Number(c.id) || 0), 0) + 1;
 
         const newClient = {
             id: nextId,
-            name: formName.trim(),
-            email: formEmail.trim(),
-            username: `${formName.trim().toLowerCase().replace(/\s+/g, "")}_client_${nextId}`,
-            holdings: "$0.00",
-            overallPL: "$0.00",
-            risk: `Threshold ${formRiskThreshold || 0}%`,
-            cap: "—",
-            sectors: formSectors,
+            name: formName.trim() || "NA",
+            email: formEmail.trim() || "NA",
+            username:
+                formName.trim()
+                    ? `${formName.trim().toLowerCase().replace(/\s+/g, "")}_client_${nextId}`
+                    : "NA",
+            holdings: "NA",
+            overallPL: "NA",
+            risk: formRiskThreshold ? `Threshold ${formRiskThreshold}%` : "NA",
+            cap: "NA",
+            sectors: formSectors.length ? formSectors : ["NA"],
         };
 
         setClients((prev) => [newClient, ...prev]);
@@ -138,7 +160,6 @@ const ClientCards = () => {
         handleCloseAdd();
     };
 
-    // delete a single sector chip
     const handleDeleteSector = (sector) => {
         setFormSectors((prev) => prev.filter((s) => s !== sector));
     };
@@ -175,11 +196,20 @@ const ClientCards = () => {
                     </Box>
                 </Box>
 
-                {/* Grid container observed for width */}
+                {loading && (
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                        Loading clients…
+                    </Typography>
+                )}
+                {error && (
+                    <Typography variant="body2" color="error" sx={{ mb: 2 }}>
+                        {String(error)}
+                    </Typography>
+                )}
+
                 <Grid container spacing={GRID_GAP_SPACING} ref={gridRef}>
                     {current.map((c) => (
-                        <Grid key={c.id} item>
-                            {/* Each Client card is fixed at 320px width internally */}
+                        <Grid key={`${c.id}-${c.username}-${c.email}`} item>
                             <Client client={c} />
                         </Grid>
                     ))}
@@ -203,7 +233,6 @@ const ClientCards = () => {
                 </Box>
             </Paper>
 
-            {/* Add New Client Dialog */}
             <Dialog
                 open={openAdd}
                 onClose={handleCloseAdd}
@@ -256,16 +285,10 @@ const ClientCards = () => {
                                     disablePortal: true,
                                     anchorOrigin: { vertical: "bottom", horizontal: "left" },
                                     transformOrigin: { vertical: "top", horizontal: "left" },
-                                    PaperProps: {
-                                        sx: {
-                                            maxHeight: 200,
-                                            mt: 1,
-                                        },
-                                    },
+                                    PaperProps: { sx: { maxHeight: 200, mt: 1 } },
                                     MenuListProps: { dense: true },
                                 }}
                                 renderValue={(selected) => (
-                                    // Stop mouse down so clicking chip X doesn't open the menu
                                     <Box
                                         sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
                                         onMouseDown={(e) => {
@@ -277,13 +300,11 @@ const ClientCards = () => {
                                                 key={value}
                                                 label={value}
                                                 onDelete={(evt) => {
-                                                    evt.stopPropagation(); // prevent Select from toggling
+                                                    evt.stopPropagation();
                                                     handleDeleteSector(value);
                                                 }}
-                                                // also prevent opening when interacting with the chip area
                                                 onMouseDown={(e) => {
                                                     e.stopPropagation();
-                                                    // prevent focus/activation that might toggle
                                                     e.preventDefault();
                                                 }}
                                                 sx={{ borderRadius: 1.5 }}
