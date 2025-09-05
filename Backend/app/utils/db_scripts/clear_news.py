@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add the Backend directory to Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
+
 from app import create_app, db
 from app.models.news import News
 

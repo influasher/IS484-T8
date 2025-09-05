@@ -1,6 +1,11 @@
 import csv
 import os
+import sys
 from datetime import datetime
+
+# Add the Backend directory to Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
+
 from app import create_app, db
 from app.models.news import News
 
@@ -16,7 +21,7 @@ def seed_news():
             return
         
         # Path to the CSV file
-        csv_path = 'old_migrations/db/migration-scripts/news_data.csv'
+        csv_path = 'old_migrations/db/migration-scripts/news_data_cleaned.csv'
         
         if not os.path.exists(csv_path):
             print(f"❌ CSV file not found at: {csv_path}")
@@ -33,7 +38,7 @@ def seed_news():
                     # Parse entities if they exist (assuming comma-separated)
                     entities = []
                     if row.get('entities'):
-                        entities = [entity.strip() for entity in row['entities'].split(',')]
+                        entities = [entity.strip().strip('{{}}').strip('"') for entity in row['entities'].split(',') if entity.strip()]
                     
                     # Parse published_date (adjust format as needed)
                     published_date = None
@@ -41,7 +46,7 @@ def seed_news():
                         try:
                             # Try different date formats
                             date_str = row['published_date'].strip()
-                            for date_format in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%m/%d/%Y']:
+                            for date_format in ['%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%m/%d/%Y']:
                                 try:
                                     published_date = datetime.strptime(date_str, date_format)
                                     break

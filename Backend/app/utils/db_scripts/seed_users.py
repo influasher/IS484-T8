@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add the Backend directory to Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
+
 from app import create_app, db
 from app.models.user import User, UserRole
 from werkzeug.security import generate_password_hash
@@ -9,7 +15,7 @@ def seed_users():
         # Check if users already exist
         existing_users = User.query.count()
         if existing_users > 0:
-            print(f"⚠️  Database already has {existing_users} users.")
+            print(f"Warning: Database already has {existing_users} users.")
             print("Run 'python clear_users.py' first to clear existing users.")
             return
         
@@ -91,7 +97,7 @@ def seed_users():
         # Commit all clients
         db.session.commit()
         
-        print("\n✅ Successfully created:")
+        print("\nSuccessfully created:")
         print("- 2 Relationship Managers")
         print("- 12 Clients (6 assigned to each RM)")
         print("\nRM Passwords: rm_password123")
