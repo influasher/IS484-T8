@@ -18,5 +18,5 @@ def register_routes(app):
     app.register_blueprint(send_pdf_bp, url_prefix='/send_pdf')
     app.register_blueprint(feedback_bp, url_prefix='/feedback')
     app.register_blueprint(sentiment_history_bp, url_prefix='/sentiment_history')
-    app.register_blueprint(user_bp, url_prefix='/user')
+    app.register_blueprint(user_bp, url_prefix='/users')
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useCallback } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Grid";
@@ -18,8 +18,12 @@ import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import Chip from "@mui/material/Chip";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import ClearRoundedIcon from "@mui/icons-material/ClearRounded";
 import Client from "./Client";
 import useFetch from "../../hooks/useFetch";
+import useDebounce from "../../hooks/useDebounce";
+import Searchbar from "../ui/Searchbar";
 
 function normalize(u) {
     const sectors = Array.isArray(u?.sectors) && u.sectors.length > 0 ? u.sectors : ["NA"];
@@ -33,17 +37,41 @@ function normalize(u) {
         risk: u?.risk ?? "NA",
         cap: u?.cap ?? "NA",
         sectors,
+        // Add full name and search-friendly fields
+        full_name: `${u?.first_name || ''} ${u?.last_name || ''}`.trim() || u?.username || "NA",
+        first_name: u?.first_name ?? "",
+        last_name: u?.last_name ?? "",
     };
 }
 
-function useClients() {
-    const { data, loading, error } = useFetch("/user/clients");
+function useClients(searchTerm = "", page = 1, perPage = 20) {
+    // Include pagination parameters in the URL
+    const url = React.useMemo(() => {
+        const params = new URLSearchParams({
+            role: 'client',
+            page: page.toString(),
+            per_page: perPage.toString()
+        });
+        
+        if (searchTerm.trim()) {
+            params.set('q', searchTerm.trim());
+        }
+        
+        return `/users/search?${params.toString()}`;
+    }, [searchTerm, page, perPage]);
+    
+    const { data, loading, error } = useFetch(url);
 
-    const list = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
-    const clients = React.useMemo(() => list.map(normalize), [list]);
+    // The API returns data in structure: { data: { users: [...], pagination: {...} } }
+    const usersList = data?.data?.users || [];
+    const pagination = data?.data?.pagination || {};
+    const clients = React.useMemo(() => usersList.map(normalize), [usersList]);
 
-    return { clients, loading, error };
+    return { clients, pagination, loading, error };
 }
+
+// Remove the searchClients function since we're using the backend search via URL
+// The search will be handled by the useFetch hook with the search parameter
 
 // ---------- constants ----------
 const ALL_SECTORS = [
@@ -67,57 +95,47 @@ const GAP_PX = GRID_GAP_SPACING * PX_PER_SPACING_UNIT;
 const ROWS_PER_PAGE = 2;
 
 const ClientCards = () => {
-    const { clients: fetchedClients, loading, error } = useClients();
+    // Search state - using proper debouncing with custom hook
+    const [inputValue, setInputValue] = React.useState("");
+    const [currentPage, setCurrentPage] = React.useState(1);
+    
+    // Debounce the search input
+    const debouncedSearchTerm = useDebounce(inputValue, 150); // 150ms debounce for faster response
+    
+    const clientsPerPage = 20; // Server-side pagination
+    
+    // Use server-side pagination with the debounced search term
+    const { 
+        clients, 
+        pagination, 
+        loading: fetchLoading, 
+        error: fetchError 
+    } = useClients(debouncedSearchTerm, currentPage, clientsPerPage);
 
-    const [clients, setClients] = React.useState([]);
-
+    // Reset to first page when search term changes
     React.useEffect(() => {
-        if (
-            clients.length !== fetchedClients.length ||
-            (clients[0]?.id !== fetchedClients[0]?.id) ||
-            (clients[clients.length - 1]?.id !== fetchedClients[fetchedClients.length - 1]?.id)
-        ) {
-            setClients(fetchedClients);
+        if (debouncedSearchTerm !== inputValue) {
+            setCurrentPage(1);
         }
-    }, [fetchedClients]);
+    }, [debouncedSearchTerm, inputValue]);
 
-    const [page, setPage] = React.useState(1);
-    const gridRef = React.useRef(null);
-    const [containerWidth, setContainerWidth] = React.useState(0);
-    const [itemsPerPage, setItemsPerPage] = React.useState(ROWS_PER_PAGE);
-
-    // Resize observer to compute columns
-    React.useEffect(() => {
-        if (!gridRef.current) return;
-        const ro = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                const w =
-                    entry.contentBoxSize && entry.contentBoxSize[0]
-                        ? entry.contentBoxSize[0].inlineSize
-                        : entry.contentRect.width;
-                setContainerWidth(w);
-            }
-        });
-        ro.observe(gridRef.current);
-        setContainerWidth(gridRef.current.getBoundingClientRect().width);
-        return () => ro.disconnect();
+    // Handle input change - this updates immediately for UI responsiveness
+    const handleSearchChange = useCallback((term) => {
+        setInputValue(term);
     }, []);
 
-    React.useEffect(() => {
-        if (!containerWidth) return;
-        const columns = Math.max(
-            1,
-            Math.floor((containerWidth + GAP_PX) / (CARD_WIDTH + GAP_PX))
-        );
-        const nextItemsPerPage = columns * ROWS_PER_PAGE;
-        setItemsPerPage(nextItemsPerPage);
-        const newPageCount = Math.max(1, Math.ceil(clients.length / nextItemsPerPage));
-        setPage((prev) => Math.min(prev, newPageCount));
-    }, [containerWidth, clients.length]);
+    // Server-side pagination handler
+    const handlePageChange = (event, page) => {
+        setCurrentPage(page);
+        window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to top on page change
+    };
 
-    const pageCount = Math.max(1, Math.ceil(clients.length / itemsPerPage));
-    const start = (page - 1) * itemsPerPage;
-    const current = clients.slice(start, start + itemsPerPage);
+    // For display, we use the clients directly from the API (already paginated)
+    const displayClients = clients;
+
+    // Use server pagination info
+    const pageCount = pagination.pages || 1;
+    const totalClients = pagination.total || 0;
 
     // Add-Client modal state
     const [openAdd, setOpenAdd] = React.useState(false);
@@ -137,27 +155,10 @@ const ClientCards = () => {
 
     const handleSubmitAdd = (e) => {
         e.preventDefault();
-        const nextId =
-            clients.reduce((max, c) => Math.max(max, Number(c.id) || 0), 0) + 1;
-
-        const newClient = {
-            id: nextId,
-            name: formName.trim() || "NA",
-            email: formEmail.trim() || "NA",
-            username:
-                formName.trim()
-                    ? `${formName.trim().toLowerCase().replace(/\s+/g, "")}_client_${nextId}`
-                    : "NA",
-            holdings: "NA",
-            overallPL: "NA",
-            risk: formRiskThreshold ? `Threshold ${formRiskThreshold}%` : "NA",
-            cap: "NA",
-            sectors: formSectors.length ? formSectors : ["NA"],
-        };
-
-        setClients((prev) => [newClient, ...prev]);
-        setPage(1);
+        // TODO: Implement API call to add new client
+        // For now, just close the dialog
         handleCloseAdd();
+        console.log("Add client functionality needs backend API implementation");
     };
 
     const handleDeleteSector = (sector) => {
@@ -186,6 +187,14 @@ const ClientCards = () => {
                     <Typography variant="h5" sx={{ fontWeight: 700, mr: 1 }}>
                         Clients
                     </Typography>
+                    
+                    {/* Updated search results indicator */}
+                    {debouncedSearchTerm && (
+                        <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
+                            {totalClients} total result{totalClients !== 1 ? 's' : ''} for "{debouncedSearchTerm}"
+                            {totalClients > clientsPerPage && ` (showing page ${currentPage} of ${pageCount})`}
+                        </Typography>
+                    )}
 
                     <Box sx={{ ml: "auto" }}>
                         <Tooltip title="Add new client">
@@ -196,43 +205,86 @@ const ClientCards = () => {
                     </Box>
                 </Box>
 
-                {loading && (
+                {/* Search Bar with debouncing */}
+                <Box sx={{ mb: 3 }}>
+                    <Searchbar
+                        value={inputValue}
+                        onChange={handleSearchChange}
+                        placeholder="Search clients by name, username, or email..."
+                        width="100%"
+                        sx={{ width: "100%" }}
+                    />
+                </Box>
+
+                {fetchLoading && (
                     <Typography variant="body2" sx={{ mb: 2 }}>
-                        Loading clients…
-                    </Typography>
-                )}
-                {error && (
-                    <Typography variant="body2" color="error" sx={{ mb: 2 }}>
-                        {String(error)}
+                        {debouncedSearchTerm ? 'Searching clients...' : 'Loading clients...'}
                     </Typography>
                 )}
 
-                <Grid container spacing={GRID_GAP_SPACING} ref={gridRef}>
-                    {current.map((c) => (
+                {fetchError && (
+                    <Typography variant="body2" color="error" sx={{ mb: 2 }}>
+                        {String(fetchError)}
+                    </Typography>
+                )}
+
+                {/* No results message */}
+                {!fetchLoading && debouncedSearchTerm && totalClients === 0 && (
+                    <Box sx={{ textAlign: 'center', py: 4 }}>
+                        <Typography variant="h6" color="text.secondary">
+                            No clients found
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            Try adjusting your search terms
+                        </Typography>
+                    </Box>
+                )}
+
+                {/* Use displayClients directly (already paginated by server) */}
+                <Grid container spacing={GRID_GAP_SPACING}>
+                    {displayClients.map((c) => (
                         <Grid key={`${c.id}-${c.username}-${c.email}`} item>
                             <Client client={c} />
                         </Grid>
                     ))}
                 </Grid>
 
-                <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
-                    <Pagination
-                        count={pageCount}
-                        page={page}
-                        onChange={(_, p) => setPage(p)}
-                        shape="rounded"
-                        siblingCount={1}
-                        boundaryCount={1}
-                        sx={{
-                            "& .MuiPaginationItem-root.Mui-selected": {
-                                backgroundColor: "#212121",
-                                color: "#fff",
-                            },
-                        }}
-                    />
-                </Box>
+                {/* Server-side pagination */}
+                {!fetchLoading && totalClients > 0 && pageCount > 1 && (
+                    <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+                        <Pagination
+                            count={pageCount}
+                            page={currentPage}
+                            onChange={handlePageChange}
+                            shape="rounded"
+                            siblingCount={1}
+                            boundaryCount={1}
+                            showFirstButton
+                            showLastButton
+                            sx={{
+                                "& .MuiPaginationItem-root.Mui-selected": {
+                                    backgroundColor: "#212121",
+                                    color: "#fff",
+                                },
+                            }}
+                        />
+                        
+                        {/* Pagination info */}
+                        <Typography 
+                            variant="body2" 
+                            sx={{ 
+                                ml: 2, 
+                                alignSelf: 'center', 
+                                color: 'text.secondary' 
+                            }}
+                        >
+                            {((currentPage - 1) * clientsPerPage) + 1}-{Math.min(currentPage * clientsPerPage, totalClients)} of {totalClients}
+                        </Typography>
+                    </Box>
+                )}
             </Paper>
 
+            {/* Keep your existing Add Client Dialog unchanged */}
             <Dialog
                 open={openAdd}
                 onClose={handleCloseAdd}

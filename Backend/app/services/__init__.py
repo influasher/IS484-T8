@@ -11,3 +11,5 @@ from .entities_service import get_all_ticker_entities, get_ticker_by_entity, upd
 from .feedback_services import get_feedback_by_userID, get_feedback_by_newsID, get_feedback_by_userID_and_newsID, insert_feedback
 from .sentiment_history_services import get_sentiment_history_by_entity_id, create_sentiment_history
 from .entity_sentiment_analyzer import EntitySentimentAnalyzer
+from .user_services import search_users, get_all_clients, get_client_by_id
+from .user_services import search_users, get_all_clients, get_client_by_id
