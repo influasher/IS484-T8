@@ -55,10 +55,8 @@ const NewsSources = () => {
   const navigate = useNavigate();
 
   const handleChipClick = (badgeKey) => {
-    // Navigate to /NewsPage and pass the badgeKey as state
-    navigate('/NewsPage', {
-      state: { search: badgeKey }, // Pass the badgeKey in the state
-    });
+    // Navigate to /entity/{badgeKey}
+    navigate(`/entity/${badgeKey}`);
   };
 
   if (!id) return <Typography>No ID provided. Please navigate correctly.</Typography>;

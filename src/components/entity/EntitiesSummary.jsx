@@ -60,8 +60,9 @@ const Entities = () => {
           mb: 3,
           borderRadius: 2,
           backgroundColor: "#fafafa",
-          border: "1px solid #e0e0e0",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+          border: 1,
+          borderColor: "grey.300",
+          boxShadow: 1,
         }}
       >
         <Grid container spacing={2} justifyContent="space-between" alignItems="center">
@@ -155,20 +156,20 @@ const Entities = () => {
                 <Card
                   sx={{
                     p: 2,
-                    border: "1px solid #ddd",
-                    borderRadius: "12px",
-                    backgroundColor: "#fff",
-                    boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
+                    border: 1,
+                    borderColor: "grey.300",
+                    borderRadius: 2,
+                    backgroundColor: "white",
+                    boxShadow: 2,
                     transition: "transform 0.3s ease, box-shadow 0.3s ease",
                     width: "100%",
                     height: "100%",
                     display: "flex",
                     flexDirection: "column",
-                    // justifyContent: "space-between",
                     minHeight: "250px",
                     "&:hover": {
                       transform: "translateY(-2px)",
-                      boxShadow: "0 8px 16px rgba(0, 0, 0, 0.15)",
+                      boxShadow: 3,
                     },
                   }}
                 >
