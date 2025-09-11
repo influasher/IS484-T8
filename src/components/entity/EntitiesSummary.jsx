@@ -145,7 +145,8 @@ const Entities = () => {
           </Grid>
         ) : entityData.length > 0 ? (
           entityData.map((entityItem) => (
-            <Grid key={entityItem.id} item xs={12} sm={6} lg={4} xl={3}>
+            <Grid key={entityItem.id} item xs={6} sm={4} md={4} lg={3} xl={3}>
+              {/* xs: 6, sm: 4, md: 4, lg: 3, xl: 3 */}
               <MuiLink
                 component={Link}
                 to={`/entity/${entityItem.ticker}`}
@@ -171,7 +172,7 @@ const Entities = () => {
                     },
                   }}
                 >
-                  <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
+                  <CardContent sx={{ p: 0, "&:last-child": { pb: 0 }, width: '100%' }}>
                     {/* Entity Header */}
                     <Box
                       sx={{
@@ -206,7 +207,7 @@ const Entities = () => {
                       variant="body2"
                       sx={{
                         fontSize: 'clamp(0.8rem, 1.5vw, 1rem)',
-                        color: '#555555',
+                        whiteSpace: 'pre-wrap', // Preserve spaces and wrap text
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         display: '-webkit-box',
@@ -215,7 +216,7 @@ const Entities = () => {
                         lineHeight: 1.4, // Slightly tighter line height
                       }}
                     >
-                      {entityItem.summary}
+                      {entityItem.summary.padEnd(200, ' ')} {/* Pad summary to a fixed length */}
                     </Typography>
                   </CardContent>
                 </Card>
