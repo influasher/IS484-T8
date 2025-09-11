@@ -2,6 +2,7 @@ import yfinance as yf
 import requests_cache
 import datetime
 import time
+import pandas as pd
 from app import db
 from app.models.news import News as NewsModel
 from app.utils.helpers import get_article_details
@@ -15,19 +16,63 @@ def get_stock_price(ticker):
     stock_price = stock_info['currentPrice']
     return stock_price
 
-def get_stock_history(ticker):
-    stock = yf.Ticker(ticker)
-    df = stock.history(period='1mo')
-
-    if df.empty:
+def get_stock_history(ticker, period='1y'):
+    """
+    Get historical stock data with period support
+    
+    Args:
+        ticker (str): Stock ticker symbol
+        period (str): Time period in yfinance format (1d, 5d, 1mo, 3mo, 6mo, 1y, ytd, 5y)
+                     Defaults to '1y' to maintain backward compatibility with existing code
+    
+    Returns:
+        dict: Dictionary containing dates and prices lists, or None if no data
+    """
+    try:
+        print(f"Fetching {period} data for {ticker}")
+        
+        # Create ticker object
+        stock = yf.Ticker(ticker)
+        
+        # Handle YTD separately if needed
+        if period == 'ytd':
+            # For YTD, use start and end dates
+            today = datetime.datetime.now()
+            start_of_year = datetime.datetime(today.year, 1, 1)
+            df = stock.history(start=start_of_year, end=today)
+        else:
+            # For other periods, use the period parameter
+            df = stock.history(period=period)
+        
+        if df.empty:
+            print(f"No data found for {ticker} with period {period}")
+            return None
+        
+        # Convert DataFrame to JSON format (same as original)
+        data = {
+            "dates": df.index.strftime('%Y-%m-%d').tolist(),
+            "prices": df['Close'].tolist()
+        }
+        
+        # Clean any NaN values
+        clean_dates = []
+        clean_prices = []
+        
+        for date, price in zip(data["dates"], data["prices"]):
+            if not pd.isna(price):
+                clean_dates.append(date)
+                clean_prices.append(float(price))
+        
+        print(f"Successfully fetched {len(clean_dates)} data points for {ticker}")
+        
+        return {
+            "dates": clean_dates,
+            "prices": clean_prices
+        }
+        
+    except Exception as e:
+        print(f"Error fetching stock history for {ticker} with period {period}: {str(e)}")
         return None
-
-    # Convert DataFrame to JSON format
-    data = {
-        "dates": df.index.strftime('%Y-%m-%d').tolist(),
-        "prices": df['Close'].tolist()
-    }
-    return data
 
 def get_stock_news(ticker):
     stock = yf.Search(ticker, enable_fuzzy_query=True, include_cb=False)

@@ -31,6 +31,7 @@ function EntityProfile({ data, loading, error }) {
 
   return (
     <Box sx={{ marginBottom: 3 }}>
+      <h4>Profile</h4>
       <TableContainer component={Paper} elevation={0}>
         <Table size="small">
           <TableBody>

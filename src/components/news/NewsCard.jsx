@@ -60,7 +60,7 @@ const NewsCard = ({ news }) => {
             </MuiLink>
           </Typography>
         
-          <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 0.5 }}>
+          <Box sx={{ mb: 0.5 }}>
             {" "}
             {/* Reduced from mb: 1 */}
             <SentimentScore

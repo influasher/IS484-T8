@@ -10,6 +10,21 @@ from app.utils.helpers import format_response
 
 entities_bp = Blueprint('entities', __name__)
 
+# Helper function to convert frontend period to yfinance period
+def convert_period_to_yfinance(period):
+    """Convert frontend period format to yfinance compatible format"""
+    period_mapping = {
+        '1D': '1d',
+        '1W': '5d',     # yfinance doesn't have 1w, use 5d for 1 week
+        '1M': '1mo',
+        '3M': '3mo', 
+        '6M': '6mo',
+        '1Y': '1y',
+        'YTD': 'ytd',
+        '5Y': '5y'
+    }
+    return period_mapping.get(period, '1y')  # default to 1 year
+
 # ** Get Entities
 @entities_bp.route("/", methods=['GET'])
 def get_entities():
@@ -110,34 +125,63 @@ def get_entity_stock_price(id):
         "stock_price": stock_price,
     }, "Stock price fetched successfully", 200)
 
-# ** get stock chart data
+# ** get stock chart data with period support
 @entities_bp.route('/<uuid:id>/chart', methods=['GET'])
 def get_entity_stock_chart(id):
     print("Fetching stock chart for entity ID:", id)
+    
+    # Get period from query parameters
+    period = request.args.get('period', '1Y')  # Default to 1 year
+    print(f"Period requested: {period}")
+    
     entity = Entity.query.get(id)
     if entity is None:
         return format_response(None, "Entity not found", 404)
     
-    # call the stock price service
-    stock_chart = get_stock_history(entity.ticker)
+    # Convert frontend period to yfinance format
+    yf_period = convert_period_to_yfinance(period)
+    
+    # call the stock price service with period
+    # You'll need to modify your get_stock_history function to accept period parameter
+    # For now, this assumes your function can handle the period parameter
+    try:
+        stock_chart = get_stock_history(entity.ticker, period=yf_period)
+    except TypeError:
+        # Fallback if your current function doesn't support period parameter yet
+        stock_chart = get_stock_history(entity.ticker)
 
     return format_response({
         "name": entity.name,
+        "ticker": entity.ticker,
+        "period": period,
         "stock_chart": stock_chart,
-    }, "Stock chart fetched successfully", 200)
+    }, f"Stock chart fetched successfully for {period}", 200)
 
-# ** get IRX chart data
+# ** get IRX chart data with period support
 @entities_bp.route('/ticker=^IRX/chart', methods=['GET'])
 def get_irx_chart():
     print("Fetching IRX chart data")
     
-    # call the stock price service for IRX
-    stock_chart = get_stock_history("^IRX")
+    # Get period from query parameters
+    period = request.args.get('period', '1Y')  # Default to 1 year
+    print(f"IRX period requested: {period}")
+    
+    # Convert frontend period to yfinance format
+    yf_period = convert_period_to_yfinance(period)
+    
+    # call the stock price service for IRX with period
+    try:
+        stock_chart = get_stock_history("^IRX", period=yf_period)
+    except TypeError:
+        # Fallback if your current function doesn't support period parameter yet
+        stock_chart = get_stock_history("^IRX")
 
     return format_response({
         "ticker": "^IRX",
+        "name": "13 Week Treasury Bill",
+        "period": period,
         "stock_chart": stock_chart,
-    }, "IRX chart fetched successfully", 200)
+    }, f"IRX chart fetched successfully for {period}", 200)
 
 @entities_bp.route('/<string:ticker>/fundamental', methods=['GET'])
 def get_entity_fundamental(ticker):

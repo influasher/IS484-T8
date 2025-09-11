@@ -1,13 +1,94 @@
-import React from "react";
-import { Container, Box, Typography } from "@mui/material";
+import React, { useState } from "react";
+import { Container, Box, Typography, ToggleButton, ToggleButtonGroup } from "@mui/material";
 import { LineChart } from "@mui/x-charts/LineChart";
 import useFetch from "../../hooks/useFetch"; // Adjust path if needed
 
 function EntityVisuals({ id }) {
   const number = id;
+  const [timeRange, setTimeRange] = useState('1Y'); // Default to 1 year
 
-  const entityUrl = `/entities/${number}/chart`;
-  const irxUrl = `/entities/ticker=^IRX/chart`; // Fetching IRX data
+  const timeRanges = [
+    { value: '1D', label: '1D' },
+    { value: '1W', label: '1W' },
+    { value: '1M', label: '1M' },
+    { value: '3M', label: '3M' },
+    { value: '6M', label: '6M' },
+    { value: '1Y', label: '1Y' },
+    { value: 'YTD', label: 'YTD' },
+    { value: '5Y', label: '5Y' },
+  ];
+
+  const handleTimeRangeChange = (event, newTimeRange) => {
+    if (newTimeRange !== null) {
+      setTimeRange(newTimeRange);
+    }
+  };
+
+  // Function to sample data points based on time range
+  const sampleDataPoints = (dates, prices, timeRange) => {
+    if (!dates || !prices || dates.length !== prices.length) return { dates, prices };
+    
+    const dataLength = dates.length;
+    let samplingInterval = 1; // Default: keep all points
+    
+    // Define sampling rules based on time range
+    switch (timeRange) {
+      case '1D':
+      case '1W':
+      case '1M':
+        samplingInterval = 1; // Keep all data points for short periods
+        break;
+      case '3M':
+      case '6M':
+        samplingInterval = Math.max(1, Math.floor(dataLength / 20)); // ~80 points for 6 months
+        break;
+      case '1Y':
+      case 'YTD':
+      case '5Y':
+        samplingInterval = Math.max(1, Math.floor(dataLength / 30)); // ~0 points for 5 years
+        break;
+      default:
+        samplingInterval = 1;
+    }
+    
+    // If sampling interval is 1, return original data
+    if (samplingInterval === 1) {
+      return { dates, prices };
+    }
+    
+    // Sample the data while keeping first and last points
+    const sampledDates = [];
+    const sampledPrices = [];
+    
+    // Always include first point
+    sampledDates.push(dates[0]);
+    sampledPrices.push(prices[0]);
+    
+    // Sample intermediate points
+    for (let i = samplingInterval; i < dataLength - 1; i += samplingInterval) {
+      sampledDates.push(dates[i]);
+      sampledPrices.push(prices[i]);
+    }
+    
+    // Always include last point (if not already included)
+    if (dataLength > 1 && (dataLength - 1) % samplingInterval !== 0) {
+      sampledDates.push(dates[dataLength - 1]);
+      sampledPrices.push(prices[dataLength - 1]);
+    }
+    
+    return { dates: sampledDates, prices: sampledPrices };
+  };
+
+  // Function to calculate cumulative returns
+  const calculateCumulativeReturns = (prices) => {
+    if (!prices || prices.length === 0) return [];
+    
+    const basePrice = prices[0];
+    return prices.map(price => ((price - basePrice) / basePrice) * 100);
+  };
+
+  const entityUrl = `/entities/${number}/chart?period=${timeRange}`;
+  const irxUrl = `/entities/ticker=^IRX/chart?period=${timeRange}`;
 
   // Fetch entity data
   const { data: entityData, loading: entityLoading, error: entityError } = useFetch(entityUrl);
@@ -21,17 +102,12 @@ function EntityVisuals({ id }) {
   if (!entityData || !entityData.data || !entityData.data.stock_chart)
     return <p>No entity data available</p>;
 
-  // Function to calculate cumulative returns
-  const calculateCumulativeReturns = (prices) => {
-    if (!prices || prices.length === 0) return [];
-    
-    const basePrice = prices[0];
-    return prices.map(price => ((price - basePrice) / basePrice) * 100);
-  };
-
   // Process entity data
-  const entityDates = entityData.data.stock_chart.dates.filter((date) => date !== undefined && date !== null);
-  const entityPrices = entityData.data.stock_chart.prices.filter((price) => price !== undefined && price !== null);
+  const entityDatesRaw = entityData.data.stock_chart.dates.filter((date) => date !== undefined && date !== null);
+  const entityPricesRaw = entityData.data.stock_chart.prices.filter((price) => price !== undefined && price !== null);
+
+  // Sample entity data based on time range
+  const { dates: entityDates, prices: entityPrices } = sampleDataPoints(entityDatesRaw, entityPricesRaw, timeRange);
 
   // Calculate cumulative returns for entity
   const entityReturns = calculateCumulativeReturns(entityPrices);
@@ -59,8 +135,11 @@ function EntityVisuals({ id }) {
   let processedIrxDates = [];
   
   if (irxData && irxData.data && irxData.data.stock_chart) {
-    const irxDatesRaw = irxData.data.stock_chart.dates.filter((date) => date !== undefined && date !== null);
-    const irxPricesRaw = irxData.data.stock_chart.prices.filter((price) => price !== undefined && price !== null);
+    const irxDatesRawOriginal = irxData.data.stock_chart.dates.filter((date) => date !== undefined && date !== null);
+    const irxPricesRawOriginal = irxData.data.stock_chart.prices.filter((price) => price !== undefined && price !== null);
+    
+    // Sample IRX data based on time range
+    const { dates: irxDatesRaw, prices: irxPricesRaw } = sampleDataPoints(irxDatesRawOriginal, irxPricesRawOriginal, timeRange);
     
     if (irxDatesRaw.length === irxPricesRaw.length && irxDatesRaw.length > 0) {
       processedIrxDates = irxDatesRaw.map(date => {
@@ -119,10 +198,48 @@ function EntityVisuals({ id }) {
       >
         <Typography
           variant="h5"
-          sx={{ fontWeight: 700, textAlign: "center" }}
+          sx={{ fontWeight: 700, textAlign: "center", mb: 2 }}
         >
           {entityData?.data?.name || "N/A"} vs Treasury Bills - Cumulative Returns
         </Typography>
+
+        {/* Time Range Toggle Buttons */}
+        <Box sx={{ mb: 3 }}>
+          <ToggleButtonGroup
+            value={timeRange}
+            exclusive
+            onChange={handleTimeRangeChange}
+            aria-label="time range selection"
+            size="small"
+            sx={{
+              '& .MuiToggleButton-root': {
+                px: 2,
+                py: 0.5,
+                fontSize: '0.875rem',
+                fontWeight: 600,
+                borderRadius: 1,
+                border: '1px solid #e0e0e0',
+                color: '#666',
+                '&.Mui-selected': {
+                  backgroundColor: '#8884d8',
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: '#7c7bd8',
+                  },
+                },
+                '&:hover': {
+                  backgroundColor: '#f5f5f5',
+                },
+              },
+            }}
+          >
+            {timeRanges.map((range) => (
+              <ToggleButton key={range.value} value={range.value}>
+                {range.label}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Box>
 
         <Box sx={{ width: "100%", height: { xs: 200, sm: 300 } }}>
           <LineChart
@@ -144,9 +261,14 @@ function EntityVisuals({ id }) {
         {/* Show data availability status */}
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           {irxReturns.length > 0 
-            ? `Showing ${entityReturns.length} data points with Treasury Bill comparison`
-            : `Showing ${entityReturns.length} data points (Treasury Bill data unavailable)`
+            ? `Showing ${entityReturns.length} data points (${timeRange}) with Treasury Bill comparison`
+            : `Showing ${entityReturns.length} data points (${timeRange}) - Treasury Bill data unavailable`
           }
+          {timeRange !== '1D' && timeRange !== '1W' && timeRange !== '1M' && (
+            <span style={{ fontStyle: 'italic', marginLeft: '8px' }}>
+              (Optimized for performance)
+            </span>
+          )}
         </Typography>
       </Box>
     </Container>
