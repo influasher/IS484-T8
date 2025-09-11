@@ -237,36 +237,38 @@ const News = () => {
                       WebkitBoxOrient: 'vertical',
                       lineHeight: 1.4, // Slightly tighter line height
                     }}
+                    >
+                    {news.summary?.length > 300
+                      ? `${news.summary.slice(0, 300)}...`
+                      : `${news.summary}${' '.repeat(300 - news.summary.length)}`}
+                    </Typography>
+                  </CardContent>
+                  </Card>
+                </Grid>
+                ))
+              ) : (
+                <Grid item xs={12}>
+                <Box 
+                  sx={{
+                  height: '500px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  }}
+                >
+                  <Typography 
+                  variant="h6" 
+                  align="center" 
+                  sx={{ fontSize: '16px', fontWeight: 'bold', color: 'black' }}
                   >
-                    {news.summary?.length > 300 ? `${news.summary.slice(0, 300)}...` : news.summary}
+                  No news available.
                   </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))
-        ) : (
-          <Grid item xs={12}>
-            <Box 
-              sx={{
-                height: '500px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Typography 
-                variant="h6" 
-                align="center" 
-                sx={{ fontSize: '16px', fontWeight: 'bold', color: 'black' }}
-              >
-                No news available.
-              </Typography>
-            </Box>
-          </Grid>
-        )}
-      </Grid>
+                </Box>
+                </Grid>
+              )}
+              </Grid>
 
-      {/* Render Sentiment Feedback Form if a news item is selected */}
+              {/* Render Sentiment Feedback Form if a news item is selected */}
       {selectedNews && (
         <>
           {console.log('Rendering SentimentFeedbackForm with title:', selectedNews.title)}

@@ -33,7 +33,7 @@ const NewsCard = ({ news }) => {
       }}
     >
       <CardContent sx={{ p: 0, "&:last-child": { pb: 0 }, flexGrow: 1 }}>
-        {/* News Header */}
+        {/* /* News Header */}
         <Box sx={{ mb: 1 }}>
           <Typography variant="h6" sx={{ mb: 0.5 }}>
             <MuiLink
@@ -54,11 +54,13 @@ const NewsCard = ({ news }) => {
                 console.log("Selected News:", news);
               }}
             >
-              {news.title}
+              {news.title.length > 44
+                ? `${news.title.slice(0, 41)}...`
+                : news.title}
             </MuiLink>
           </Typography>
-          {/* Sentiment Score - aligned to right like in entities */}
-          <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 0.5 }}>
+        
+          <Box sx={{ mb: 0.5 }}>
             {" "}
             {/* Reduced from mb: 1 */}
             <SentimentScore

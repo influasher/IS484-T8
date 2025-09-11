@@ -96,19 +96,20 @@ const SentimentFeedbackForm = ({ newsTitle, onFeedbackSubmit }) => {
   return (
     <div className="feedback-form">
       <ToastContainer limit={1} /> {/* Limit to 1 toast at a time */}
-      <h2>Sentiment Feedback Form</h2>
-      <h3>Article: {newsTitle}</h3>
+      <h3>Sentiment Feedback Form</h3>
+      <p>Article: {newsTitle}</p>
       <div>
-        <span style={{ color: 'green' }}>
+        <span>
           FinBERT: {Math.ceil(filteredNewsData.finbert_score)}
         </span>
         &nbsp;&nbsp;
-        <span style={{ color: 'red' }}>
+        <span>
           Gemini: {Math.ceil(filteredNewsData.second_model_score)}
         </span>
       </div>
-      <p>Your assessment:</p>
+      <hr />
       <div>
+      <p>Your assessment:</p>
         <label>
           <input
             type="radio"
@@ -116,7 +117,7 @@ const SentimentFeedbackForm = ({ newsTitle, onFeedbackSubmit }) => {
             value="bullish"
             onChange={handleOptionChange}
           />
-          Bullish
+          &nbsp; Bullish
         </label>
         &nbsp;&nbsp;
         {/* <label>
@@ -136,7 +137,7 @@ const SentimentFeedbackForm = ({ newsTitle, onFeedbackSubmit }) => {
             value="bearish"
             onChange={handleOptionChange}
           />
-          Bearish
+          &nbsp; Bearish
         </label>
       </div>
 

@@ -2,6 +2,7 @@ import { Pie } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { useLocation } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch';
+import { Box, Typography, CircularProgress } from '@mui/material';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -15,16 +16,22 @@ function PieChart({ key }) {
   const { data: agreementData } = useFetch(`/news/id/${id}`);  // Assuming a different endpoint
   const agreementScore = agreementData?.data?.agreement_rate;
 
-
-
   // Handle loading state
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+        <CircularProgress />
+      </Box>
+    );
   }
 
   // Handle error state
   if (error || !data || !data.data) {
-    return <div>Error fetching feedback data.</div>;
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+        <Typography color="error">Error fetching feedback data.</Typography>
+      </Box>
+    );
   }
 
   // Process feedbackData to count sentiments
@@ -54,7 +61,6 @@ function PieChart({ key }) {
 
   // Calculate percentages for each sentiment (out of 100)
   const bearishPercentage = totalCount > 0 ? (bearishCount / totalCount) * 100 : 0;
-  // const neutralPercentage = totalCount > 0 ? (neutralCount / totalCount) * 100 : 0;
   const bullishPercentage = totalCount > 0 ? (bullishCount / totalCount) * 100 : 0;
 
   // Pie chart data
@@ -95,24 +101,23 @@ function PieChart({ key }) {
   };
 
   // Disable the pie if agreementScore is 1
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (error) {
-    return <div>Error fetching news data.</div>;
-  }
-
   if (!agreementData || agreementScore === 1) {
-    return <div style={{ color: 'white', fontStyle: 'italic' }}>No feedback required</div>;
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+        <Typography color="textSecondary" fontStyle="italic">
+          No feedback required
+        </Typography>
+      </Box>
+    );
   }
 
   return (
-    
-    <div style={{ width: "55%", margin: "0 auto" }}>
-      <h3 >Feedback Based on Users</h3>
+    <Box width="55%" margin="0 auto" textAlign="center">
+      <Typography variant="h5" gutterBottom>
+        Feedback Based on Users
+      </Typography>
       <Pie data={chartData} options={options} />
-    </div>
+    </Box>
   );
 }
 

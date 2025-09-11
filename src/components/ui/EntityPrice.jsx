@@ -15,9 +15,6 @@ function EntityPrice(id) {
     <div style={styles.container}>
       <Typography
         sx={{
-          color: "black",
-          fontWeight: 700,
-          fontSize: "clamp(1.5rem, 4vw, 3rem)", // dynamic font size
           textAlign: "center",
           m: "0 auto", // shorthand for margin
           maxWidth: "90vw",
