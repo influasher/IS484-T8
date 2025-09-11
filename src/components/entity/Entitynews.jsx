@@ -42,9 +42,9 @@ const News = ({ EntityName }) => {
     setSearchTerm(term); // Update search term in the parent component
   };
 
-  console.log("Current Page:", currentPage);
-  console.log("Total Pages:", totalPages);
-  console.log("Current News Data:", currentNews);
+  // console.log("Current Page:", currentPage);
+  // console.log("Total Pages:", totalPages);
+  // console.log("Current News Data:", currentNews);
 
   // Handle pagination
   const handlePageChange = (event, pageNumber) => {
@@ -55,6 +55,7 @@ const News = ({ EntityName }) => {
 
   return (
     <Container sx={{ mt: 4 }}>
+      
       {/* News Content */}
       <Grid container spacing={3}>
         {loading ? (

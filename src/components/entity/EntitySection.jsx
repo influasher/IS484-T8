@@ -1,15 +1,16 @@
 import React from "react";
 import { useParams } from "react-router-dom";
-import { Box, CircularProgress, Typography } from "@mui/material";
+import { Box, CircularProgress, Typography, Link as MuiLink } from "@mui/material";
 import EntityHeader from "./EntityHeader";
 import EntityVisuals from "./Entityvisuals";
 import EntityNews from "./Entitynews";
+import EntityProfile from "./EntityProfile";
 import useFetch from "../../hooks/useFetch";
 import "../../styles/App.css";
+import { Link } from "react-router-dom";
 
 const EntitySection = () => {
   const { ticker } = useParams();
-  console.log(ticker);
   const url = `/entities/${ticker}`;
   const { data, loading, error } = useFetch(url);
   const EntityName = data ? data.data.name : "N/A";
@@ -35,13 +36,25 @@ const EntitySection = () => {
     );
 
   return (
-    <>
-      <EntityHeader data={data} />
-
-      <EntityVisuals id={stockID} />
-
-      <EntityNews EntityName={EntityName} />
-    </>
+    <Box sx={{ display: "flex" }}>
+      <Box sx={{ flex: 1, padding: 2 }}>
+        <EntityHeader data={data} />
+        <EntityVisuals id={stockID} />
+        <div style={{ textAlign: "center" }}>
+          <Typography variant="h6" sx={{ mt: 2 }}>
+            <MuiLink 
+              component={Link}
+              to="/NewsPage">
+                Search for more news
+            </MuiLink>
+          </Typography>
+          <EntityNews EntityName={EntityName} />
+        </div>
+      </Box>
+      <Box sx={{ width: "25%", borderLeft: "1px solid #ddd", padding: 2 }}>
+        <EntityProfile data={data} />
+      </Box>
+    </Box>
   );
 };
 

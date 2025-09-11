@@ -126,6 +126,19 @@ def get_entity_stock_chart(id):
         "stock_chart": stock_chart,
     }, "Stock chart fetched successfully", 200)
 
+# ** get IRX chart data
+@entities_bp.route('/ticker=^IRX/chart', methods=['GET'])
+def get_irx_chart():
+    print("Fetching IRX chart data")
+    
+    # call the stock price service for IRX
+    stock_chart = get_stock_history("^IRX")
+
+    return format_response({
+        "ticker": "^IRX",
+        "stock_chart": stock_chart,
+    }, "IRX chart fetched successfully", 200)
+
 @entities_bp.route('/<string:ticker>/fundamental', methods=['GET'])
 def get_entity_fundamental(ticker):
     stock_fundamentals = get_stock_fundamentals(ticker)

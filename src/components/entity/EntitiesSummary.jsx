@@ -217,7 +217,7 @@ const Entities = () => {
                         lineHeight: 1.4, // Slightly tighter line height
                       }}
                     >
-                      {entityItem.summary.padEnd(200, ' ')} {/* Pad summary to a fixed length */}
+                      {entityItem.summary.padEnd(400, ' ')} {/* Pad summary to a fixed length */}
                     </Typography>
                   </CardContent>
                 </Card>

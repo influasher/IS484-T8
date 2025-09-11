@@ -4,6 +4,8 @@ import {
   Chip,
   Tooltip,
   Grid,
+  Typography,
+  Divider,
 } from "@mui/material";
 import Entity from "./Entity";
 import EntityPrice from "../ui/EntityPrice";
@@ -34,7 +36,61 @@ const EntityHeader = ({ data }) => {
       <Grid container alignItems="center" justifyContent="space-between">
         {/* Entity on the left */}
         <Grid item>
-          <Entity EntityTicker={EntityTicker} />
+          <Box
+            sx={{
+              top: 16,
+              left: 16,
+              display: "flex",
+              alignItems: "baseline",
+              p: 2,
+              zIndex: 1000,
+              bgcolor: "white",
+              gap: 3,
+            }}
+          >
+            {/* Symbol */}
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              {EntityTicker ?? "N/A"}
+            </Typography>
+
+            {/* Vertical Divider */}
+            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+
+            <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
+              Price
+              
+              <Typography
+                variant="h5"
+                sx={{ fontWeight: 700 }}
+              >
+                
+                <EntityPrice id={stockID} />
+              </Typography>
+
+              {/* Currency */}
+              {/* <Typography
+                variant="subtitle1"
+                sx={{ fontWeight: 500, color: "text.secondary" }}
+              >
+                {entity.currency ?? "USD"}
+              </Typography> */}
+
+              {/* Change + percentage */}
+              {/* <Typography
+                variant="h6"
+                sx={{ color: isPositive ? "green" : "red", fontWeight: "bold" }}
+              >
+                {entity.change != null ? (entity.change >= 0 ? "+" : "") : ""}
+                {entity.change?.toFixed(2) ?? "--"} (
+                {entity.percent_change != null
+                  ? entity.percent_change >= 0
+                    ? "+"
+                    : ""
+                  : ""}
+                {entity.percent_change?.toFixed(2) ?? "--"}%)
+              </Typography> */}
+            </Box>
+          </Box>
         </Grid>
 
         {/* Buttons on the right */}
@@ -43,12 +99,6 @@ const EntityHeader = ({ data }) => {
             <ReportButton EntityName={EntityName} />
             <SendPDF EntityName={EntityName} />
           </Box>
-        </Grid>
-      </Grid>
-
-      <Grid container alignItems="start">
-        <Grid item>
-          <EntityPrice id={stockID} />
         </Grid>
       </Grid>
 

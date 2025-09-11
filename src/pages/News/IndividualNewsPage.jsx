@@ -3,6 +3,8 @@ import NewsSources from '../../components/news/NewsSources';
 import SentimentFeedbackForm from '../../components/ui/sentimentFeedback';
 import { useLocation } from 'react-router-dom';
 import PieChart from '../../components/ui/feedbackChart';
+import { Link } from 'react-router-dom';
+import { Typography, Link as MuiLink } from '@mui/material';
 
 function IndividualNewsPage() {
   const [refreshChart, setRefreshChart] = useState(false); // State to trigger chart refresh
@@ -14,6 +16,7 @@ function IndividualNewsPage() {
   return (
     <div style={{ color: 'black', padding: '20px' }}>
       <NewsSources />
+      
       <div style={styles.container}>
         {/* Sentiment Feedback Form */}
         <div style={styles.sentimentFeedbackWrapper}>
@@ -25,6 +28,16 @@ function IndividualNewsPage() {
         <div style={styles.pieChartWrapper}>
         <PieChart key={refreshChart} />
         </div>
+      </div>
+
+      <div style={{ textAlign: "center" }}>
+        <Typography variant="h6" sx={{ mt: 2 }}>
+          <MuiLink 
+            component={Link}
+            to="/NewsPage">
+              Search for more news
+          </MuiLink>
+        </Typography>
       </div>
     </div>
   );
