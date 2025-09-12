@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 import useFetch from './hooks/useFetch';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
+import LoginPage from './pages/LoginPage';
 import NewsPage from './pages/News/NewsPage';
 import IndividualNewsPage from './pages/News/IndividualNewsPage';
 import EntitiesPage from './pages/Entities/EntitiesPage';
@@ -31,8 +32,9 @@ function App() {
           <Route path="/IndividualNewsPage" element={<IndividualNewsPage />} />
           <Route path="/entity/:ticker" element={<EntityPage />} />
           <Route path="/DashboardPage" element={<DashboardPage />} />
-          <Route path="/" element={<ClientCards sx={{ pt: "84px" }} />} />
+          <Route path="/RM" element={<ClientCards sx={{ pt: "84px" }} />} />
           <Route path="/client/:id" element={<ClientRecc />} />
+          <Route path="/" element={<LoginPage />} />
         </Routes>
       </main>
     </div>
