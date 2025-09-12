@@ -10,6 +10,7 @@ import IndividualNewsPage from './pages/News/IndividualNewsPage';
 import EntitiesPage from './pages/Entities/EntitiesPage';
 import EntityPage from './pages/Entities/EntityPage';
 import DashboardPage from './pages/DashboardPage';
+import ClientHomePage from './pages/Clients/ClientHomePage';
 import './styles/App.css';
 import ClientCards from './components/clients/ClientCards';
 import ClientRecc from './components/clients/ClientRecc';
@@ -30,11 +31,13 @@ function App() {
           <Route path="/EntitiesPage" element={<EntitiesPage />} />
           <Route path="/NewsPage" element={<NewsPage />} />
           <Route path="/IndividualNewsPage" element={<IndividualNewsPage />} />
-          <Route path="/entity/:ticker" element={<EntityPage />} />
+          <Route path="/Entity/:ticker" element={<EntityPage />} />
           <Route path="/DashboardPage" element={<DashboardPage />} />
           <Route path="/RM" element={<ClientCards sx={{ pt: "84px" }} />} />
-          <Route path="/client/:id" element={<ClientRecc />} />
+          <Route path="/RM/Client/:id" element={<ClientRecc />} />
           <Route path="/" element={<LoginPage />} />
+          <Route path="/Client" element={<ClientHomePage />} />
+          {/* <Route path="*" element={<Navigate to="/" replace />} /> */}
         </Routes>
       </main>
     </div>
