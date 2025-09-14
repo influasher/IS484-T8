@@ -23,7 +23,7 @@ def get_all_ticker_entities():
     if not entities:
         return []
     for entity in entities:
-        ticker_list.append(entity.ticker)
+        ticker_list.append({"ticker": entity.ticker, "name": entity.name})
 
     return ticker_list
 
