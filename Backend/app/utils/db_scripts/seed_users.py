@@ -6,7 +6,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../../.."))
 
 from app import create_app, db
 from app.models.user import User, UserRole
-from werkzeug.security import generate_password_hash
 
 
 def seed_users():
@@ -22,31 +21,40 @@ def seed_users():
 
         # Create RMs first
         rm1 = User(
-            username="jsmith_rm",
-            email="john.smith@company.com",
-            first_name="John",
-            last_name="Smith",
-            password=generate_password_hash("rm_password123"),
-            role=UserRole.RELATIONSHIP_MANAGER,
+            username='jsmith_rm',
+            email='john.smith@company.com',
+            first_name='John',
+            last_name='Smith',
+            role=UserRole.RELATIONSHIP_MANAGER
         )
 
         rm2 = User(
-            username="sjohnson_rm",
-            email="sarah.johnson@company.com",
-            first_name="Sarah",
-            last_name="Johnson",
-            password=generate_password_hash("rm_password123"),
-            role=UserRole.RELATIONSHIP_MANAGER,
+            username='sjohnson_rm',
+            email='sarah.johnson@company.com',
+            first_name='Sarah',
+            last_name='Johnson',
+            role=UserRole.RELATIONSHIP_MANAGER
+        )
+
+        # Add SentiFinance RM
+        sentifinance_rm = User(
+            username='sentifinance_rm',
+            email='sentifinance67@gmail.com',
+            first_name='SentiFinance',
+            last_name='RM',
+            role=UserRole.RELATIONSHIP_MANAGER
         )
 
         # Add RMs to session and commit to get their IDs
         db.session.add(rm1)
         db.session.add(rm2)
+        db.session.add(sentifinance_rm)
         db.session.commit()
 
         print(f"Created RM 1: {rm1.username} (ID: {rm1.id})")
         print(f"Created RM 2: {rm2.username} (ID: {rm2.id})")
-
+        print(f"Created SentiFinance RM: {sentifinance_rm.username} (ID: {sentifinance_rm.id})")
+        
         # Clients for John Smith (RM1)
         clients_rm1 = [
             {
@@ -127,46 +135,57 @@ def seed_users():
             },
         ]
 
+        # Clients for SentiFinance RM
+        clients_sentifinance = [
+            {'username': 'sentifinance_client', 'email': 'sentifinanceclient@gmail.com', 'first_name': 'SentiFinance', 'last_name': 'Client'}
+        ]
+        
         # Create clients for RM1
         for client_data in clients_rm1:
             client = User(
-                username=client_data["username"],
-                email=client_data["email"],
-                first_name=client_data["first_name"],
-                last_name=client_data["last_name"],
-                password=generate_password_hash("client_password123"),
+                username=client_data['username'],
+                email=client_data['email'],
+                first_name=client_data['first_name'],
+                last_name=client_data['last_name'],
                 role=UserRole.CLIENT,
                 rm_id=rm1.id,
             )
             db.session.add(client)
-            print(
-                f"Created client: {client.first_name} {client.last_name} ({client.username}) -> RM: {rm1.first_name} {rm1.last_name}"
-            )
+            print(f"Created client: {client.first_name} {client.last_name} ({client.username}) -> RM: {rm1.first_name} {rm1.last_name}")
 
         # Create clients for RM2
         for client_data in clients_rm2:
             client = User(
-                username=client_data["username"],
-                email=client_data["email"],
-                first_name=client_data["first_name"],
-                last_name=client_data["last_name"],
-                password=generate_password_hash("client_password123"),
+                username=client_data['username'],
+                email=client_data['email'],
+                first_name=client_data['first_name'],
+                last_name=client_data['last_name'],
                 role=UserRole.CLIENT,
                 rm_id=rm2.id,
             )
             db.session.add(client)
-            print(
-                f"Created client: {client.first_name} {client.last_name} ({client.username}) -> RM: {rm2.first_name} {rm2.last_name}"
-            )
+            print(f"Created client: {client.first_name} {client.last_name} ({client.username}) -> RM: {rm2.first_name} {rm2.last_name}")
 
+        # Create clients for SentiFinance RM
+        for client_data in clients_sentifinance:
+            client = User(
+                username=client_data['username'],
+                email=client_data['email'],
+                first_name=client_data['first_name'],
+                last_name=client_data['last_name'],
+                role=UserRole.CLIENT,
+                rm_id=sentifinance_rm.id
+            )
+            db.session.add(client)
+            print(f"Created client: {client.first_name} {client.last_name} ({client.username}) -> RM: {sentifinance_rm.first_name} {sentifinance_rm.last_name}")
+        
         # Commit all clients
         db.session.commit()
 
         print("\nSuccessfully created:")
-        print("- 2 Relationship Managers")
-        print("- 12 Clients (6 assigned to each RM)")
-        print("\nRM Passwords: rm_password123")
-        print("Client Passwords: client_password123")
+        print("- 3 Relationship Managers")
+        print("- 13 Clients (6 to RM1, 6 to RM2, 1 to SentiFinance RM)")
+        print("\nPasswordless authentication enabled - login with email + OTP")
 
 
 if __name__ == "__main__":
