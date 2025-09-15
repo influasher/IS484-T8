@@ -1,49 +1,28 @@
 import React from "react";
-import Box from "@mui/material/Box";
-import Paper from "@mui/material/Paper";
-import Grid from "@mui/material/Grid";
-import Typography from "@mui/material/Typography";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
-import Pagination from "@mui/material/Pagination";
+import {
+    Box,
+    Paper,
+    Grid,
+    Typography,
+    IconButton,
+    Tooltip,
+    Pagination,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
+    Button,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    Chip,
+    Slider,
+} from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import FormControl from "@mui/material/FormControl";
-import InputLabel from "@mui/material/InputLabel";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
-import Chip from "@mui/material/Chip";
 import Client from "./Client";
 import useFetch from "../../hooks/useFetch";
-
-function normalize(u) {
-    const sectors = Array.isArray(u?.sectors) && u.sectors.length > 0 ? u.sectors : ["NA"];
-    return {
-        id: u?.id ?? "NA",
-        name: u?.username ?? "NA", // map backend username -> UI name for now
-        email: u?.email ?? "NA",
-        username: u?.username ?? "NA",
-        holdings: u?.holdings ?? "NA",
-        overallPL: u?.overallPL ?? "NA",
-        risk: u?.risk ?? "NA",
-        cap: u?.cap ?? "NA",
-        sectors,
-    };
-}
-
-function useClients() {
-    const { data, loading, error } = useFetch("/user/clients");
-
-    const list = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
-    const clients = React.useMemo(() => list.map(normalize), [list]);
-
-    return { clients, loading, error };
-}
 
 // ---------- constants ----------
 const ALL_SECTORS = [
@@ -66,8 +45,40 @@ const PX_PER_SPACING_UNIT = 8;
 const GAP_PX = GRID_GAP_SPACING * PX_PER_SPACING_UNIT;
 const ROWS_PER_PAGE = 2;
 
+// --------------------------------
+
+const RISK_LABELS = ["Zero", "Medium", "Moderate", "High", "Very High"];
+function riskValueToLabel(val) {
+    if (typeof val !== "number") return "Zero";
+    return RISK_LABELS[val] ?? "Zero";
+}
+
+function normalize(u) {
+    const sectors = Array.isArray(u?.sectors) && u.sectors.length > 0 ? u.sectors : ["NA"];
+    return {
+        id: u?.id ?? "NA",
+        name: (u?.first_name && u?.last_name) ? `${u.first_name} ${u.last_name}` : "NA",
+        email: u?.email ?? "NA",
+        username: u?.username ?? "NA",
+        holdings: u?.holdings ?? "NA",
+        overall_pl: u?.overall_pl ?? "NA",
+        risk_cap: u?.risk_cap ?? "NA",
+        sectors,
+    };
+}
+
+function useClients() {
+    // fetch all clients
+    const { data, loading, status } = useFetch("/user/clients");
+
+    const list = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+    const clients = React.useMemo(() => list.map(normalize), [list]);
+
+    return { clients, loading, status };
+}
+
 const ClientCards = () => {
-    const { clients: fetchedClients, loading, error } = useClients();
+    const { clients: fetchedClients, loading, status } = useClients();
 
     const [clients, setClients] = React.useState([]);
 
@@ -121,7 +132,10 @@ const ClientCards = () => {
 
     // Add-Client modal state
     const [openAdd, setOpenAdd] = React.useState(false);
-    const [formName, setFormName] = React.useState("");
+    const [formFirstName, setFormFirstName] = React.useState("");
+    const [formLastName, setFormLastName] = React.useState("");
+    // const [formUsername, setFormUsername] = React.useState("");
+    const [formStopLossTolerance, setFormStopLossTolerance] = React.useState(0);
     const [formEmail, setFormEmail] = React.useState("");
     const [formRiskThreshold, setFormRiskThreshold] = React.useState("");
     const [formSectors, setFormSectors] = React.useState([]);
@@ -129,35 +143,56 @@ const ClientCards = () => {
     const handleOpenAdd = () => setOpenAdd(true);
     const handleCloseAdd = () => {
         setOpenAdd(false);
-        setFormName("");
+        setFormFirstName("");
+        setFormLastName("");
+        // setFormUsername("");
+        setFormStopLossTolerance(0);
         setFormEmail("");
-        setFormRiskThreshold("");
+        setFormRiskThreshold(0);
         setFormSectors([]);
     };
 
-    const handleSubmitAdd = (e) => {
+    const handleSubmitAdd = async (e) => {
         e.preventDefault();
-        const nextId =
-            clients.reduce((max, c) => Math.max(max, Number(c.id) || 0), 0) + 1;
 
-        const newClient = {
-            id: nextId,
-            name: formName.trim() || "NA",
-            email: formEmail.trim() || "NA",
-            username:
-                formName.trim()
-                    ? `${formName.trim().toLowerCase().replace(/\s+/g, "")}_client_${nextId}`
-                    : "NA",
-            holdings: "NA",
-            overallPL: "NA",
-            risk: formRiskThreshold ? `Threshold ${formRiskThreshold}%` : "NA",
-            cap: "NA",
-            sectors: formSectors.length ? formSectors : ["NA"],
+        const payload = {
+            // generate random id
+            id: crypto.randomUUID(),
+            // username: formUsername.trim(),
+            // for now auto generate the username
+            username: formFirstName.trim().toLowerCase() + "." + formLastName.trim().toLowerCase() + Math.floor(Math.random() * 1000),
+            first_name: formFirstName.trim(),
+            last_name: formLastName.trim(),
+            email: formEmail.trim(),
+            // risk_cap: riskValueToLabel(formRiskThreshold),
+            // sectors: formSectors,
+            // stop_loss_tolerance: formStopLossTolerance === "yes"? true : false,
+            role: "client",
+            rm_id: null,
+            created_at: new Date().toISOString(),
         };
 
-        setClients((prev) => [newClient, ...prev]);
-        setPage(1);
-        handleCloseAdd();
+        try {
+            const res = await fetch("/user/create-clients", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) throw new Error("Failed to add client");
+
+            const result = await res.json();
+            // Optionally, normalize result.data if needed
+            const newClient = normalize(result.data);
+
+            setClients((prev) => [newClient, ...prev]);
+            setPage(1);
+            handleCloseAdd();
+        } catch (err) {
+            alert("Error adding client: " + err.message);
+        }
     };
 
     const handleDeleteSector = (sector) => {
@@ -169,7 +204,8 @@ const ClientCards = () => {
             sx={{
                 minHeight: "100vh",
                 bgcolor: (t) => t.palette.grey[100],
-                p: { xs: 1.5, sm: 2.5, md: 3 },
+                px: { xs: 3, sm: 5, md: 7 },
+                py: { xs: 1.5, sm: 2.5, md: 3 },
             }}
         >
             <Paper
@@ -178,7 +214,8 @@ const ClientCards = () => {
                     position: "relative",
                     zIndex: (t) => t.zIndex.drawer + 1,
                     mx: "auto",
-                    p: { xs: 2, sm: 3 },
+                    px: { xs: 3, sm: 5, md: 7 },
+                    py: { xs: 2, sm: 3 },
                     borderRadius: 3,
                 }}
             >
@@ -201,9 +238,9 @@ const ClientCards = () => {
                         Loading clients…
                     </Typography>
                 )}
-                {error && (
+                {status && (status !== 200) && !loading && (
                     <Typography variant="body2" color="error" sx={{ mb: 2 }}>
-                        {String(error)}
+                        Failed to load clients: {status}
                     </Typography>
                 )}
 
@@ -249,13 +286,29 @@ const ClientCards = () => {
                 <DialogContent dividers>
                     <Box component="form" onSubmit={handleSubmitAdd} sx={{ mt: 1.5, display: "grid", gap: 2 }}>
                         <TextField
-                            label="Name"
+                            label="First Name"
                             type="text"
                             fullWidth
                             required
-                            value={formName}
-                            onChange={(e) => setFormName(e.target.value)}
+                            value={formFirstName}
+                            onChange={(e) => setFormFirstName(e.target.value)}
                         />
+                        <TextField
+                            label="Last Name"
+                            type="text"
+                            fullWidth
+                            required
+                            value={formLastName}
+                            onChange={(e) => setFormLastName(e.target.value)}
+                        />
+                        {/* <TextField
+                            label="Username"
+                            type="text"
+                            fullWidth
+                            required
+                            value={formUsername}
+                            onChange={(e) => setFormUsername(e.target.value)}
+                        /> */}
                         <TextField
                             label="Email"
                             type="email"
@@ -264,15 +317,6 @@ const ClientCards = () => {
                             value={formEmail}
                             onChange={(e) => setFormEmail(e.target.value)}
                         />
-                        <TextField
-                            label="Risk Threshold (%)"
-                            type="number"
-                            fullWidth
-                            inputProps={{ min: 0, step: 1 }}
-                            value={formRiskThreshold}
-                            onChange={(e) => setFormRiskThreshold(e.target.value)}
-                        />
-
                         <FormControl fullWidth>
                             <InputLabel id="sectors-label">Sectors</InputLabel>
                             <Select
@@ -320,6 +364,39 @@ const ClientCards = () => {
                                 ))}
                             </Select>
                         </FormControl>
+                        <TextField
+                            label="Stop Loss Tolerance"
+                            type="number"
+                            fullWidth
+                            required
+                            defaultValue={0}
+                            value={formStopLossTolerance}
+                            onChange={(e) => setFormStopLossTolerance(e.target.value)}
+                        />
+                        <Box sx={{ px: 0, py: 1, mx: 1.5 }}>
+                            <Typography variant="body1" sx={{ mb: 1, fontWeight: 500 }}>
+                                Risk Threshold
+                            </Typography>
+                            <Slider
+                                value={typeof formRiskThreshold === "number" ? formRiskThreshold : 0}
+                                min={0}
+                                max={4}
+                                step={1}
+                                // show 1dp
+                                precision={1}
+                                marks={[
+                                    { value: 0, label: "Zero" },
+                                    { value: 1, label: "Medium" },
+                                    { value: 2, label: "Moderate" },
+                                    { value: 3, label: "High" },
+                                    { value: 4, label: "Very High" },
+                                ]}
+                                valueLabelDisplay="auto"
+                                valueLabelFormat={(value) => RISK_LABELS[value] || value}
+                                onChange={(_, val) => setFormRiskThreshold(Number(val))}
+                                sx={{ mx: 1, width: "calc(100% - 20px)" }}
+                            />
+                        </Box>
                     </Box>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, py: 2 }}>
