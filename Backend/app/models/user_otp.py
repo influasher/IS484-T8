@@ -24,7 +24,11 @@ class UserOTP(db.Model):
         self.is_used = False
 
     def is_expired(self):
-        return datetime.now(timezone.utc) > self.expires_at
+        now = datetime.now(timezone.utc)
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return now > expires_at
 
     def is_valid(self):
         return not self.is_used and not self.is_expired()
