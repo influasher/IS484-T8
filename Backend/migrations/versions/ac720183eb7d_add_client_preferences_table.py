@@ -1,8 +1,8 @@
-"""Add client_preferences table
+"""Add client_preferences table with updated field types
 
-Revision ID: 4a40c4bc4079
+Revision ID: ac720183eb7d
 Revises: 32e7eb06cc0d
-Create Date: 2025-09-15 13:39:07.394628
+Create Date: 2025-09-15 16:23:31.018032
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '4a40c4bc4079'
+revision = 'ac720183eb7d'
 down_revision = '32e7eb06cc0d'
 branch_labels = None
 depends_on = None
@@ -23,8 +23,8 @@ def upgrade():
     sa.Column('user_id', sa.UUID(), nullable=False),
     sa.Column('holding', sa.Float(), nullable=True),
     sa.Column('overall_pl', sa.Float(), nullable=True),
-    sa.Column('stop_loss_tolerance', sa.Boolean(), nullable=False),
-    sa.Column('risk_cap', sa.Float(), nullable=True),
+    sa.Column('stop_loss_tolerance', sa.Float(), nullable=True),
+    sa.Column('risk_cap', sa.String(), nullable=True),
     sa.Column('sectors', postgresql.ARRAY(sa.String()), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('updated_at', sa.DateTime(), nullable=True),
