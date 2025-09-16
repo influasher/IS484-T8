@@ -1,12 +1,12 @@
-import React from "react";
-import EntitySection from "../../components/entity/EntitySection";
+import React from 'react';
+import IndvEntity from '../../components/entity/IndvEntity';
 
-function EntityPage() {
-  console.log("Rendering Entities Page");
+function EntitiesPage() {
+  console.log('Rendering Entities Page');
   return (
-    <div>
-        <EntitySection />
-      </div>
-  );
+  <div>
+        <IndvEntity />
+  </div>
+  ); 
 }
-export default EntityPage;
+export default EntitiesPage

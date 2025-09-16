@@ -32,7 +32,7 @@ import ReportButton from "../ui/export";
 import SendPDF from "../ui/SendReport";
 import CustomChip from "../ui/CustomChip";
 
-const CombinedEntityPage = () => {
+const IndvEntity = () => {
   const { ticker } = useParams();
   const url = `/entities/${ticker}`;
   const { data, loading, error } = useFetch(url);
@@ -227,11 +227,8 @@ const CombinedEntityPage = () => {
     { label: "Name", value: data.data.name },
     { label: "Asset Type", value: data.data.AssetType ?? "-" },
     { label: "Description", value: data.data.summary ?? "-" },
-    { label: "Exchange", value: data.data.Exchange },
-    { label: "Currency", value: data.data.Currency },
     { label: "Sector", value: data.data.Sector ?? "-" },
     { label: "Industry", value: data.data.Industry ?? "-" },
-    { label: "Official Site", value: data.data.OfficialSite ?? "-" },
   ];
 
   const sentimentTypes = {
@@ -585,4 +582,4 @@ const styles = {
   },
 };
 
-export default CombinedEntityPage;
+export default IndvEntity;

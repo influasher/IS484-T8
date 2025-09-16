@@ -1,7 +1,4 @@
 import React from 'react';
-import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import useFetch from './hooks/useFetch';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import LoginPage from './pages/LoginPage';
@@ -13,9 +10,9 @@ import DashboardPage from './pages/DashboardPage';
 import ClientHomePage from './pages/Clients/ClientHomePage';
 import RMHomePage from './pages/RM/RMHomePage';
 import RMIndvClientView from './pages/RM/RMIndvClientView';
+import SearchTable from './components/ui/SearchTable';
 import './styles/App.css';
 import { useParams } from 'react-router-dom';
-import CombinedEntityPage from './components/entity/Entity';
 
 function App() {
   const { id } = useParams(); // Get entity ID from URL
@@ -32,14 +29,14 @@ function App() {
           <Route path="/EntitiesPage" element={<EntitiesPage />} />
           <Route path="/NewsPage" element={<NewsPage />} />
           <Route path="/IndividualNewsPage" element={<IndividualNewsPage />} />
-          <Route path="/Entity/:ticker" element={<EntityPage />} />
+          <Route path="/Entity/:ticker" element={<EntityPage/>} />
           <Route path="/DashboardPage" element={<DashboardPage />} />
           <Route path="/RM" element={<RMHomePage />} />
           <Route path="/RM/Client/:id" element={<RMIndvClientView/>} />
           <Route path="/Login" element={<LoginPage />} />
           <Route path="/Client" element={<ClientHomePage />} />
+          <Route path="Test" element={<SearchTable />} />
           {/* <Route path="*" element={<Navigate to="/Login" replace />} /> */}
-          <Route path="/CombinedEntityPage/:ticker" element={<CombinedEntityPage/>} />
         </Routes>
       </main>
     </div>
