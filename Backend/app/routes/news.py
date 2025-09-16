@@ -1,7 +1,7 @@
 from flask import Blueprint, request
 from app.utils.decorators import jwt_required
 import time
-from app.services.news_services import news_by_ticker, news_by_id, all_news, resync_news_data
+from app.services.news_services import news_by_name, news_by_id, all_news, resync_news_data
 from app.services.data_ingestion_finviz import get_finviz_news_by_ticker, get_all_finviz
 from app.services.data_ingestion_gnews import get_gnews_news_by_ticker, get_all_top_gnews
 from app.services.data_ingestion_yfinance import get_stock_news
@@ -257,10 +257,7 @@ def get_news(entity):
     sort_order = request.args.get('sort_order', 'desc')  # Default to ascending
     filter_time = request.args.get('filter', 'all')  # Default to all-time
 
-    ticker = get_ticker_by_entity(entity)
-
-    news_list = news_by_ticker(ticker, page, per_page, sort_order, filter_time)
-
+    news_list = news_by_name(entity, page, per_page, sort_order, filter_time)
     if not news_list:
         return format_response([], "News not found", 404)
 

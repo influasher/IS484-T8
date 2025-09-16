@@ -3,11 +3,72 @@ from sqlalchemy import any_, func, or_
 from datetime import datetime, timedelta
 from app import db
 import time
+from sqlalchemy import cast
+from sqlalchemy.dialects.postgresql import ARRAY, VARCHAR
 
 def news_by_ticker(ticker, page=1, per_page=3, sort_order="desc", filter_time="all"):
     """Get paginated, filtered, and sorted news by ticker"""
 
     query = News.query.filter(News.entities.any(ticker))
+
+    # Apply time filtering
+    if filter_time != "all":
+        now = datetime.now()  # Ensure UTC consistency
+        if filter_time == "24":
+            query = query.filter(News.published_date >= now - timedelta(hours=24))
+        elif filter_time == "48":
+            query = query.filter(News.published_date >= now - timedelta(hours=48))
+        elif filter_time == "7d":
+            query = query.filter(News.published_date >= now - timedelta(days=7))
+
+    # Apply sorting (asc = oldest first, desc = newest first)
+    if sort_order == 'asc':
+        query = query.order_by(News.published_date.asc())
+    else:
+        query = query.order_by(News.published_date.desc())
+
+    # Apply pagination
+    news_paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    if not news_paginated.items:
+        return []
+
+    news_list = [{
+        "id": n.id,
+        "publisher": n.publisher,
+        "description": n.description,
+        "summary": n.summary,
+        "published_date": n.published_date.strftime('%Y-%m-%d %H:%M:%S'),
+        "title": n.title,
+        "url": n.url,
+        "entities": n.entities,
+        "score": n.score,
+        "finbert_score": n.finbert_score,
+        "second_model_score": n.second_model_score,
+        "third_model_score": n.third_model_score,
+        "sentiment": n.sentiment,
+        "tags": n.tags,
+        "confidence": n.confidence,
+        "agreement_rate": n.agreement_rate,
+        "company_names": n.company_names,
+        "regions": n.regions,
+        "sectors": n.sectors
+    } for n in news_paginated.items]
+
+    return {
+        "news": news_list,
+        "total": news_paginated.total,
+        "pages": news_paginated.pages,
+        "current_page": news_paginated.page,
+        "next_page": news_paginated.next_num,
+        "prev_page": news_paginated.prev_num,
+        "per_page": per_page
+    }
+
+def news_by_name(name, page=1, per_page=3, sort_order="desc", filter_time="all"):
+    """Get paginated, filtered, and sorted news by company name"""
+
+    query = News.query.filter(News.entities.contains(cast([name], ARRAY(VARCHAR))))
 
     # Apply time filtering
     if filter_time != "all":

@@ -4,7 +4,7 @@ from .data_ingestion_yfinance import get_stock_price, get_stock_history
 from .sentiment_analysis import get_sentiment, SentimentAnalyzer
 from .article_scraper import scrape_article
 from .export_pdf import generate_pdf
-from .news_services import news_by_ticker, news_by_id, all_news, resync_news_data
+from .news_services import news_by_ticker, news_by_name, news_by_id, all_news, resync_news_data
 from .entities_service import get_ticker_by_entity, get_all_ticker_entities
 from .email_pdf import send_email_with_attachment
 from .entities_service import get_all_ticker_entities, get_ticker_by_entity, update_entity_sentiment
