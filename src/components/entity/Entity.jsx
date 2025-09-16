@@ -102,62 +102,6 @@ const CombinedEntityPage = () => {
     }
   };
 
-  // Function to sample data points based on time range
-  const sampleDataPoints = (dates, prices, timeRange) => {
-    if (!dates || !prices || dates.length !== prices.length)
-      return { dates, prices };
-
-    const dataLength = dates.length;
-    let samplingInterval = 1; // Default: keep all points
-
-    // Define sampling rules based on time range
-    switch (timeRange) {
-      case "1D":
-      case "1W":
-      case "1M":
-        samplingInterval = 1; // Keep all data points for short periods
-        break;
-      case "3M":
-      case "6M":
-        samplingInterval = Math.max(1, Math.floor(dataLength / 20)); // ~80 points for 6 months
-        break;
-      case "1Y":
-      case "YTD":
-      case "5Y":
-        samplingInterval = Math.max(1, Math.floor(dataLength / 30)); // ~0 points for 5 years
-        break;
-      default:
-        samplingInterval = 1;
-    }
-
-    // If sampling interval is 1, return original data
-    if (samplingInterval === 1) {
-      return { dates, prices };
-    }
-
-    // Sample the data while keeping first and last points
-    const sampledDates = [];
-    const sampledPrices = [];
-
-    // Always include first point
-    sampledDates.push(dates[0]);
-    sampledPrices.push(prices[0]);
-
-    // Sample intermediate points
-    for (let i = samplingInterval; i < dataLength - 1; i += samplingInterval) {
-      sampledDates.push(dates[i]);
-      sampledPrices.push(prices[i]);
-    }
-
-    // Always include last point (if not already included)
-    if (dataLength > 1 && (dataLength - 1) % samplingInterval !== 0) {
-      sampledDates.push(dates[dataLength - 1]);
-      sampledPrices.push(prices[dataLength - 1]);
-    }
-
-    return { dates: sampledDates, prices: sampledPrices };
-  };
-
   // Function to calculate cumulative returns
   const calculateCumulativeReturns = (prices) => {
     if (!prices || prices.length === 0) return [];
@@ -176,18 +120,11 @@ const CombinedEntityPage = () => {
   console.log("Performance Change:", performanceChange);
 
   // Process entity data
-  const entityDatesRaw = entityData.data.stock_chart.dates.filter(
+  const entityDates = entityData.data.stock_chart.dates.filter(
     (date) => date !== undefined && date !== null
   );
-  const entityPricesRaw = entityData.data.stock_chart.prices.filter(
+  const entityPrices = entityData.data.stock_chart.prices.filter(
     (price) => price !== undefined && price !== null
-  );
-
-  // Sample entity data based on time range
-  const { dates: entityDates, prices: entityPrices } = sampleDataPoints(
-    entityDatesRaw,
-    entityPricesRaw,
-    timeRange
   );
 
   // Calculate cumulative returns for entity
@@ -216,18 +153,11 @@ const CombinedEntityPage = () => {
   let processedIrxDates = [];
 
   if (irxData && irxData.data && irxData.data.stock_chart) {
-    const irxDatesRawOriginal = irxData.data.stock_chart.dates.filter(
+    const irxDatesRaw = irxData.data.stock_chart.dates.filter(
       (date) => date !== undefined && date !== null
     );
-    const irxPricesRawOriginal = irxData.data.stock_chart.prices.filter(
+    const irxPricesRaw = irxData.data.stock_chart.prices.filter(
       (price) => price !== undefined && price !== null
-    );
-
-    // Sample IRX data based on time range
-    const { dates: irxDatesRaw, prices: irxPricesRaw } = sampleDataPoints(
-      irxDatesRawOriginal,
-      irxPricesRawOriginal,
-      timeRange
     );
 
     if (irxDatesRaw.length === irxPricesRaw.length && irxDatesRaw.length > 0) {
@@ -447,16 +377,6 @@ const CombinedEntityPage = () => {
                     </LineChart>
                   </Stack>
                 </Stack>
-                {/* <Typography variant="body2" color="text.secondary">
-                  {irxReturns.length > 0
-                    ? `Showing ${entityReturns.length} data points (${timeRange}) with Treasury Bill comparison`
-                    : `Showing ${entityReturns.length} data points (${timeRange}) - Treasury Bill data unavailable`}
-                  {["1D", "1W", "1M"].includes(timeRange) ? null : (
-                    <em style={{ marginLeft: 8 }}>
-                      (Optimized for performance)
-                    </em>
-                  )}
-                </Typography> */}
               </Box>
             </Container>
 
