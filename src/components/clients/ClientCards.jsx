@@ -156,7 +156,6 @@ const ClientCards = () => {
         e.preventDefault();
 
         const payload = {
-            // generate random id
             id: crypto.randomUUID(),
             // username: formUsername.trim(),
             // for now auto generate the username
@@ -164,9 +163,9 @@ const ClientCards = () => {
             first_name: formFirstName.trim(),
             last_name: formLastName.trim(),
             email: formEmail.trim(),
-            // risk_cap: riskValueToLabel(formRiskThreshold),
-            // sectors: formSectors,
-            // stop_loss_tolerance: formStopLossTolerance === "yes"? true : false,
+            risk_cap: riskValueToLabel(formRiskThreshold),
+            sectors: formSectors,
+            stop_loss_tolerance: formStopLossTolerance,
             role: "client",
             rm_id: null,
             created_at: new Date().toISOString(),
