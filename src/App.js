@@ -28,7 +28,7 @@ function App() {
         <Routes>
           <Route path="/EntitiesPage" element={<EntitiesPage />} />
           <Route path="/NewsPage" element={<NewsPage />} />
-          <Route path="/IndividualNewsPage" element={<IndividualNewsPage />} />
+          <Route path="/IndividualNewsPage/:id" element={<IndividualNewsPage />} />
           <Route path="/Entity/:ticker" element={<EntityPage/>} />
           <Route path="/DashboardPage" element={<DashboardPage />} />
           <Route path="/RM" element={<RMHomePage />} />

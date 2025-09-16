@@ -67,7 +67,7 @@ const News = () => {
           >
             <MuiLink
               component={Link}
-              to="/Individualnewspage"
+              to={`/Individualnewspage/${news.id}`}
               state={{ id: news.id, title: news.title }}
               sx={{
                 display: "block",
