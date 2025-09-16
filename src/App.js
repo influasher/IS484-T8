@@ -15,6 +15,7 @@ import RMHomePage from './pages/RM/RMHomePage';
 import RMIndvClientView from './pages/RM/RMIndvClientView';
 import './styles/App.css';
 import { useParams } from 'react-router-dom';
+import CombinedEntityPage from './components/entity/Entity';
 
 function App() {
   const { id } = useParams(); // Get entity ID from URL
@@ -38,6 +39,7 @@ function App() {
           <Route path="/Login" element={<LoginPage />} />
           <Route path="/Client" element={<ClientHomePage />} />
           {/* <Route path="*" element={<Navigate to="/Login" replace />} /> */}
+          <Route path="/CombinedEntityPage/:ticker" element={<CombinedEntityPage/>} />
         </Routes>
       </main>
     </div>

@@ -165,6 +165,7 @@ function EntityVisuals({ id }) {
       data: entityReturns,
       label: `${entityData.data.name} Cumulative Return (%)`,
       color: "#8884d8",
+      showMark: false,
     }
   ];
 
@@ -174,6 +175,7 @@ function EntityVisuals({ id }) {
       data: irxReturns,
       label: "13 Week Treasury Bill Cumulative Return (%)",
       color: "#82ca9d",
+      showMark: false,
     });
   }
 

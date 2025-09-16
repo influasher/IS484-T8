@@ -16,6 +16,11 @@ def get_stock_price(ticker):
     stock_price = stock_info['currentPrice']
     return stock_price
 
+def get_performance(prices):
+    start_price = prices[0]   # first available price in period
+    end_price = prices[-1]    # most recent price
+    return ((end_price - start_price) / start_price) * 100
+
 def get_stock_history(ticker, period='1y'):
     """
     Get historical stock data with period support
@@ -40,6 +45,10 @@ def get_stock_history(ticker, period='1y'):
             today = datetime.datetime.now()
             start_of_year = datetime.datetime(today.year, 1, 1)
             df = stock.history(start=start_of_year, end=today)
+        elif period == '1d':
+            df = stock.history(period=period, interval='30m')
+        elif period == '5d':
+            df = stock.history(period=period, interval='1h')
         else:
             # For other periods, use the period parameter
             df = stock.history(period=period)
@@ -50,7 +59,7 @@ def get_stock_history(ticker, period='1y'):
         
         # Convert DataFrame to JSON format (same as original)
         data = {
-            "dates": df.index.strftime('%Y-%m-%d').tolist(),
+            "dates": df.index.strftime('%Y-%m-%d %H:%M:%S').tolist(),
             "prices": df['Close'].tolist()
         }
         
@@ -61,13 +70,16 @@ def get_stock_history(ticker, period='1y'):
         for date, price in zip(data["dates"], data["prices"]):
             if not pd.isna(price):
                 clean_dates.append(date)
-                clean_prices.append(float(price))
+                clean_prices.append(float(price))            
+
+        performance = get_performance(clean_prices)
         
         print(f"Successfully fetched {len(clean_dates)} data points for {ticker}")
         
         return {
             "dates": clean_dates,
-            "prices": clean_prices
+            "prices": clean_prices,
+            "performance": performance
         }
         
     except Exception as e:
