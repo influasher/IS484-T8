@@ -35,9 +35,9 @@ function App() {
           <Route path="/DashboardPage" element={<DashboardPage />} />
           <Route path="/RM" element={<ClientCards sx={{ pt: "84px" }} />} />
           <Route path="/RM/Client/:id" element={<ClientRecc />} />
-          <Route path="/" element={<LoginPage />} />
+          <Route path="/Login" element={<LoginPage />} />
           <Route path="/Client" element={<ClientHomePage />} />
-          {/* <Route path="*" element={<Navigate to="/" replace />} /> */}
+          {/* <Route path="*" element={<Navigate to="/Login" replace />} /> */}
         </Routes>
       </main>
     </div>

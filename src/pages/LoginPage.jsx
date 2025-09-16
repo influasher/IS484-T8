@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { TextField, Button, Box, Typography, Container } from '@mui/material';
+import { Login } from '@mui/icons-material';
+import LoginComponent from '../components/ui/LoginComponent';
+import logo from '../img/logos/download.png';
 
 const LoginPage = () => {
     const [email, setEmail] = useState('');
@@ -24,67 +27,30 @@ const LoginPage = () => {
     };
 
     return (
-        <Container maxWidth="sm">
+        <Box sx={{ display: "flex", minHeight: "100vh" }}>
             <Box
-                display="flex"
-                flexDirection="column"
-                alignItems="center"
-                justifyContent="center"
-                minHeight="100vh"
+              sx={{
+                flex: 1,
+                padding: 4,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
             >
-                <Typography variant="h4" gutterBottom>
-                    Login
-                </Typography>
-                <TextField
-                    label="Email"
-                    variant="outlined"
-                    fullWidth
-                    margin="normal"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                />
-                <TextField
-                    label="Password"
-                    type="password"
-                    variant="outlined"
-                    fullWidth
-                    margin="normal"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                />
-                {!otpSent ? (
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        fullWidth
-                        onClick={handleSendOtp}
-                        sx={{ mt: 2 }}
-                    >
-                        Send OTP
-                    </Button>
-                ) : (
-                    <>
-                        <TextField
-                            label="OTP"
-                            variant="outlined"
-                            fullWidth
-                            margin="normal"
-                            value={otp}
-                            onChange={(e) => setOtp(e.target.value)}
-                        />
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            fullWidth
-                            onClick={handleLogin}
-                            sx={{ mt: 2 }}
-                        >
-                            Login
-                        </Button>
-                    </>
-                )}
+              <img
+                src={logo} // Use the imported image
+                style={{
+                  width: '100%', // Make the image take up the full width of the parent
+                  height: '100%', // Make the image take up the full height of the parent
+                  objectFit: 'contain', // Ensure the image scales properly without distortion
+                }}
+              />
             </Box>
-        </Container>
+            <Box sx={{ width: "25%", borderLeft: "1px solid #ddd", padding: 2 }}>
+                <LoginComponent/>
+            </Box>
+        </Box>
     );
 };
 
