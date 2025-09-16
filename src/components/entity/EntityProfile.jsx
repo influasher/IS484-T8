@@ -17,7 +17,7 @@ function EntityProfile({ data, loading, error }) {
   data = data.data;
 
   const profiles = [
-    { label: "Symbol", value: data.ticker },
+    { label: "Ticker", value: data.ticker },
     { label: "Name", value: data.name },
     { label: "Asset Type", value: data.AssetType ?? "-" },
     { label: "Description", value: data.summary ?? "-" },
@@ -27,11 +27,9 @@ function EntityProfile({ data, loading, error }) {
     { label: "Industry", value: data.Industry ?? "-" },
     { label: "Official Site", value: data.OfficialSite ?? "-" },
   ];
-  console.log("company profile"+profiles);
 
   return (
     <Box sx={{ marginBottom: 3 }}>
-      <h4>Profile</h4>
       <TableContainer component={Paper} elevation={0}>
         <Table size="small">
           <TableBody>
