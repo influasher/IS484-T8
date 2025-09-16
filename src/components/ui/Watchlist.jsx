@@ -135,7 +135,7 @@ const StockWatchlist = () => {
     <Box sx={{ width: "100%", backgroundColor: "#f5f5f5", minHeight: "100vh", p: 2 }}>
       <Paper sx={{ width: "100%", backgroundColor: "white" }}>
         <Typography variant="h6" sx={{ fontWeight: 500, p: 2 }}>
-          Stock Market
+          Watchlist
         </Typography>
         <Box sx={{ p: 2 }}>
           <TextField

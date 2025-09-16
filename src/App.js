@@ -11,9 +11,9 @@ import EntitiesPage from './pages/Entities/EntitiesPage';
 import EntityPage from './pages/Entities/EntityPage';
 import DashboardPage from './pages/DashboardPage';
 import ClientHomePage from './pages/Clients/ClientHomePage';
+import RMHomePage from './pages/RM/RMHomePage';
+import RMIndvClientView from './pages/RM/RMIndvClientView';
 import './styles/App.css';
-import ClientCards from './components/clients/ClientCards';
-import ClientRecc from './components/clients/ClientRecc';
 import { useParams } from 'react-router-dom';
 
 function App() {
@@ -33,8 +33,8 @@ function App() {
           <Route path="/IndividualNewsPage" element={<IndividualNewsPage />} />
           <Route path="/Entity/:ticker" element={<EntityPage />} />
           <Route path="/DashboardPage" element={<DashboardPage />} />
-          <Route path="/RM" element={<ClientCards sx={{ pt: "84px" }} />} />
-          <Route path="/RM/Client/:id" element={<ClientRecc />} />
+          <Route path="/RM" element={<RMHomePage />} />
+          <Route path="/RM/Client/:id" element={<RMIndvClientView/>} />
           <Route path="/Login" element={<LoginPage />} />
           <Route path="/Client" element={<ClientHomePage />} />
           {/* <Route path="*" element={<Navigate to="/Login" replace />} /> */}
