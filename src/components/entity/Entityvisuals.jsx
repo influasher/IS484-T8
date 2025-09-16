@@ -4,7 +4,6 @@ import { LineChart } from "@mui/x-charts/LineChart";
 import useFetch from "../../hooks/useFetch"; // Adjust path if needed
 
 function EntityVisuals({ id }) {
-  const number = id;
   const [timeRange, setTimeRange] = useState('1Y'); // Default to 1 year
 
   const timeRanges = [
@@ -87,7 +86,7 @@ function EntityVisuals({ id }) {
     return prices.map(price => ((price - basePrice) / basePrice) * 100);
   };
 
-  const entityUrl = `/entities/${number}/chart?period=${timeRange}`;
+  const entityUrl = `/entities/${id}/chart?period=${timeRange}`;
   const irxUrl = `/entities/ticker=^IRX/chart?period=${timeRange}`;
 
   // Fetch entity data
