@@ -4,9 +4,9 @@ import IconButton from "@mui/material/IconButton";
 import { useNavigate } from "react-router-dom";
 import { ReactComponent as UBSLogo } from "../img/logos/ubs-transparent.svg";
 import { SvgIcon } from "@mui/material";
-
 import { Tabs, Tab, Stack } from "@mui/material";
 import { Link, useLocation } from "react-router-dom";
+import { ROUTES } from "../routes";
 
 function CustomIcon(props) {
   return <SvgIcon {...props} component={UBSLogo} inheritViewBox />;
@@ -18,11 +18,11 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
 
   // Map paths to tab index
   const paths = [
-    "/EntitiesPage",
-    "/NewsPage",
-    "/DashboardPage",
-    "/Client",
-    "/RM",
+    ROUTES.ENTITIES,
+    ROUTES.NEWS,
+    ROUTES.DASHBOARD,
+    ROUTES.CLIENT_HOME,
+    ROUTES.RM_HOME,
   ];
 
   const handleChange = (event, newValue) => {
@@ -30,13 +30,12 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
   };
 
   const handleHomeClick = () => {
-    if (role === "RM") {
-      navigate("/RM");
-    } else if (role === "Client") {
-      navigate("/Client");
-    } else {
-      navigate("/Login");
-    }
+    const redirectMap = {
+      RM: ROUTES.RM_HOME,
+      Client: ROUTES.CLIENT_HOME,
+    };
+  
+    navigate(redirectMap[role] || ROUTES.LOGIN);
   };
 
   return (
