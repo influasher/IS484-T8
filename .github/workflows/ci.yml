@@ -31,6 +31,10 @@ jobs:
         uv run pytest dummy_tests/ --verbose
     
     - name: Test Flask app startup
+      env:
+        DATABASE_URI: sqlite:///test.db  # Temporary test database for CI
+        SECRET_KEY: test-secret-key-for-ci
+        JWT_SECRET_KEY: test-jwt-secret-for-ci
       run: |
         cd Backend
         uv run python -c "from app import create_app; app = create_app(); print('Flask app created successfully')"
@@ -90,4 +94,4 @@ jobs:
     - name: Check Python code style
       run: |
         cd Backend
-        uv run flake8 . --max-line-length=88 --exclude=venv,migrations || echo "Fix flake8 issues"
+        uv run flake8 . --max-line-length=88 --exclude=venv,migrations,.venv || echo "Fix flake8 issues"

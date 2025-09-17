@@ -10,10 +10,12 @@ import logging
 logger = logging.getLogger("crawler")
 logging.basicConfig(level=logging.INFO)
 
+
 # Create a reusable user agent
 def get_random_user_agent():
     ua = UserAgent()
     return ua.random
+
 
 DEFAULT_USER_AGENT = get_random_user_agent()
 
@@ -25,22 +27,23 @@ BROWSER_CONFIG = BrowserConfig(
     viewport_height=720,
     user_agent=DEFAULT_USER_AGENT,
     verbose=False,
-    use_persistent_context=True
+    use_persistent_context=True,
 )
 
 # Reusable crawler run config
 RUN_CONFIG = CrawlerRunConfig(
     user_agent=DEFAULT_USER_AGENT,
     word_count_threshold=100,
-    excluded_tags=['form', 'header', 'footer', 'aside'],
+    excluded_tags=["form", "header", "footer", "aside"],
     exclude_external_links=True,
     exclude_social_media_links=True,
     process_iframes=False,
     remove_overlay_elements=True,
     simulate_user=True,
     magic=True,
-    cache_mode=CacheMode.ENABLED
+    cache_mode=CacheMode.ENABLED,
 )
+
 
 async def scrape_article_async(url, retries=2, delay=2):
     """Scrape article content asynchronously with retry mechanism."""
@@ -51,7 +54,9 @@ async def scrape_article_async(url, retries=2, delay=2):
                 if result.success:
                     return result.cleaned_html
                 else:
-                    logger.warning(f"[Attempt {attempt+1}] Error: {result.error_message}")
+                    logger.warning(
+                        f"[Attempt {attempt+1}] Error: {result.error_message}"
+                    )
                     return None
         except (TargetClosedError, TimeoutError) as e:
             logger.warning(f"[Attempt {attempt+1}] Retriable browser error: {e}")
@@ -63,6 +68,7 @@ async def scrape_article_async(url, retries=2, delay=2):
         except Exception as e:
             logger.exception(f"Unhandled exception while scraping: {e}")
             return None
+
 
 def scrape_article(url: str):
     """Wrapper for synchronous usage of the async scraping."""
