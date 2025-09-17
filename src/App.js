@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import LoginPage from './pages/LoginPage';
 import NewsPage from './pages/News/NewsPage';
@@ -17,10 +17,25 @@ import { useParams } from 'react-router-dom';
 function App() {
   const { id } = useParams(); // Get entity ID from URL
 
+  const location = useLocation();
+
+  // Pages where we don't want a Navbar
+  const noNavbarRoutes = ["/Login", "/login"];
+
+  // // Example: role stored in localStorage/session/auth context
+  // const role = localStorage.getItem("role"); // "RM" or "Client"
+
+  // // Navbar config
+  // const navbarTabs = role === "RM" 
+  //   ? ["Dashboard", "Clients", "Entities", "News"]
+  //   : ["Dashboard", "Portfolio", "Entities", "News"];
+
+  const showNavbar = !noNavbarRoutes.includes(location.pathname);
+
   return (
     <div className="App">
-      {/* Sidebar */}
-      <Navbar />
+       {/* Conditionally render Navbar */}
+       {showNavbar && <Navbar />}
 
       {/* Main Content */}
       <main className="App-content">
