@@ -31,6 +31,7 @@ import EntityPrice from "../ui/EntityPrice";
 import ReportButton from "../ui/export";
 import SendPDF from "../ui/SendReport";
 import CustomChip from "../ui/CustomChip";
+import { ROUTES } from "../../routes";
 
 const IndvEntity = () => {
   const { ticker } = useParams();
@@ -390,7 +391,7 @@ const IndvEntity = () => {
                 <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                   <MuiLink
                     component={Link}
-                    to="/NewsPage"
+                    to={ROUTES.NEWS}
                     underline="hover"
                     sx={{
                       color: "text.primary", // uses theme's default text color (black/dark gray)
@@ -419,7 +420,7 @@ const IndvEntity = () => {
                         >
                           <MuiLink
                             component={Link}
-                            to="/Individualnewspage"
+                            to={ROUTES.INDIVIDUAL_NEWS}
                             state={{ id: news.id, title: news.title }}
                             sx={{
                               display: "block",

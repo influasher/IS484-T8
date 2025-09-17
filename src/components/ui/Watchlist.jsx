@@ -14,6 +14,7 @@ import {
 import { Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import useFetch from "../../hooks/useFetch";
+import { ROUTES } from "../../routes";
 
 const url = "/entities/get_all_tickers";
 
@@ -175,7 +176,7 @@ const StockWatchlist = () => {
                     key={stock.id}
                     hover
                     sx={{ cursor: "pointer" }}
-                    onClick={() => navigate(`/Entity/${stock.ticker}`)}
+                    onClick={() => navigate(`${ROUTES.ENTITY}/${stock.ticker}`)}
                   >
                     <TableCell>{stock.ticker}</TableCell>
                     <TableCell>{stock.name}</TableCell>
