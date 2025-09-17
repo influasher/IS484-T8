@@ -8,40 +8,92 @@ import {
   Box,
   FormControl,
   FormLabel,
+  CircularProgress,
 } from "@mui/material";
 import UBSLogo from "../img/logos/UBS2.jpg";
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
+import { sendOTP, verifyOTP } from "../services/authService";
+import useAuth from "../hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [emailError, setEmailError] = useState(false);
   const [emailErrorMessage, setEmailErrorMessage] = useState("");
-  const [passwordError, setPasswordError] = useState(false);
-  const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
+  const [otpError, setOtpError] = useState(false);
+  const [otpErrorMessage, setOtpErrorMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSendOtp = () => {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSendOtp = async () => {
     if (!email || !/\S+@\S+\.\S+/.test(email)) {
       setEmailError(true);
       setEmailErrorMessage("Please enter a valid email address.");
       return;
     }
+
     setEmailError(false);
     setEmailErrorMessage("");
-    console.log(`Sending OTP to ${email}`);
-    setOtpSent(true);
+    setLoading(true);
+
+    try {
+      const result = await sendOTP(email);
+
+      if (result.success) {
+        setOtpSent(true);
+        console.log("OTP sent successfully");
+      } else {
+        setEmailError(true);
+        setEmailErrorMessage(result.message);
+      }
+    } catch (error) {
+      setEmailError(true);
+      setEmailErrorMessage("Failed to send OTP. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!otp || otp.length !== 6) {
-      console.log("Invalid OTP");
+      setOtpError(true);
+      setOtpErrorMessage("Please enter a valid 6-digit OTP.");
       return;
     }
-    console.log(
-      `Logging in with Email: ${email}, Password: ${password}, OTP: ${otp}`
-    );
+
+    setOtpError(false);
+    setOtpErrorMessage("");
+    setLoading(true);
+
+    try {
+      const result = await verifyOTP(otp);
+
+      if (result.success) {
+        // Login successful
+        login(result.data.user, result.data.access_token);
+
+        // Redirect based on user role
+        if (result.data.user.role === "client") {
+          navigate("/Client");
+        } else if (result.data.user.role === "relationship_manager") {
+          navigate("/RM");
+        } else {
+          navigate("/DashboardPage");
+        }
+      } else {
+        setOtpError(true);
+        setOtpErrorMessage(result.message);
+      }
+    } catch (error) {
+      setOtpError(true);
+      setOtpErrorMessage("Failed to verify OTP. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
   return (
     <Stack direction="row" sx={{ height: "100vh" }}>
@@ -105,26 +157,7 @@ const LoginPage = () => {
                 color={emailError ? "error" : "primary"}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-              />
-            </FormControl>
-            <FormControl>
-              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                <FormLabel htmlFor="password">Password</FormLabel>
-              </Box>
-              <TextField
-                error={passwordError}
-                helperText={passwordErrorMessage}
-                name="password"
-                placeholder="•••••••••"
-                type="password"
-                id="password"
-                autoComplete="current-password"
-                required
-                fullWidth
-                variant="outlined"
-                color={passwordError ? "error" : "primary"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                disabled={otpSent || loading}
               />
             </FormControl>
             {!otpSent ? (
@@ -133,25 +166,34 @@ const LoginPage = () => {
                 variant="contained"
                 onClick={handleSendOtp}
                 color="error"
-                sx={{ height: "46px", width: "150px",
-                "&:hover": { backgroundColor: "darkred" }, mt: 1}}
-                endIcon={<ArrowForwardIosIcon  />}
+                disabled={loading}
+                sx={{
+                  height: "46px",
+                  width: "150px",
+                  "&:hover": { backgroundColor: "darkred" },
+                  mt: 1
+                }}
+                endIcon={loading ? <CircularProgress size={20} color="inherit" /> : <ArrowForwardIosIcon />}
               >
-                Send OTP
+                {loading ? "Sending..." : "Send OTP"}
               </Button>
             ) : (
               <>
                 <FormControl>
                   <FormLabel htmlFor="otp">OTP</FormLabel>
                   <TextField
+                    error={otpError}
+                    helperText={otpErrorMessage}
                     id="otp"
                     name="otp"
-                    placeholder="Enter OTP"
+                    placeholder="Enter 6-digit OTP"
                     type="text"
                     fullWidth
                     variant="outlined"
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
+                    disabled={loading}
+                    inputProps={{ maxLength: 6 }}
                   />
                 </FormControl>
                 <Button
@@ -159,8 +201,11 @@ const LoginPage = () => {
                   fullWidth
                   variant="contained"
                   onClick={handleLogin}
+                  disabled={loading || otp.length !== 6}
+                  color="error"
+                  sx={{ "&:hover": { backgroundColor: "darkred" } }}
                 >
-                  Login
+                  {loading ? <CircularProgress size={24} color="inherit" /> : "Login"}
                 </Button>
               </>
             )}
