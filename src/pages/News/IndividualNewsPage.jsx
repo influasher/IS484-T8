@@ -15,6 +15,8 @@ import useFetch from '../../hooks/useFetch';
 import SentimentScore from '../../components/ui/Sentimentscore';
 import SentimentFeedbackForm from '../../components/ui/sentimentFeedback';
 import PieChart from '../../components/ui/feedbackChart';
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+
 
 function IndividualNewsPage() {
   const [refreshChart, setRefreshChart] = useState(false);
@@ -72,63 +74,99 @@ function IndividualNewsPage() {
         {/* News Content Section */}
         <Container maxWidth="lg" sx={{ py: 2 }}>
           {/* News Title and Sentiment Row */}
-          <Grid container alignItems="center" spacing={2}>
-            <Grid item xs={12} md={8}>
-              <MuiLink
-                href={newsData.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                underline="none"
-                sx={{
-                  color: '#1976d2',
-                  textDecoration: 'none',
-                  '&:hover': {
-                    textDecoration: 'underline',
-                  },
-                }}
-              >
+          <Grid item xs={12} md={8}>
+            <MuiLink
+              href={newsData.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              underline="none"
+              sx={{
+                color: '#1976d2',
+                textDecoration: 'none',
+                '&:hover': {
+                  textDecoration: 'underline',
+                },
+              }}
+            >
+              <Stack direction="column" spacing={0.5}>
                 <Typography
-                  variant="h5"
-                  component="h4"
+                  variant="body2"
                   sx={{
-                    fontSize: 'calc(7px + 1vw)',
-                    fontWeight: 'bold',
-                    color: '#1976d2',
+                    fontWeight: "bold",
+                    color: "text.secondary",
                   }}
+                >
+                  {newsData.publisher} |{" "}
+                  {new Date(newsData.published_date).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </Typography>
+                <Typography
+                  variant="h4"
+                  sx={{ color: "text.primary" }}
                 >
                   {newsData.title}
                 </Typography>
-              </MuiLink>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Box display="flex" justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
-                <SentimentScore score={newsData.score} sentiment={newsData.sentiment} />
-              </Box>
-            </Grid>
+              </Stack>
+            </MuiLink>
           </Grid>
 
-          {/* News date and publisher */}
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-              fontSize: 'calc(8px + 0.5vw)',
-              color: 'text.secondary',
-              mb: 1,
-              mt: 1,
-            }}
-          >
-            <Typography variant="body2" color="text.secondary">
-              📅 {new Date(newsData.published_date).toLocaleDateString()}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              📰 {newsData.publisher}
-            </Typography>
-          </Box>
+
+          {/* News Summary */}
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.6 }}>
+            {newsData.summary}
+          </Typography>
+
+          {/* Sentiment Scores */}
+          <Grid container spacing={1} alignItems="center" justifyContent="flex-end" sx={{ mb: 4 }}>
+          {[
+            {
+            label: `FinBERT: ${scores.finbert}`,
+            tooltip: "Financial BERT model trained specifically on financial text to detect sentiment in financial news.",
+            value: scores.finbert,
+            onClick: () => handleChipClick('FinBERT')
+            },
+            {
+            label: `Gemini: ${scores.gemini}`,
+            tooltip: "Google's Gemini model provides general language understanding for broader context analysis.",
+            value: scores.gemini,
+            onClick: () => handleChipClick('Gemini')
+            },
+            {
+            label: `Combine Score: ${scores.combine_score}`,
+            tooltip: "Weighted average of both models with confidence factoring to provide the most accurate sentiment score.",
+            value: scores.combine_score,
+            onClick: () => handleChipClick('Combine Score')
+            },
+          ].map((chip, i) => (
+            <Grid item key={i}>
+            <Tooltip title={chip.tooltip} arrow>
+              <Chip
+              label={chip.label}
+              variant="outlined"
+              clickable
+              onClick={chip.onClick}
+              sx={{
+                fontSize: "0.8rem",
+                fontWeight: 500,
+                borderRadius: "8px",
+                borderColor: getColor(chip.value),
+                color: getColor(chip.value),
+                backgroundColor: "transparent",
+              }}
+              />
+            </Tooltip>
+            </Grid>
+          ))}
+
+          <SentimentScore score={newsData.score} sentiment={newsData.sentiment} />
+          </Grid>
 
           {/* Entities */}
           <Box sx={{ mb: 2 }}>
+            Entities:{" "}
             {newsData.entities?.map((entity) => (
               <Chip
                 key={entity}
@@ -137,77 +175,20 @@ function IndividualNewsPage() {
                 clickable
                 onClick={() => handleChipClick(entity)}
                 sx={{ 
-                  m: 0.5,
-                  fontSize: '1em',
-                  fontWeight: '500',
+                  fontSize: "0.8rem",
+                  fontWeight: 500,
+                  borderRadius: "8px",
+                  backgroundColor: "transparent",
                 }}
               />
             ))}
           </Box>
 
-          {/* Sentiment Scores */}
-          <Box sx={{ mb: 2 }}>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              <Tooltip
-                title="Financial BERT model trained specifically on financial text to detect sentiment in financial news."
-                arrow
-              >
-                <Chip
-                  label={`FinBERT: ${scores.finbert}`}
-                  color={getColor(scores.finbert)}
-                  clickable
-                  onClick={() => handleChipClick('FinBERT')}
-                  sx={{
-                    fontSize: '1em',
-                    fontWeight: '500',
-                  }}
-                />
-              </Tooltip>
-              <Tooltip
-                title="Google's Gemini model provides general language understanding for broader context analysis."
-                arrow
-              >
-                <Chip
-                  label={`Gemini: ${scores.gemini}`}
-                  color={getColor(scores.gemini)}
-                  clickable
-                  onClick={() => handleChipClick('Gemini')}
-                  sx={{
-                    fontSize: '1em',
-                    fontWeight: '500',
-                  }}
-                />
-              </Tooltip>
-              <Tooltip
-                title="Weighted average of both models with confidence factoring to provide the most accurate sentiment score."
-                arrow
-              >
-                <Chip
-                  label={`Combine Score: ${scores.combine_score}`}
-                  color={getColor(scores.combine_score)}
-                  clickable
-                  onClick={() => handleChipClick('Combine Score')}
-                  sx={{
-                    fontSize: '1em',
-                    fontWeight: '500',
-                  }}
-                />
-              </Tooltip>
-            </Box>
-          </Box>
-
-          {/* News Summary */}
-          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.6 }}>
-            {newsData.summary}
-          </Typography>
-
           {/* Region, Sectors, and Affected Companies */}
-          <Grid container spacing={3}>
+          <Box sx={{ mb: 2 }}></Box>
+            Regions:{" "}
             {region_list?.length > 0 && (
               <Grid item xs={12} md={4}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                  🌍 Region:
-                </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   {region_list.map((region) => (
                     <Chip
@@ -225,11 +206,12 @@ function IndividualNewsPage() {
                 </Box>
               </Grid>
             )}
+          <Box/>
+
+          <Box sx={{ mb: 2 }}>
+            Sectors:{" "}
             {sectors_list?.length > 0 && (
               <Grid item xs={12} md={4}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                  🏢 Sectors:
-                </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   {sectors_list.map((sector) => (
                     <Chip
@@ -251,11 +233,13 @@ function IndividualNewsPage() {
                 </Box>
               </Grid>
             )}
-            {company_name_list?.length > 0 && (
+          </Box>
+
+          
+          {/* <Box sx={{ mb: 2 }}>
+            Affected Companies:
+             {company_name_list?.length > 0 && (
               <Grid item xs={12} md={4}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                  🏭 Affected Companies:
-                </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   {company_name_list.map((company) => (
                     <Chip
@@ -272,11 +256,37 @@ function IndividualNewsPage() {
                   ))}
                 </Box>
               </Grid>
-            )}
-          </Grid>
+            )} 
+          <Box/> */}
+
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ mt: 2 }}
+          >
+            <Typography variant="h6"></Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              <MuiLink
+                component={Link}
+                to="/NewsPage"
+                underline="hover"
+                sx={{
+                  color: "text.primary", // uses theme's default text color (black/dark gray)
+                  "&:hover": { color: "text.secondary" }, // subtle hover effect
+                  gap: 10,
+                }}
+              >
+                View More News
+                <ArrowForwardIcon />
+              </MuiLink>
+            </Typography>
+          </Stack>
         </Container>
 
         <Divider sx={{ mt: 2, mb: 3 }} />
+
+       
 
         {/* Feedback and Chart Section */}
         <Container maxWidth="xl">
@@ -308,23 +318,7 @@ function IndividualNewsPage() {
               </Box>
             </Stack>
           </Stack>
-
-          {/* Bottom Navigation Link */}
-          <Box sx={{ textAlign: "center", mt: 4, mb: 2 }}>
-            <Typography variant="h6">
-              <MuiLink 
-                component={Link}
-                to="/NewsPage"
-                underline="hover"
-                sx={{
-                  color: "text.primary",
-                  "&:hover": { color: "text.secondary" }
-                }}
-              >
-                Search for more news
-              </MuiLink>
-            </Typography>
-          </Box>
+          
         </Container>
       </Box>
     </Box>
