@@ -22,20 +22,15 @@ function App() {
   // Pages where we don't want a Navbar
   const noNavbarRoutes = ["/Login", "/login"];
 
-  // // Example: role stored in localStorage/session/auth context
-  // const role = localStorage.getItem("role"); // "RM" or "Client"
-
-  // // Navbar config
-  // const navbarTabs = role === "RM" 
-  //   ? ["Dashboard", "Clients", "Entities", "News"]
-  //   : ["Dashboard", "Portfolio", "Entities", "News"];
+  // Example: role stored in localStorage/session/auth context
+  const role = "RM" // "RM" or "Client"
 
   const showNavbar = !noNavbarRoutes.includes(location.pathname);
 
   return (
     <div className="App">
        {/* Conditionally render Navbar */}
-       {showNavbar && <Navbar />}
+       {showNavbar && <Navbar role={role}/>}
 
       {/* Main Content */}
       <main className="App-content">
