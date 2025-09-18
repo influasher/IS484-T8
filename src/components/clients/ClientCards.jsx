@@ -60,7 +60,7 @@ function normalize(u) {
         name: (u?.first_name && u?.last_name) ? `${u.first_name} ${u.last_name}` : "NA",
         email: u?.email ?? "NA",
         username: u?.username ?? "NA",
-        holdings: u?.holdings ?? "NA",
+        holding: u?.holding ?? "NA",
         overall_pl: u?.overall_pl ?? "NA",
         risk_cap: u?.risk_cap ?? "NA",
         sectors,
@@ -166,13 +166,16 @@ const ClientCards = () => {
             risk_cap: riskValueToLabel(formRiskThreshold),
             sectors: formSectors,
             stop_loss_tolerance: formStopLossTolerance,
-            role: "client",
+            role: "CLIENT",
             rm_id: null,
             created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
         };
 
         try {
-            const res = await fetch("/user/create-clients", {
+            // need to change the following to a hostable url instead of localhost
+            const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
+            const res = await fetch(`${API_BASE_URL}/user/create-clients`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
