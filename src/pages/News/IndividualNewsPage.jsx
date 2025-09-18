@@ -17,6 +17,7 @@ import SentimentScore from '../../components/ui/Sentimentscore';
 import SentimentFeedbackForm from '../../components/ui/sentimentFeedback';
 import PieChart from '../../components/ui/feedbackChart';
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import {ROUTES} from "../../routes";
 
 
 function IndividualNewsPage() {
@@ -277,7 +278,7 @@ function IndividualNewsPage() {
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               <MuiLink
                 component={Link}
-                to="/NewsPage"
+                to={ROUTES.NEWS}
                 underline="hover"
                 sx={{
                   color: "text.primary", // uses theme's default text color (black/dark gray)

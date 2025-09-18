@@ -128,10 +128,10 @@ function App() {
           />
 
           {/* Redirect root to login */}
-          <Route path="/" element={<Navigate to="/Login" replace />} />
+          <Route path="/" element={<Navigate to={ROUTES.LOGIN} replace />} />
 
           {/* Catch all - redirect to login */}
-          <Route path="*" element={<Navigate to="/Login" replace />} />
+          <Route path="*" element={<Navigate to={ROUTES.LOGIN} replace />} />
         </Routes>
       </main>
     </div>

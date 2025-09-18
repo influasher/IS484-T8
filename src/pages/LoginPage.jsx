@@ -15,6 +15,7 @@ import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { sendOTP, verifyOTP } from "../services/authService";
 import useAuth from "../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
+import { ROUTES } from "../routes";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -78,11 +79,11 @@ const LoginPage = () => {
 
         // Redirect based on user role
         if (result.data.user.role === "client") {
-          navigate("/Client");
+          navigate(ROUTES.CLIENT_HOME);
         } else if (result.data.user.role === "relationship_manager") {
-          navigate("/RM");
+          navigate(ROUTES.RM_HOME);
         } else {
-          navigate("/DashboardPage");
+          navigate(ROUTES.DASHBOARD);
         }
       } else {
         setOtpError(true);
