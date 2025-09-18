@@ -3,10 +3,12 @@ import AppBar from "@mui/material/AppBar";
 import IconButton from "@mui/material/IconButton";
 import { useNavigate } from "react-router-dom";
 import { ReactComponent as UBSLogo } from "../img/logos/ubs-transparent.svg";
-import { SvgIcon } from "@mui/material";
+import { SvgIcon, Button } from "@mui/material";
 import { Tabs, Tab, Stack } from "@mui/material";
 import { Link, useLocation } from "react-router-dom";
 import { ROUTES } from "../routes";
+import useAuth from "../hooks/useAuth";
+import LogoutIcon from '@mui/icons-material/Logout';
 
 function CustomIcon(props) {
   return <SvgIcon {...props} component={UBSLogo} inheritViewBox />;
@@ -15,6 +17,7 @@ function CustomIcon(props) {
 const NavBar = ({ role, elevation = 0, sticky = true }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   // Map paths to tab index
   const paths = [
@@ -34,8 +37,13 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
       RM: ROUTES.RM_HOME,
       Client: ROUTES.CLIENT_HOME,
     };
-  
+
     navigate(redirectMap[role] || ROUTES.LOGIN);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate(ROUTES.LOGIN);
   };
 
   return (
@@ -94,6 +102,21 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
           <Tab label="Client" />
           <Tab label="RM" />
         </Tabs>
+
+        {/* Logout button */}
+        <Button
+          onClick={handleLogout}
+          startIcon={<LogoutIcon />}
+          sx={{
+            color: "grey",
+            "&:hover": {
+              backgroundColor: "transparent",
+              color: "red",
+            },
+          }}
+        >
+          Logout
+        </Button>
       </Stack>
     </AppBar>
   );
