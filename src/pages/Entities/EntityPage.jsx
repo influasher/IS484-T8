@@ -1,7 +1,7 @@
 import React from 'react';
 import IndvEntity from '../../components/entity/IndvEntity';
 
-function EntitiesPage() {
+function EntityPage() {
   console.log('Rendering Entities Page');
   return (
   <div>
@@ -9,4 +9,4 @@ function EntitiesPage() {
   </div>
   ); 
 }
-export default EntitiesPage
+export default EntityPage

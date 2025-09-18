@@ -3,6 +3,8 @@ import { formatSentimentClassification } from '../../utils/sentimentAnalysis';
 import Tooltip from '@mui/material/Tooltip';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import Grid from '@mui/material/Grid';
+import Chip from '@mui/material/Chip';
 
 const SentimentScore = ({ 
   score, 
@@ -14,39 +16,33 @@ const SentimentScore = ({
 }) => {
   if (!score && score !== 0) {
     return (
-      <Box
-        sx={{
-          backgroundColor: '#808080',
-          borderRadius: '15px',
-          padding: '5px 15px',
-          color: 'white',
-          fontSize: 'calc(1px + 1vw)',
-          fontWeight: 'bold',
-        }}
-      >
-        No score found
-      </Box>
+      <Grid container spacing={1} alignItems="center" justifyContent="flex-end">
+        <Grid item>
+          <Chip
+            label="No Score Found"
+            variant="outlined"
+            sx={{
+              fontSize: "0.8rem",
+              fontWeight: 500,
+              borderRadius: "8px",
+              borderColor: "default",
+              color: "default",
+              backgroundColor: "transparent",
+            }}
+          />
+        </Grid>
+      </Grid>
     );
   }
 
   const formattedSentiment = formatSentimentClassification(sentiment || 'neutral');
   console.log(formattedSentiment);
 
-  const getBackgroundColor = (sentiment) => {
-    switch (sentiment?.toLowerCase()) {
-      case 'positive':
-      case 'bullish':
-        return '#28a745'; // Green
-      case 'negative':
-      case 'bearish':
-        return '#dc3545'; // Red
-      case 'neutral':
-        return '#ffc107'; // Yellow
-      default:
-        return '#6c757d'; // Default to grey for unknown sentiment
-    }
-  }; 
-  const bgColor = getBackgroundColor(sentiment);
+  const getColor = (score) => {
+    if (score > 0) return 'success';
+    if (score < 0) return 'error';
+    return 'default';
+  };
 
   const displayScore = typeof score === 'number' ? 
     (score > -100 && score < 100) ? score : (score > 0 ? 100 : -100) : 0;
@@ -61,53 +57,63 @@ const SentimentScore = ({
     }
   };
 
+  const chipData = [
+    {
+      label: `${displayScore.toFixed(1)} (${formattedSentiment})`,
+      tooltip: getTooltipContent(),
+      value: displayScore,
+    }
+  ];
+
+  // Add additional chips if showDetails is true
+  if (showDetails) {
+    if (confidence) {
+      chipData.push({
+        label: `Confidence: ${(confidence * 100).toFixed(0)}%`,
+        tooltip: "Higher confidence indicates more reliable sentiment analysis",
+        value: confidence * 100,
+      });
+    }
+    
+    if (finbertScore) {
+      chipData.push({
+        label: `FinBERT: ${finbertScore.toFixed(1)}`,
+        tooltip: "Financial BERT model score",
+        value: finbertScore,
+      });
+    }
+    
+    if (secondModelScore) {
+      chipData.push({
+        label: `Second Model: ${secondModelScore.toFixed(1)}`,
+        tooltip: "Second NLP model score",
+        value: secondModelScore,
+      });
+    }
+  }
+
   return (
     <Box className="sentiment-score-container">
-      <Tooltip title={getTooltipContent()} arrow>
-        <Box
-          sx={{
-            backgroundColor: bgColor,
-            borderRadius: '15px',
-            padding: '5px 15px',
-            color: 'white',
-            fontSize: 'calc(1px + 1vw)',
-            fontWeight: 'bold',
-            display: 'inline-block',
-            cursor: 'pointer',
-          }}
-        >
-          {displayScore.toFixed(1)} ({formattedSentiment})
-        </Box>
-      </Tooltip>
-      
-      {showDetails && (
-        <Box className="sentiment-details" sx={{ mt: 2, fontSize: '0.875rem' }}>
-          {confidence && (
-            <Tooltip title="Higher confidence indicates more reliable sentiment analysis" arrow>
-              <Typography 
-                className="sentiment-confidence" 
-                sx={{ cursor: 'pointer', color: 'text.secondary' }}
-                variant="body2"
-              >
-                Confidence: {(confidence * 100).toFixed(0)}%
-              </Typography>
+      <Grid container spacing={1} alignItems="center" justifyContent="flex-end" sx={{ mb: 4 }}>
+        {chipData.map((chip, i) => (
+          <Grid item key={i}>
+            <Tooltip title={chip.tooltip} arrow>
+              <Chip
+                label={chip.label}
+                variant="outlined"
+                sx={{
+                  fontSize: "0.8rem",
+                  fontWeight: 500,
+                  borderRadius: "8px",
+                  borderColor: getColor(chip.value),
+                  color: getColor(chip.value),
+                  backgroundColor: "transparent",
+                }}
+              />
             </Tooltip>
-          )}
-          
-          {finbertScore && secondModelScore && (
-            <Tooltip title="Scores from different NLP models used in sentiment analysis" arrow>
-              <Typography 
-                className="model-scores" 
-                sx={{ cursor: 'pointer', color: 'text.secondary', mt: 1 }}
-                variant="body2"
-              >
-                FinBERT: {finbertScore.toFixed(1)} | 
-                Second Model: {secondModelScore.toFixed(1)}
-              </Typography>
-            </Tooltip>
-          )}
-        </Box>
-      )}
+          </Grid>
+        ))}
+      </Grid>
     </Box>
   );
 };
