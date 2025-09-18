@@ -22,7 +22,7 @@ function IndividualNewsPage() {
   const [refreshChart, setRefreshChart] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { id } = useParams();
+  const id = location.state?.id || null;
   const newsTitle = location.state?.title || 'Unknown Title';
   
   const { data } = useFetch(`news/id/${id}`);
