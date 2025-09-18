@@ -473,13 +473,23 @@ const IndvEntity = () => {
                       count={totalPages}
                       page={currentPage}
                       onChange={handlePageChange}
-                      color="primary"
-                      size="large"
+                      shape="rounded"
                       showFirstButton
                       showLastButton
                       siblingCount={2}
                       boundaryCount={1}
-                      sx={{ display: "flex", justifyContent: "center" }}
+                      sx={{
+                        display: "flex",
+                        justifyContent: "center",
+                        "& .MuiPagination-ul": {
+                          justifyContent: "center",
+                          flexWrap: "nowrap",
+                        },
+                        "& .MuiPaginationItem-root.Mui-selected": {
+                          backgroundColor: "#212121",
+                          color: "#fff",
+                        },
+                      }}
                     />
                   </Grid>
                 </Grid>
