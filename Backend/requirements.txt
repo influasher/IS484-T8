@@ -65,3 +65,6 @@ torchaudio
 
 #pdf
 fpdf
+
+# azure
+azure-communication-email
