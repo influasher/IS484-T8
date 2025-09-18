@@ -8,6 +8,7 @@ import {
   Tooltip,
   Link,
   Paper,
+  CircularProgress,
 } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch';
@@ -60,7 +61,14 @@ const NewsSources = () => {
   };
 
   if (!id) return <Typography>No ID provided. Please navigate correctly.</Typography>;
-  if (!newsData) return <Typography>Loading...</Typography>;
+  if (!newsData) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading News...</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ py: 2 }}>

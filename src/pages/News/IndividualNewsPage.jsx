@@ -9,6 +9,7 @@ import {
   Link as MuiLink,
   Stack,
   Divider,
+  CircularProgress,
 } from '@mui/material';
 import { useLocation, useNavigate, Link, useParams } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch';
@@ -66,7 +67,14 @@ function IndividualNewsPage() {
 
   // Loading and error states
   if (!id) return <Typography>No ID provided. Please navigate correctly.</Typography>;
-  if (!newsData) return <Typography>Loading...</Typography>;
+  if (!newsData) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading News...</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ display: "flex", px: 4 }}>
