@@ -1,16 +1,56 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import { useNavigate } from "react-router-dom";
-import { ROUTES } from "../../routes";
 
 const Client = ({ client }) => {
     const navigate = useNavigate();
     const handleOpen = () => {
         const id = client.id ?? client.username;
-        navigate(`${ROUTES.RM_CLIENT}/${encodeURIComponent(id)}`);
+        navigate(`/client/${encodeURIComponent(id)}`);
+    };
+
+    const name = client.name ?? `${client.first_name ?? "NA"} ${client.last_name ?? "NA"}`;
+    const email = client.email ?? "NA";
+
+    const [preferences, setPreferences] = useState(null);
+    const [loadingPrefs, setLoadingPrefs] = useState(true);
+
+    useEffect(() => {
+        if (!client.id) return;
+        setLoadingPrefs(true);
+
+        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
+        fetch(`${API_BASE_URL}/user/${client.id}/preferences`)
+            .then((res) => {
+                if (!res.ok) throw new Error("Failed to fetch preferences");
+                return res.json();
+            })
+            .then((data) => {
+                setPreferences(data.data);
+                setLoadingPrefs(false);
+            })
+            .catch(() => {
+                // fallback object with NA values
+                setPreferences({
+                    holding: "NA",
+                    overall_pl: "NA",
+                    risk_cap: "NA",
+                    stop_loss_tolerance: "NA",
+                    sectors: "NA",
+                });
+                setLoadingPrefs(false);
+            });
+    }, [client.id]);
+
+    const prefs = preferences || {
+        holding: "NA",
+        overall_pl: "NA",
+        risk_cap: "NA",
+        stop_loss_tolerance: "NA",
+        sectors: "NA",
     };
 
     return (
@@ -34,7 +74,7 @@ const Client = ({ client }) => {
                         whiteSpace: "nowrap",
                     }}
                 >
-                    {client.name}
+                    {name}
                 </Typography>
 
                 <Typography
@@ -47,67 +87,39 @@ const Client = ({ client }) => {
                         whiteSpace: "nowrap",
                     }}
                 >
-                    Email: {client.email}
-                </Typography>
-                <Typography
-                    variant="body2"
-                    sx={{
-                        color: "text.secondary",
-                        mb: 0.5,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                    }}
-                >
-                    Current holdings: {client.holdings}
+                    Email: {email}
                 </Typography>
 
-                {/* New Overall P/L line */}
-                {client.overallPL && (
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: "text.secondary",
-                            mb: 0.5,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                        }}
-                    >
-                        Overall P/L: {client.overallPL}
+                {loadingPrefs ? (
+                    <Typography variant="body2" sx={{ color: "text.secondary", mb: 0.5 }}>
+                        Loading preferences…
                     </Typography>
+                ) : (
+                    <>
+                        <Typography variant="body2" sx={{ color: "text.secondary", mb: 0.5 }}>
+                            Current holdings: {prefs.holding ?? "NA"}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: "text.secondary", mb: 0.5 }}>
+                            Overall P/L: {prefs.overall_pl ?? "NA"}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: "text.secondary", mb: 0.5 }}>
+                            Risk Cap: {prefs.risk_cap ?? "NA"}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: "text.secondary", mb: 0.5 }}>
+                            Stop Loss Tolerance: {prefs.stop_loss_tolerance ?? "NA"}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                            Sectors: {Array.isArray(prefs.sectors) ? prefs.sectors.join(", ") : "NA"}
+                        </Typography>
+                    </>
                 )}
-
-                <Typography
-                    variant="body2"
-                    sx={{
-                        color: "text.secondary",
-                        mb: 0.5,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                    }}
-                >
-                    Risk: {client.risk} • Cap: {client.cap}
-                </Typography>
-                <Typography
-                    variant="body2"
-                    sx={{
-                        color: "text.secondary",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                    }}
-                >
-                    Sectors: {client.sectors.join(", ")}
-                </Typography>
 
                 <Button
                     variant="contained"
                     onClick={handleOpen}
                     color="black"
                     sx={{
-                        mt: 1.5, 
+                        mt: 1.5,
                         "&:hover": {
                             bgcolor: "#6b6b6bff",
                             boxShadow: "none",
