@@ -37,9 +37,9 @@ const IndvEntity = () => {
   const { ticker } = useParams();
   const url = `/entities/${ticker}`;
   const { data, loading, error } = useFetch(url);
-  const EntityName = data ? data.data.name : "N/A";
-  const stockID = data ? data.data.id : "N/A";
-  const EntityTicker = data ? data.data.ticker : "N/A";
+  const stockID = data?.data?.id ?? null;
+  const EntityName = data?.data?.name ?? null;
+  const EntityTicker = data?.data?.ticker ?? null;
 
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -74,7 +74,9 @@ const IndvEntity = () => {
     { value: "5Y", label: "5Y" },
   ];
 
-  const entityUrl = `/entities/${stockID}/chart?period=${timeRange}`;
+  const entityUrl = stockID
+    ? `/entities/${stockID}/chart?period=${timeRange}`
+    : null;
   const irxUrl = `/entities/ticker=^IRX/chart?period=${timeRange}`;
 
   // Fetch entity data
@@ -111,11 +113,42 @@ const IndvEntity = () => {
     return prices.map((price) => ((price - basePrice) / basePrice) * 100);
   };
 
-  if (entityLoading || irxLoading) return <p>Loading chart data...</p>;
-  if (entityError) return <p>Entity Error: {entityError}</p>;
-  if (irxError) return <p>IRX Error: {irxError}</p>;
-  if (!entityData || !entityData.data || !entityData.data.stock_chart)
-    return <p>No entity data available</p>;
+  if (entityLoading || irxLoading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading chart data...</Typography>
+      </Box>
+    );
+  }
+
+  if (entityError) {
+    return (
+      <Typography color="error" sx={{ py: 4, textAlign: "center" }}>
+        Entity Error: {entityError}
+      </Typography>
+    );
+  }
+
+  if (irxError) {
+    return (
+      <Typography color="error" sx={{ py: 4, textAlign: "center" }}>
+        IRX Error: {irxError}
+      </Typography>
+    );
+  }
+
+  // Only check for empty data **after loading finishes and no error**
+  if (
+    !entityData?.data?.stock_chart ||
+    entityData.data.stock_chart.prices.length === 0
+  ) {
+    return (
+      <Typography sx={{ py: 4, textAlign: "center" }}>
+        No entity data available
+      </Typography>
+    );
+  }
 
   const performanceChange = entityData.data.stock_chart.performance;
   console.log("Performance Change:", performanceChange);
@@ -473,13 +506,23 @@ const IndvEntity = () => {
                       count={totalPages}
                       page={currentPage}
                       onChange={handlePageChange}
-                      color="primary"
-                      size="large"
+                      shape="rounded"
                       showFirstButton
                       showLastButton
                       siblingCount={2}
                       boundaryCount={1}
-                      sx={{ display: "flex", justifyContent: "center" }}
+                      sx={{
+                        display: "flex",
+                        justifyContent: "center",
+                        "& .MuiPagination-ul": {
+                          justifyContent: "center",
+                          flexWrap: "nowrap",
+                        },
+                        "& .MuiPaginationItem-root.Mui-selected": {
+                          backgroundColor: "#212121",
+                          color: "#fff",
+                        },
+                      }}
                     />
                   </Grid>
                 </Grid>

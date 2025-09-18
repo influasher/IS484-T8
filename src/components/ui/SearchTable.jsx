@@ -1,29 +1,30 @@
-import React from 'react';
-import { Box, 
-    Grid, 
-    Table, 
-    TableBody, 
-    TableContainer, 
-    TableRow, 
-    Paper, 
-    Typography, 
-    Stack, 
-    Pagination, 
-    TextField,
-    InputAdornment,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-} from '@mui/material';
+import React from "react";
+import {
+  Box,
+  Grid,
+  Table,
+  TableBody,
+  TableContainer,
+  TableRow,
+  Paper,
+  Typography,
+  Stack,
+  Pagination,
+  TextField,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+} from "@mui/material";
 import { Search, Sort } from "@mui/icons-material";
-import { useState } from 'react';
-import { useEffect } from 'react';
+import { useState } from "react";
+import { useEffect } from "react";
 
-function SearchTable({ 
-  data = [], 
-  loading = false, 
-  totalPages = 1, 
+function SearchTable({
+  data = [],
+  loading = false,
+  totalPages = 1,
   currentPage = 1,
   onPageChange,
   onSearchChange,
@@ -34,7 +35,7 @@ function SearchTable({
   sortOptions = [],
   renderTableBody,
   itemsPerPage = 5,
-  entityType = "items"
+  entityType = "items",
 }) {
   const [internalSearchTerm, setInternalSearchTerm] = useState(searchTerm);
   const [internalSortOrder, setInternalSortOrder] = useState(sortOrder);
@@ -86,7 +87,12 @@ function SearchTable({
           boxShadow: 1,
         }}
       >
-        <Grid container spacing={2} justifyContent="space-between" alignItems="center">
+        <Grid
+          container
+          spacing={2}
+          justifyContent="space-between"
+          alignItems="center"
+        >
           <Grid item size="grow">
             <TextField
               fullWidth
@@ -140,7 +146,8 @@ function SearchTable({
         {/* Results Counter */}
         <Box sx={{ mt: 2 }}>
           <Typography variant="body2" color="text.secondary">
-            Showing {data.length} {entityType} on page {currentPage} of {totalPages}
+            Showing {data.length} {entityType} on page {currentPage} of{" "}
+            {totalPages}
             {internalSearchTerm && ` for "${internalSearchTerm}"`}
           </Typography>
         </Box>
@@ -150,7 +157,9 @@ function SearchTable({
       {loading && <Typography>Loading...</Typography>}
       <TableContainer component={Paper} elevation={0}>
         <Table size="small">
-          {renderTableBody ? renderTableBody(data) : (
+          {renderTableBody ? (
+            renderTableBody(data)
+          ) : (
             <TableBody>
               {data.map((item, i) => (
                 <TableRow key={i} hover>
@@ -170,19 +179,29 @@ function SearchTable({
               count={totalPages}
               page={currentPage}
               onChange={handlePageChange}
-              color="primary"
-              size="large"
+              shape="rounded"
               showFirstButton
               showLastButton
               siblingCount={2}
               boundaryCount={1}
-              sx={{ display: "flex", justifyContent: "center" }}
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                "& .MuiPagination-ul": {
+                  justifyContent: "center",
+                  flexWrap: "nowrap",
+                },
+                "& .MuiPaginationItem-root.Mui-selected": {
+                  backgroundColor: "#212121",
+                  color: "#fff",
+              },
+              }}
             />
           </Grid>
         </Grid>
       )}
     </div>
-  ); 
+  );
 }
 
 export default SearchTable;
