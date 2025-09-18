@@ -4,13 +4,14 @@ import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import { useNavigate } from "react-router-dom";
+import { ROUTES } from "../../routes";
 
 
 const Client = ({ client }) => {
     const navigate = useNavigate();
     const handleOpen = () => {
         const id = client.id ?? client.username;
-        navigate(`/client/${encodeURIComponent(id)}`);
+        navigate(`${ROUTES.RM_CLIENT}/${encodeURIComponent(id)}`);
     };
 
     // Use normalized fields from ClientCards.jsx

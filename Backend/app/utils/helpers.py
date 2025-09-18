@@ -10,7 +10,12 @@ import pandas as pd
 from rapidfuzz import process, fuzz
 import spacy
 import subprocess
-from .helpers_constants import sp500_plus2_dict, SECTOR_KEYWORDS, country_to_region, regions
+from .helpers_constants import (
+    sp500_plus2_dict,
+    SECTOR_KEYWORDS,
+    country_to_region,
+    regions,
+)
 
 load_dotenv()
 
@@ -32,11 +37,11 @@ nlp = spacy.load("en_core_web_trf")
 # sp500_plus2 = sp500_df[["Security", "GICS Sector"]]
 
 # Define new rows as DataFrames
-#new_row_1 = pd.DataFrame([{"Security": "HSBC Holdings plc", "GICS Sector": "Financials"}])
-#new_row_2 = pd.DataFrame([{"Security": "Taiwan Semiconductor Manufacturing Company Limited", "GICS Sector": "Information Technology"}])
+# new_row_1 = pd.DataFrame([{"Security": "HSBC Holdings plc", "GICS Sector": "Financials"}])
+# new_row_2 = pd.DataFrame([{"Security": "Taiwan Semiconductor Manufacturing Company Limited", "GICS Sector": "Information Technology"}])
 
 # Concatenate the new rows
-#sp500_plus2 = pd.concat([sp500_plus2, new_row_1, new_row_2], ignore_index=True)
+# sp500_plus2 = pd.concat([sp500_plus2, new_row_1, new_row_2], ignore_index=True)
 
 # Create list of known companies
 known_companies = sp500_plus2["Security"].tolist()
@@ -46,17 +51,19 @@ sectors = sp500_plus2["GICS Sector"].unique().tolist()
 
 # ** General-purpose helper functions for common tasks like formatting responses or handling dates.
 
+
 def format_response(data, message="Success", status_code=200):
-    return jsonify({
-        "status": status_code,
-        "message": message,
-        "data": data
-    }), status_code
+    return (
+        jsonify({"status": status_code, "message": message, "data": data}),
+        status_code,
+    )
+
 
 def calculate_percentage(part, whole):
     if whole == 0:
         return 0
     return (part / whole) * 100
+
 
 def password_rule_checker(password):
     # Check if password is at least 8 characters long
@@ -81,9 +88,10 @@ def format_date_into_tuple_for_gnews(date):
     date = date.split("-")
     return (int(date[0]), int(date[1]), int(date[2]))
 
+
 def URL_decoder(url):
     # Decode the URL
-    try: 
+    try:
         decoded_url = new_decoderv1(url)
         if decoded_url.get("status"):
             return decoded_url
@@ -92,8 +100,12 @@ def URL_decoder(url):
     except Exception as e:
         print(f"Error occurred: {e}")
 
+
 def get_article_details(url, article_html):
-    from app.services.sentiment_analysis import get_sentiment  # Move import here to avoid circular import
+    from app.services.sentiment_analysis import (
+        get_sentiment,
+    )  # Move import here to avoid circular import
+
     try:
         # Fetch the article details
         article_result = article(url, input_html=article_html)
@@ -114,24 +126,26 @@ def get_article_details(url, article_html):
             summary = article_result.summary
 
         # get the sentiment of the article
-        sentiment = get_sentiment(article_result.title + summary, use_openai=False, use_gemini=True)
+        sentiment = get_sentiment(
+            article_result.title + summary, use_openai=False, use_gemini=True
+        )
 
         keyword = article_result.keywords
-    
+
         return {
             "text": article_result.text,
             "summary": summary,
-            'numerical_score': sentiment['numerical_score'],
-            'finbert_score': sentiment['finbert_score'],
-            'second_model_score': sentiment['second_model_score'],
-            'third_model_score': sentiment['third_model_score'],
-            'classification': sentiment['classification'],
-            'confidence': sentiment['confidence'],
-            'agreement_rate': sentiment['agreement_rate'],
-            'keywords': keyword,
-            'companies': companies,
-            'regions': regions,
-            'sectors': sectors,
+            "numerical_score": sentiment["numerical_score"],
+            "finbert_score": sentiment["finbert_score"],
+            "second_model_score": sentiment["second_model_score"],
+            "third_model_score": sentiment["third_model_score"],
+            "classification": sentiment["classification"],
+            "confidence": sentiment["confidence"],
+            "agreement_rate": sentiment["agreement_rate"],
+            "keywords": keyword,
+            "companies": companies,
+            "regions": regions,
+            "sectors": sectors,
         }
 
     except Exception as e:
@@ -139,17 +153,17 @@ def get_article_details(url, article_html):
         return {
             "text": "An error occurred while fetching the article details",
             "summary": "An error occurred while fetching the article details",
-            'numerical_score': 0,
-            'finbert_score': 0,
-            'second_model_score': 0,
-            'third_model_score': 0,
-            'classification': "neutral",
-            'confidence': 0,
-            'agreement_rate': 0,
-            'keywords': [],
-            'companies': [],
-            'regions': [],
-            'sectors': [],
+            "numerical_score": 0,
+            "finbert_score": 0,
+            "second_model_score": 0,
+            "third_model_score": 0,
+            "classification": "neutral",
+            "confidence": 0,
+            "agreement_rate": 0,
+            "keywords": [],
+            "companies": [],
+            "regions": [],
+            "sectors": [],
         }
 
 
@@ -157,7 +171,9 @@ def news_interpreter_summariser(news_text, summary_length):
     api_key = os.getenv("GEMINI_API_KEY")
 
     if not api_key:
-        raise ValueError("API key not found. Please set the GEMINI_API_KEY in the .env file.")
+        raise ValueError(
+            "API key not found. Please set the GEMINI_API_KEY in the .env file."
+        )
 
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-2.0-flash")
@@ -171,21 +187,27 @@ def news_interpreter_summariser(news_text, summary_length):
     response = model.generate_content(prompt)
 
     # Check if we have a valid response
-    if not response or not response.candidates or not response.candidates[0].content.parts:
+    if (
+        not response
+        or not response.candidates
+        or not response.candidates[0].content.parts
+    ):
         print("Error: No valid response received from the model")
         return None
-    
+
     # Process the response
     news_summary = response.candidates[0].content.parts[0].text
-    
+
     # Clean the text of any markdown or extra formatting
-    clean_text = re.sub(r'```json\s*|\s*```$', '', news_summary)
+    clean_text = re.sub(r"```json\s*|\s*```$", "", news_summary)
     clean_text = clean_text.strip()
 
     # clean_text = "Hello world"
     return clean_text
 
+
 ### NEWS_INTERPRETER_TAGGER FUNCTIONS START HERE ###
+
 
 def extract_info_from_article(article):
     prompt = f"""
@@ -200,7 +222,9 @@ def extract_info_from_article(article):
     """
 
     try:
-        api_key = os.getenv("GEMINI_API_KEY")  # Replace with env management for security
+        api_key = os.getenv(
+            "GEMINI_API_KEY"
+        )  # Replace with env management for security
         if not api_key:
             raise ValueError("API key not found. Please set the GEMINI_API_KEY.")
 
@@ -209,7 +233,11 @@ def extract_info_from_article(article):
 
         response_obj = model.generate_content(prompt)
 
-        if not response_obj or not response_obj.candidates or not response_obj.candidates[0].content.parts:
+        if (
+            not response_obj
+            or not response_obj.candidates
+            or not response_obj.candidates[0].content.parts
+        ):
             print("Error: No valid response from Gemini model")
             return None
 
@@ -221,98 +249,114 @@ def extract_info_from_article(article):
         print(f"Error processing article: {e}")
         return None
 
+
 def combine_company_names(row):
     ner = row.get("company_names_ner")
     llm = row.get("company_names_llm_ner")
-    combined = list(set(
-        x for x in (
-            (ner if isinstance(ner, list) else [ner]) +
-            (llm if isinstance(llm, list) else [llm])
+    combined = list(
+        set(
+            x
+            for x in (
+                (ner if isinstance(ner, list) else [ner])
+                + (llm if isinstance(llm, list) else [llm])
+            )
+            if x is not None
         )
-        if x is not None
-    ))
+    )
     return combined if combined else None
+
 
 def combine_sectors(row):
     ner = row.get("sectors_ner")
     llm = row.get("sectors_llm_ner")
-    combined = list(set(
-        x for x in (
-            (ner if isinstance(ner, list) else [ner]) +
-            (llm if isinstance(llm, list) else [llm])
+    combined = list(
+        set(
+            x
+            for x in (
+                (ner if isinstance(ner, list) else [ner])
+                + (llm if isinstance(llm, list) else [llm])
+            )
+            if x is not None
         )
-        if x is not None
-    ))
+    )
     return combined if combined else None
 
+
 def combine_columns_single(val1, val2):
-    combined = list(set(
-        x for x in (
-            (val1 if isinstance(val1, list) else [val1]) +
-            (val2 if isinstance(val2, list) else [val2])
+    combined = list(
+        set(
+            x
+            for x in (
+                (val1 if isinstance(val1, list) else [val1])
+                + (val2 if isinstance(val2, list) else [val2])
+            )
+            if x is not None
         )
-        if x is not None
-    ))
+    )
     return combined if combined else None
+
 
 # Extract company using spaCy NER and fuzzy match
 
+
 def extract_company(text, confidence_score_arg):
-    #print("Next article...")
+    # print("Next article...")
     doc = nlp(str(text))
     orgs = list(set(ent.text for ent in doc.ents if ent.label_ == "ORG"))
-    #print("Orgs:" + ", ".join(orgs))
+    # print("Orgs:" + ", ".join(orgs))
 
     match_list = []
 
     for org in orgs:
-        #print("Current org:" + org)
+        # print("Current org:" + org)
         match, score, _ = process.extractOne(org, known_companies)
-        #print("Current match:" + match)
-        #print("Current score:" + str(score))
+        # print("Current match:" + match)
+        # print("Current score:" + str(score))
         if score >= confidence_score_arg:
             match_list.append(match)
-            #print("Current match list:" + ", ".join(match_list))
+            # print("Current match list:" + ", ".join(match_list))
 
     if match_list == []:
-        #print("Returned None")
+        # print("Returned None")
         return None
-        
+
     else:
         unique_list = list(set(match_list))
-        #print("Final match list:" + ", ".join(unique_list))
+        # print("Final match list:" + ", ".join(unique_list))
         return unique_list
-    
+
+
 def extract_region(text, confidence_score_arg=85):
-    #cleaned_text = preprocess_text(str(text))
-    #print("cleaned text:" + cleaned_text)
+    # cleaned_text = preprocess_text(str(text))
+    # print("cleaned text:" + cleaned_text)
     doc = nlp(str(text))
-    #print("text:" + text)
+    # print("text:" + text)
     regions = list(set(ent.text for ent in doc.ents if ent.label_ == "GPE"))
-    #print("regions:"+", ".join(regions))
+    # print("regions:"+", ".join(regions))
 
     match_list = []
     article = 1
 
     for region in regions:
-        #print("article" + str(article))
+        # print("article" + str(article))
         article += 1
-        #print("current region:" + region)
+        # print("current region:" + region)
         match, score, _ = process.extractOne(region, country_to_region.keys())
-        #print("match + score:" + match + str(score))
+        # print("match + score:" + match + str(score))
         if score >= confidence_score_arg:
             mapped_region = country_to_region[match]
             match_list.append(mapped_region)
-            #print("current match_list:" + ", ".join(match_list))
+            # print("current match_list:" + ", ".join(match_list))
 
     if not match_list:
         return None
     else:
-        #print("returned match_list:" + ", ".join(match_list))
+        # print("returned match_list:" + ", ".join(match_list))
         return list(set(match_list))  # Return unique mapped regions
-    
+
+
 def classify_sector(text, threshold=80):
-    #print("Running classify_sector function")
+    # print("Running classify_sector function")
     text = str(text).lower()
     matched_sectors = []
 
@@ -325,49 +369,53 @@ def classify_sector(text, threshold=80):
 
     return list(set(matched_sectors)) if matched_sectors else None
 
+
 def lookup_sectors_from_companies(company_list):
-    #print("Running lookup_sectors_from_companies function")
+    # print("Running lookup_sectors_from_companies function")
     if not company_list:
         return None
     sectors = set()
     for company in company_list:
-        #print("Current ner company:" + company)
+        # print("Current ner company:" + company)
         match = sp500_plus2.loc[sp500_plus2["Security"] == company, "GICS Sector"]
-        #print("Current ner sector match:" + match)
+        # print("Current ner sector match:" + match)
         if not match.empty:
             sectors.add(match.iloc[0])
-    #print("Returned list of ner sectors:" + ", ".join(list(sectors)))
+    # print("Returned list of ner sectors:" + ", ".join(list(sectors)))
     return list(sectors) if sectors else None
 
+
 ### NEWS_INTERPRETER_TAGGER FUNCTIONS END HERE ###
+
 
 def news_interpreter_tagger(news_text):
     # Step 1: Extract summary-like LLM response
     llm_output = extract_info_from_article(news_text)
 
-    #print("Extracting from raw description...")
+    # print("Extracting from raw description...")
     company_names_ner = extract_company(news_text, 90)
     regions_ner = extract_region(news_text, 90)
 
-    #print("Extracting from LLM output...")
+    # print("Extracting from LLM output...")
     company_names_llm_ner = extract_company(llm_output, 90)
     regions_llm_ner = extract_region(llm_output, 90)
     sectors_llm_ner = classify_sector(llm_output, 90)
 
     # Combine company names
-    company_names = combine_company_names({
-        "company_names_ner": company_names_ner,
-        "company_names_llm_ner": company_names_llm_ner
-    })
+    company_names = combine_company_names(
+        {
+            "company_names_ner": company_names_ner,
+            "company_names_llm_ner": company_names_llm_ner,
+        }
+    )
 
     # Sector from company lookup
     sectors_ner = lookup_sectors_from_companies(company_names)
 
     # Combine sectors
-    sectors = combine_sectors({
-        "sectors_ner": sectors_ner,
-        "sectors_llm_ner": sectors_llm_ner
-    })
+    sectors = combine_sectors(
+        {"sectors_ner": sectors_ner, "sectors_llm_ner": sectors_llm_ner}
+    )
 
     # Combine regions
     regions = combine_columns_single(regions_ner, regions_llm_ner)
@@ -375,14 +423,11 @@ def news_interpreter_tagger(news_text):
     # Return result as tuple or dictionary
     return company_names, regions, sectors
 
+
 def news_interpreter(news_text, summary_length):
     summary = news_interpreter_summariser(news_text, summary_length)
     companies, regions, sectors = news_interpreter_tagger(news_text)
     return {
-            "summary": summary,
-            "metadata": {
-                "companies": companies,
-                "regions": regions,
-                "sectors": sectors
-            }
-        }
+        "summary": summary,
+        "metadata": {"companies": companies, "regions": regions, "sectors": sectors},
+    }

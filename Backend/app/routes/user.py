@@ -1,35 +1,19 @@
 from flask import Blueprint, request
+import uuid
 
 from app.models import User, ClientPreferences
 from app import db
 from app.utils import format_response
 
-user_bp = Blueprint('user', __name__)
+user_bp = Blueprint("user", __name__)
 
-@user_bp.route('/', methods=['GET'])
-def get_users():
-    db_users = User.query.all()
-    users = []
-    for user in db_users:
-        users.append({
-            "id": user.id,
-            "username": user.username,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "email": user.email,
-            "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
-            "rm_id": user.rm_id,
-            "created_at": user.created_at,
-        })
-    return format_response(users, "Users fetched successfully", 200)
-
-@user_bp.route('/clients', methods=['GET'])
+@user_bp.route("/clients", methods=["GET"])
 def get_clients():
-    db_users = User.query.filter_by(role='CLIENT').all()
+    db_users = User.query.filter_by(role="CLIENT").all()
     users = []
     for user in db_users:
         users.append({
-            "id": user.id,
+            "id": str(user.id),
             "username": user.username,
             "first_name": user.first_name,
             "last_name": user.last_name,
@@ -40,18 +24,22 @@ def get_clients():
         })
     return format_response(users, "Clients fetched successfully", 200)
 
-@user_bp.route('/<id>', methods=['GET'])
+@user_bp.route("/<id>", methods=["GET"])
 def get_user(id):
-    user = User.query.get(id)
+    try:
+        user_uuid = uuid.UUID(id)
+    except ValueError:
+        return format_response(None, "Invalid user ID format", 400)
+    user = User.query.get(user_uuid)
     if user is None:
         return format_response(None, "User not found", 404)
     user_data = {
-        "id": user.id,
+        "id": str(user.id),
         "username": user.username,
         "first_name": user.first_name,
         "last_name": user.last_name,
         "email": user.email,
-        "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
+        "role": user.role.value if hasattr(user.role, "value") else str(user.role),
         "rm_id": user.rm_id,
         "created_at": user.created_at,
     }
@@ -79,8 +67,8 @@ def create_client():
     # Create ClientPreferences
     preferences = ClientPreferences(
         user_id=user.id,
-        holding=0.0,
-        overall_pl=0.0,
+        holding=data.get("holding", 0.0),
+        overall_pl=data.get("overall_pl", 0.0),
         stop_loss_tolerance=data.get("stop_loss_tolerance"),
         risk_cap=data.get("risk_cap"),
         sectors=data.get("sectors"),
@@ -89,7 +77,7 @@ def create_client():
     db.session.commit()
 
     user_response = {
-        "id": user.id,
+        "id": str(user.id),
         "username": user.username,
         "first_name": user.first_name,
         "last_name": user.last_name,
