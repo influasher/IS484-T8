@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom';
 import SearchTable from '../ui/SearchTable';
 import useFetch from '../../hooks/useFetch';
 import SentimentFeedbackForm from '../ui/sentimentFeedback';
+import { ROUTES } from '../../routes';
 
 const News = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -67,7 +68,7 @@ const News = () => {
           >
             <MuiLink
               component={Link}
-              to={`/Individualnewspage/${news.id}`}
+              to={ROUTES.INDIVIDUAL_NEWS}
               state={{ id: news.id, title: news.title }}
               sx={{
                 display: "block",

@@ -3,6 +3,7 @@ import unittest
 from app.utils.helpers import summarise_news
 from dotenv import load_dotenv
 
+
 class TestSummariseNews(unittest.TestCase):
     def setUp(self):
         # Load environment variables from .env file
@@ -18,6 +19,7 @@ class TestSummariseNews(unittest.TestCase):
         summary = summarise_news(self.news_text, self.summary_length)
         self.assertIsInstance(summary, str)
         self.assertTrue(len(summary.split()) <= self.summary_length)
+
 
 if __name__ == "__main__":
     unittest.main()

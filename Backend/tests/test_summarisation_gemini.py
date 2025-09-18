@@ -4,9 +4,10 @@ import sys
 import os
 
 # Add the directory containing summarisation_gemini.py to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../app')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../app")))
 
 from app.utils.helpers import summarise_news
+
 
 class TestSummariseNews(unittest.TestCase):
 
@@ -20,7 +21,11 @@ class TestSummariseNews(unittest.TestCase):
             # Mocking the response from the generate_content method
             mock_response = MagicMock()
             mock_response.candidates = [
-                MagicMock(content=MagicMock(parts=[MagicMock(text="This is a summarised response.")]))
+                MagicMock(
+                    content=MagicMock(
+                        parts=[MagicMock(text="This is a summarised response.")]
+                    )
+                )
             ]
             mock_generate_content.return_value = mock_response
 
@@ -44,7 +49,11 @@ class TestSummariseNews(unittest.TestCase):
         with patch("os.getenv", return_value=None):
             with self.assertRaises(ValueError) as context:
                 summarise_news("Some news text", 10)
-            self.assertEqual(str(context.exception), "API key not found. Please set the GEMINI_API_KEY in the .env file.")
+            self.assertEqual(
+                str(context.exception),
+                "API key not found. Please set the GEMINI_API_KEY in the .env file.",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

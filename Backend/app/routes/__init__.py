@@ -10,13 +10,12 @@ from .user import user_bp
 
 
 def register_routes(app):
-    app.register_blueprint(auth_bp, url_prefix='/auth')
-    app.register_blueprint(news_bp, url_prefix='/news')
-    app.register_blueprint(entities_bp, url_prefix='/entities')
-    app.register_blueprint(sentiment_bp, url_prefix='/sentiment')
-    app.register_blueprint(pdf_bp, url_prefix='/pdf')
-    app.register_blueprint(send_pdf_bp, url_prefix='/send_pdf')
-    app.register_blueprint(feedback_bp, url_prefix='/feedback')
-    app.register_blueprint(sentiment_history_bp, url_prefix='/sentiment_history')
-    app.register_blueprint(user_bp, url_prefix='/user')
-
+    app.register_blueprint(auth_bp, url_prefix="/auth")
+    app.register_blueprint(news_bp, url_prefix="/news")
+    app.register_blueprint(entities_bp, url_prefix="/entities")
+    app.register_blueprint(sentiment_bp, url_prefix="/sentiment")
+    app.register_blueprint(pdf_bp, url_prefix="/pdf")
+    app.register_blueprint(send_pdf_bp, url_prefix="/send_pdf")
+    app.register_blueprint(feedback_bp, url_prefix="/feedback")
+    app.register_blueprint(sentiment_history_bp, url_prefix="/sentiment_history")
+    app.register_blueprint(user_bp, url_prefix="/user")

@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 import SearchTable from '../ui/SearchTable';
 import SentimentScore from "../ui/Sentimentscore";
 import useFetch from "../../hooks/useFetch";
+import { ROUTES } from "../../routes";
 
 const Entities = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -66,7 +67,7 @@ const Entities = () => {
           >
             <MuiLink
               component={Link}
-              to={`/entity/${entity.ticker}`}
+              to={`${ROUTES.ENTITY}/${entity.ticker}`}
               sx={{
                 display: "block",
                 textDecoration: "none",
