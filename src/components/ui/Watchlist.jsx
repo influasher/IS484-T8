@@ -132,6 +132,7 @@ const StockWatchlist = () => {
   }
 
   return (
+
     <>
       <Typography variant="h6" sx={{ fontWeight: 500, p: 2 }}>
         Watchlist
