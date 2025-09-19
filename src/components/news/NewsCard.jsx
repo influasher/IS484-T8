@@ -8,6 +8,7 @@ import {
 } from "@mui/material";
 import SentimentScore from "../ui/Sentimentscore";
 import { Link } from "react-router-dom";
+import { ROUTES } from "../../routes";
 
 // Main News Component
 const NewsCard = ({ news }) => {
@@ -38,7 +39,7 @@ const NewsCard = ({ news }) => {
           <Typography variant="h6" sx={{ mb: 0.5 }}>
             <MuiLink
               component={Link}
-              to="/Individualnewspage"
+              to={ROUTES.INDIVIDUAL_NEWS}
               state={{ id: news.id, title: news.title }}
               sx={{
                 fontSize: "clamp(0.9rem, 2vw, 1.2rem)",

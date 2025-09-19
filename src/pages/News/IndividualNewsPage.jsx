@@ -9,6 +9,7 @@ import {
   Link as MuiLink,
   Stack,
   Divider,
+  CircularProgress,
 } from '@mui/material';
 import { useLocation, useNavigate, Link, useParams } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch';
@@ -16,13 +17,14 @@ import SentimentScore from '../../components/ui/Sentimentscore';
 import SentimentFeedbackForm from '../../components/ui/sentimentFeedback';
 import PieChart from '../../components/ui/feedbackChart';
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import {ROUTES} from "../../routes";
 
 
 function IndividualNewsPage() {
   const [refreshChart, setRefreshChart] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { id } = useParams();
+  const id = location.state?.id || null;
   const newsTitle = location.state?.title || 'Unknown Title';
   
   const { data } = useFetch(`news/id/${id}`);
@@ -66,7 +68,14 @@ function IndividualNewsPage() {
 
   // Loading and error states
   if (!id) return <Typography>No ID provided. Please navigate correctly.</Typography>;
-  if (!newsData) return <Typography>Loading...</Typography>;
+  if (!newsData) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading News...</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ display: "flex", px: 4 }}>
@@ -269,7 +278,7 @@ function IndividualNewsPage() {
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               <MuiLink
                 component={Link}
-                to="/NewsPage"
+                to={ROUTES.NEWS}
                 underline="hover"
                 sx={{
                   color: "text.primary", // uses theme's default text color (black/dark gray)

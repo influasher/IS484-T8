@@ -19,32 +19,33 @@ import { ROUTES } from "../../routes";
 const url = "/entities/get_all_tickers";
 
 const TrendChart = ({ data, trend }) => {
-    const svgWidth = 97;
-    const svgHeight = 40;
-    const padding = 8;
-  
-    const points = data
-      .map((value, index) => {
-        const x = padding + (index / (data.length - 1)) * (svgWidth - 2 * padding);
-        const y = padding + (1 - value / 100) * (svgHeight - 2 * padding);
-        return `${x},${y}`;
-      })
-      .join(" ");
-  
-    const color = trend === "up" ? "#2e7d32" : "#d32f2f";
-  
-    return (
-      <svg width="97" height="40" viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
-        <polyline
-          points={points}
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  };
+  const svgWidth = 97;
+  const svgHeight = 40;
+  const padding = 8;
+
+  const points = data
+    .map((value, index) => {
+      const x =
+        padding + (index / (data.length - 1)) * (svgWidth - 2 * padding);
+      const y = padding + (1 - value / 100) * (svgHeight - 2 * padding);
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  const color = trend === "up" ? "#2e7d32" : "#d32f2f";
+
+  return (
+    <svg width="97" height="40" viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
 
 const StockWatchlist = () => {
   const { data: stocks, loading, error } = useFetch(url);
@@ -115,14 +116,12 @@ const StockWatchlist = () => {
       maximumFractionDigits: 2,
     }).format(value);
 
-  const formatChange = (value) =>
-    (value >= 0 ? "+" : "") + value.toFixed(2);
+  const formatChange = (value) => (value >= 0 ? "+" : "") + value.toFixed(2);
 
   const formatChangePercent = (value) =>
     (value >= 0 ? "+" : "") + value.toFixed(2) + "%";
 
-  const formatVolume = (value) =>
-    new Intl.NumberFormat("en-US").format(value);
+  const formatVolume = (value) => new Intl.NumberFormat("en-US").format(value);
 
   if (loading) {
     return <Typography>Loading...</Typography>;
@@ -133,78 +132,83 @@ const StockWatchlist = () => {
   }
 
   return (
-    <Box sx={{ width: "100%", minHeight: "100vh", p: 2 }}>
-      <Paper sx={{ width: "100%", backgroundColor: "white" }}>
-        <Typography variant="h6" sx={{ fontWeight: 500, p: 2 }}>
-          Watchlist
-        </Typography>
-        <Box sx={{ p: 2 }}>
-          <TextField
-            fullWidth
-            variant="outlined"
-            placeholder="Search by company name or ticker..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <Search style={{ marginRight: 8, color: "gray" }} />
-              ),
-            }}
-          />
+
+    <>
+      <Typography variant="h6" sx={{ fontWeight: 500, p: 2 }}>
+        Watchlist
+      </Typography>
+      <Box sx={{ p: 2 }}>
+        <TextField
+          fullWidth
+          variant="outlined"
+          placeholder="Search by company name or ticker..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <Search style={{ marginRight: 8, color: "gray" }} />
+            ),
+          }}
+        />
+      </Box>
+      {filteredData.length === 0 ? (
+        <Box sx={{ p: 2, textAlign: "center", color: "gray" }}>
+          No stocks found matching "{searchTerm}"
         </Box>
-        {filteredData.length === 0 ? (
-          <Box sx={{ p: 2, textAlign: "center", color: "gray" }}>
-            No stocks found matching "{searchTerm}"
-          </Box>
-        ) : (
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Ticker</TableCell>
-                  <TableCell>Company</TableCell>
-                  <TableCell align="center">Trend</TableCell>
-                  <TableCell align="right">Price</TableCell>
-                  <TableCell align="right">Change</TableCell>
-                  <TableCell align="right">% Change</TableCell>
-                  <TableCell align="right">Volume</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredData.map((stock) => (
-                  <TableRow
-                    key={stock.id}
-                    hover
-                    sx={{ cursor: "pointer" }}
-                    onClick={() => navigate(`${ROUTES.ENTITY}/${stock.ticker}`)}
+      ) : (
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Ticker</TableCell>
+                <TableCell>Company</TableCell>
+                <TableCell align="center">Trend</TableCell>
+                <TableCell align="right">Price</TableCell>
+                <TableCell align="right">Change</TableCell>
+                <TableCell align="right">% Change</TableCell>
+                <TableCell align="right">Volume</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredData.map((stock) => (
+                <TableRow
+                  key={stock.id}
+                  hover
+                  sx={{ cursor: "pointer" }}
+                  onClick={() => navigate(`${ROUTES.ENTITY}/${stock.ticker}`)}
+                >
+                  <TableCell>{stock.ticker}</TableCell>
+                  <TableCell>{stock.name}</TableCell>
+                  <TableCell align="center">
+                    <TrendChart data={stock.trendData} trend={stock.trend} />
+                  </TableCell>
+                  <TableCell align="right">
+                    {formatCurrency(stock.price)}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ color: stock.change >= 0 ? "#2e7d32" : "#d32f2f" }}
                   >
-                    <TableCell>{stock.ticker}</TableCell>
-                    <TableCell>{stock.name}</TableCell>
-                    <TableCell align="center">
-                        <TrendChart data={stock.trendData} trend={stock.trend} />
-                    </TableCell>
-                    <TableCell align="right">{formatCurrency(stock.price)}</TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ color: stock.change >= 0 ? "#2e7d32" : "#d32f2f" }}
-                    >
-                      {formatChange(stock.change)}
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ color: stock.changePercent >= 0 ? "#2e7d32" : "#d32f2f" }}
-                    >
-                      {formatChangePercent(stock.changePercent)}
-                    </TableCell>
-                    <TableCell align="right">{formatVolume(stock.volume)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </Paper>
-    </Box>
+                    {formatChange(stock.change)}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      color: stock.changePercent >= 0 ? "#2e7d32" : "#d32f2f",
+                    }}
+                  >
+                    {formatChangePercent(stock.changePercent)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {formatVolume(stock.volume)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </>
   );
 };
 

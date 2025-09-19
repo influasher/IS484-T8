@@ -8,7 +8,7 @@ import { Tabs, Tab, Stack } from "@mui/material";
 import { Link, useLocation } from "react-router-dom";
 import { ROUTES } from "../routes";
 import useAuth from "../hooks/useAuth";
-import LogoutIcon from '@mui/icons-material/Logout';
+import LogoutIcon from "@mui/icons-material/Logout";
 
 function CustomIcon(props) {
   return <SvgIcon {...props} component={UBSLogo} inheritViewBox />;
@@ -19,14 +19,15 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
   const navigate = useNavigate();
   const { logout } = useAuth();
 
-  // Map paths to tab index
-  const paths = [
-    ROUTES.ENTITIES,
-    ROUTES.NEWS,
-    ROUTES.DASHBOARD,
-    ROUTES.CLIENT_HOME,
-    ROUTES.RM_HOME,
+  // Build tabs dynamically
+  const baseTabs = [
+    { label: "Entities", path: ROUTES.ENTITIES },
+    { label: "News", path: ROUTES.NEWS },
+    { label: "Dashboard", path: ROUTES.DASHBOARD },
   ];
+
+  const paths = baseTabs.map((t) => t.path);
+  const currentIndex = paths.indexOf(location.pathname);
 
   const handleChange = (event, newValue) => {
     navigate(paths[newValue]);
@@ -34,10 +35,9 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
 
   const handleHomeClick = () => {
     const redirectMap = {
-      RM: ROUTES.RM_HOME,
-      Client: ROUTES.CLIENT_HOME,
+      relationship_manager: ROUTES.RM_HOME,
+      client: ROUTES.CLIENT_HOME,
     };
-
     navigate(redirectMap[role] || ROUTES.LOGIN);
   };
 
@@ -64,56 +64,50 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
       <Stack
         direction="row"
         spacing={2}
-        sx={{ alignItems: "center", justifyContent: "start" }}
+        sx={{ alignItems: "center", justifyContent: "space-between" }}
       >
-        {/* Home icon */}
-        <IconButton
-          onClick={handleHomeClick}
-          sx={{
-            p: 0,
-            "&:hover": {
-              backgroundColor: "transparent", // remove hover background
-            },
-          }}
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{ alignItems: "center", justifyContent: "start" }}
         >
-          <CustomIcon sx={{ fontSize: 80 }} />
-        </IconButton>
-        <Tabs
-          value={paths.indexOf(location.pathname)}
-          onChange={handleChange}
-          sx={{
-            height: "64px",
-            minHeight: "64px",
-            "& .MuiTab-root": {
+          {/* Home icon */}
+          <IconButton
+            onClick={handleHomeClick}
+            sx={{
+              p: 0,
+              "&:hover": { backgroundColor: "transparent" },
+            }}
+          >
+            <CustomIcon sx={{ fontSize: 80 }} />
+          </IconButton>
+
+          <Tabs
+            value={currentIndex === -1 ? false : currentIndex}
+            onChange={handleChange}
+            sx={{
+              height: "64px",
               minHeight: "64px",
-              color: "grey", // unselected tab text
-              "&.Mui-selected": {
-                color: "black", // selected tab text
+              "& .MuiTab-root": {
+                minHeight: "64px",
+                color: "grey",
+                "&.Mui-selected": { color: "black" },
               },
-            },
-            "& .MuiTabs-indicator": {
-              backgroundColor: "red", // indicator color
-            },
-          }}
-        >
-          <Tab label="Entities" />
-          <Tab label="News" />
-          <Tab label="Dashboard" />
-          <Tab label="Client" />
-          <Tab label="RM" />
-        </Tabs>
+              "& .MuiTabs-indicator": { backgroundColor: "red" },
+            }}
+          >
+            {baseTabs.map((tab, idx) => (
+              <Tab key={idx} label={tab.label} />
+            ))}
+          </Tabs>
+        </Stack>
 
         {/* Logout button */}
         <Button
+          variant="outlined"
           onClick={handleLogout}
           startIcon={<LogoutIcon />}
-          sx={{
-            color: "grey",
-            "&:hover": {
-              backgroundColor: "transparent",
-              color: "red",
-            },
-          }}
+          color="error"
         >
           Logout
         </Button>

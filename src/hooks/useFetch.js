@@ -7,6 +7,8 @@ const useFetch = (endpoint) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (!endpoint) return; // skip fetch if endpoint is null
+    
     const fetchData = async () => {
       try {
         const result = await getData(endpoint);

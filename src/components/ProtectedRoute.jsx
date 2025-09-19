@@ -2,6 +2,7 @@ import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import { CircularProgress, Box } from "@mui/material";
+import { ROUTES } from "../routes";
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { isLoggedIn, loading, userRole } = useAuth();
@@ -23,18 +24,18 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
 
   // Not authenticated - redirect to login with return URL
   if (!isLoggedIn) {
-    return <Navigate to="/Login" state={{ from: location }} replace />;
+    return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
   }
 
   // Check role-based access if roles are specified
   if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
     // User doesn't have required role - redirect to appropriate dashboard
     if (userRole === "client") {
-      return <Navigate to="/Client" replace />;
+      return <Navigate to={ROUTES.CLIENT_HOME} replace />;
     } else if (userRole === "relationship_manager") {
-      return <Navigate to="/RM" replace />;
+      return <Navigate to={ROUTES.RM_HOME} replace />;
     } else {
-      return <Navigate to="/DashboardPage" replace />;
+      return <Navigate to={ROUTES.DASHBOARD} replace />;
     }
   }
 
