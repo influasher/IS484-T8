@@ -45,13 +45,6 @@ const PortfolioDashboard = () => {
   
   const itemsPerPage = 10;
 
-  // Hard coded data - client portfolio with allocation details
-  const client_portfolio = [
-    { name: 'AAPL', value: 80, color: '#6366f1' },
-    { name: 'HSBC', value: 41, color: '#10b981' },
-    { name: 'TSMC', value: 35, color: '#f59e0b' },
-  ];
-
   const timeRanges = [
     { label: '1M', value: '1M' },
     { label: '3M', value: '3M' },
@@ -83,13 +76,11 @@ const PortfolioDashboard = () => {
       { date: new Date('2021-01-01'), value: 6800 },
       { date: new Date('2022-01-01'), value: 8000 },
     ],
-    metrics: {
-      totalInvestment: 12056.36,
-      totalMarketValue: 13982.35,
-      unrealizedPL: 47.59,
-      unrealizedPLPercent: 3.28,
-    },
-    allocation: client_portfolio
+    allocation: [
+        { name: 'AAPL', value: 80, color: '#6366f1' },
+        { name: 'HSBC', value: 41, color: '#10b981' },
+        { name: 'TSMC', value: 35, color: '#f59e0b' },
+      ]
   };
 
   const mockTransactionData = [
@@ -440,12 +431,109 @@ const PortfolioDashboard = () => {
     return filtered;
   };
 
+  // Function to calculate portfolio metrics from transaction data
+  const calculatePortfolioMetrics = (transactions) => {
+    let totalDeposits = 0;
+    let totalWithdrawals = 0;
+    let totalPurchases = 0;
+    let totalSales = 0;
+    let totalDividends = 0;
+    let totalCapitalGains = 0;
+    let totalInterest = 0;
+
+    transactions.forEach(transaction => {
+      const amount = transaction.amount;
+      
+      switch (transaction.type.toLowerCase()) {
+        case 'deposit':
+          totalDeposits += amount;
+          break;
+        case 'withdrawal':
+          totalWithdrawals += Math.abs(amount); // Convert to positive for calculation
+          break;
+        case 'purchase':
+          totalPurchases += Math.abs(amount); // Convert to positive for calculation
+          break;
+        case 'sale':
+          totalSales += amount;
+          break;
+        case 'dividend':
+          totalDividends += amount;
+          break;
+        case 'capital gains':
+          totalCapitalGains += amount;
+          break;
+        case 'interest':
+          totalInterest += amount;
+          break;
+      }
+    });
+
+    // Calculate net cash invested (deposits - withdrawals)
+    const netCashInvested = totalDeposits - totalWithdrawals;
+    
+    // Calculate total money put into investments
+    const totalInvestmentAmount = totalPurchases;
+    
+    // Calculate current cash position (deposits - withdrawals - purchases + sales + dividends + capital gains + interest)
+    const currentCashPosition = totalDeposits - totalWithdrawals - totalPurchases + totalSales + totalDividends + totalCapitalGains + totalInterest;
+    
+    // For current portfolio value, we need current market prices of holdings
+    // Since we don't have real-time prices, we'll estimate based on transactions
+    // This is a simplified calculation - in reality, you'd need current market data
+    
+    // Calculate net investment in securities (purchases - sales)
+    const netSecuritiesInvestment = totalPurchases - totalSales;
+    
+    // Estimate current portfolio value (this is simplified - would need real market data)
+    // Assuming 15% growth on net securities investment for demonstration
+    const estimatedSecuritiesValue = netSecuritiesInvestment * 1.15; // 15% estimated growth
+    
+    const estimatedTotalPortfolioValue = currentCashPosition + estimatedSecuritiesValue;
+    
+    // Calculate total realized gains (sales + dividends + capital gains + interest - original purchase amounts)
+    const totalRealizedGains = totalSales + totalDividends + totalCapitalGains + totalInterest - (totalPurchases - netSecuritiesInvestment);
+    
+    // Calculate unrealized P&L (estimated current value - total cash invested)
+    const unrealizedPL = estimatedTotalPortfolioValue - netCashInvested;
+    const unrealizedPLPercent = netCashInvested > 0 ? (unrealizedPL / netCashInvested) * 100 : 0;
+
+    return {
+      totalInvestment: netCashInvested,
+      totalMarketValue: estimatedTotalPortfolioValue,
+      unrealizedPL: unrealizedPL,
+      unrealizedPLPercent: unrealizedPLPercent,
+      breakdown: {
+        totalDeposits,
+        totalWithdrawals,
+        totalPurchases,
+        totalSales,
+        totalDividends,
+        totalCapitalGains,
+        totalInterest,
+        currentCashPosition,
+        netSecuritiesInvestment,
+        estimatedSecuritiesValue
+      }
+    };
+  };
+
   const fetchPortfolioData = async (period = '1Y') => {
     setLoading(true);
     try {
-      // Mock API call - replace with actual implementation
+      // Calculate metrics from transaction data
+      const calculatedMetrics = calculatePortfolioMetrics(mockTransactionData);
+      
+      // Create portfolio data with calculated metrics
+      const portfolioDataWithCalculatedMetrics = {
+        ...mockPortfolioData,
+        metrics: calculatedMetrics,
+        // Keep the same performance chart data for now
+        performance: mockPortfolioData.performance
+      };
+      
       await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API delay
-      setPortfolioData(mockPortfolioData);
+      setPortfolioData(portfolioDataWithCalculatedMetrics);
     } catch (error) {
       console.error('Error fetching portfolio data:', error);
     } finally {
@@ -485,6 +573,7 @@ const PortfolioDashboard = () => {
   useEffect(() => {
     fetchPortfolioData(timeRange);
     fetchTransactionData();
+
   }, []);
 
   useEffect(() => {
@@ -625,7 +714,7 @@ const PortfolioDashboard = () => {
                             fontSize: "1.75rem" 
                           }}
                         >
-                          ${metrics.totalInvestment.toLocaleString()} SGD
+                          ${metrics.totalInvestment.toFixed(2).toLocaleString()} SGD
                         </Typography>
                         <Typography 
                           variant="body2" 
@@ -645,7 +734,7 @@ const PortfolioDashboard = () => {
                             fontSize: "1.75rem" 
                           }}
                         >
-                          ${metrics.totalMarketValue.toLocaleString()} SGD
+                          ${metrics.totalMarketValue.toFixed(2).toLocaleString()} SGD
                         </Typography>
                         <Typography 
                           variant="body2" 
@@ -667,7 +756,7 @@ const PortfolioDashboard = () => {
                           fontSize: "1.25rem" 
                         }}
                       >
-                        +{metrics.unrealizedPL} ({metrics.unrealizedPLPercent}%)
+                        +{metrics.unrealizedPL.toFixed(2)} ({metrics.unrealizedPLPercent.toFixed(2)}%)
                       </Typography>
                       <Typography 
                         variant="body2" 
@@ -813,7 +902,7 @@ const PortfolioDashboard = () => {
                 justifyContent="space-between"
                 alignItems="center"
                 >
-                <Grid item xs={12} sm={8} md={8}>
+                <Grid item size="grow">
                     <TextField
                     fullWidth
                     variant="outlined"
@@ -835,7 +924,7 @@ const PortfolioDashboard = () => {
                     />
                 </Grid>
                 
-                <Grid item xs={12} sm={4} md={4}>
+                <Grid item size={{ xs: 6, sm: 4, md: 4, lg: 3, xl: 3 }}>
                     <FormControl fullWidth variant="outlined">
                     <InputLabel id="sort-select-label">Sort By</InputLabel>
                     <Select
