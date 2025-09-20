@@ -14,7 +14,7 @@ function ClientHomePage() {
         Hello,
       </Typography>
         <ClientPortfolio/>
-      <Watchlist />
+      {/* <Watchlist /> */}
     </Box>
   );
 }
