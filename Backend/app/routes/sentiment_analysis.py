@@ -39,7 +39,16 @@ def analyze_entity():
             ticker, page=1, per_page=10, sort_order="desc", filter_time="all"
         )
 
-        news_details = news_list["news"]
+        if not news_list:
+            continue
+
+        if isinstance(news_list, dict):
+            news_details = news_list["news"]
+
+        else:
+            news_details = news_list
+
+        # news_details = news_list["news"]
 
         for news in news_details:
             articles.append(
