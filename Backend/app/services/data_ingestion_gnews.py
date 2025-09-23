@@ -83,7 +83,7 @@ def get_gnews_news_by_ticker(query, start_date, end_date):
             "apnnews.com",
             "fool.com",
         ],
-        # max_results=1  # For testing purposes
+        max_results=5  # For testing purposes
     )
 
     data = gn.get_news(query)
