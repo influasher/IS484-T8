@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request
 from app.services.sentiment_analysis import get_sentiment
 from app.services.sentiment_history_services import create_sentiment_history
 from app.services.entities_service import update_entity_sentiment

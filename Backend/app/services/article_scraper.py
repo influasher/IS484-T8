@@ -3,7 +3,6 @@ from crawl4ai import AsyncWebCrawler
 from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig, CacheMode
 from fake_useragent import UserAgent
 from playwright._impl._errors import TargetClosedError, TimeoutError
-from random import choice
 import logging
 
 # Configure logging
