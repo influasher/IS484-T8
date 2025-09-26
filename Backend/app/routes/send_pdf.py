@@ -92,13 +92,13 @@ def send_pdf_email():
                 if os.path.exists(pdf_filepath):
                     os.remove(pdf_filepath)
                     logging.info(f"Deleted file: {pdf_filepath}")
-            except Exception as e:
+            except Exception:
                 logging.error(f"Error deleting file: {traceback.format_exc()}")
 
         # Run cleanup in a background thread
         threading.Thread(target=cleanup, daemon=True).start()
         return format_response({"success": True}, "Email sent", 200)
 
-    except Exception as e:
+    except Exception:
         logging.error(f"Error: {traceback.format_exc()}")
         return format_response(None, "Failed to send email", 500)

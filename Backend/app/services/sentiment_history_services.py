@@ -1,8 +1,8 @@
 from app.models import SentimentHistory
-from sqlalchemy import func, desc, asc
+from sqlalchemy import func
 from app import db
 
-from datetime import datetime, timedelta
+from datetime import datetime
 import numpy as np
 
 

@@ -1,4 +1,3 @@
-import pandas as pd
 
 sp500_plus2_dict = {
     "Security": {

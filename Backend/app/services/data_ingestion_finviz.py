@@ -1,6 +1,6 @@
 from app import db
 from app.models.news import News as NewsModel
-from finvizfinance.quote import finvizfinance, Quote
+from finvizfinance.quote import finvizfinance
 from finvizfinance.news import News
 from app.utils.helpers import get_article_details
 from app.services.article_scraper import scrape_article

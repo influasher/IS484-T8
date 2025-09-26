@@ -18,8 +18,6 @@ from .news_services import (
 from .entities_service import get_ticker_by_entity, get_all_ticker_entities
 from .email_pdf import send_email_with_attachment
 from .entities_service import (
-    get_all_ticker_entities,
-    get_ticker_by_entity,
     update_entity_sentiment,
 )
 from .feedback_services import (

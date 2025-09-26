@@ -1,9 +1,7 @@
 import yfinance as yf
-import requests_cache
 import datetime
 import time
 import pandas as pd
-from app import db
 from app.models.news import News as NewsModel
 from app.utils.helpers import get_article_details
 from app.services.article_scraper import scrape_article
@@ -93,7 +91,10 @@ def get_stock_history(ticker, period="1y"):
 
 
 def get_stock_news(ticker):
-    stock = yf.Search(ticker, enable_fuzzy_query=True, include_cb=False)
+    stock = yf.Search(ticker,
+                      max_results=3,
+                      enable_fuzzy_query=True,
+                      include_cb=False)
     news = stock.news
 
     newslist = []

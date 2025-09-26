@@ -2,10 +2,6 @@ from flask import Blueprint, request
 from app.models.entity import Entity
 from app.services.data_ingestion_finviz import get_stock_fundamentals
 from app.services.data_ingestion_yfinance import get_stock_price, get_stock_history
-from app.services.sentiment_history_services import (
-    get_sentiment_history_by_entity_id,
-    create_sentiment_history,
-)
 from app.services.entities_service import get_all_entities, get_all_ticker_entities
 from app import db
 from app.utils.decorators import jwt_required

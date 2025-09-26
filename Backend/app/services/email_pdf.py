@@ -20,6 +20,6 @@ def send_email_with_attachment(
         mail.send(msg)  # Send email using properly initialized mail object
         logging.info(f"Email sent to {recipient_email} with attachment {pdf_filepath}")
         return True
-    except Exception as e:
+    except Exception:
         logging.error(f"Error sending email: {traceback.format_exc()}")
         return False

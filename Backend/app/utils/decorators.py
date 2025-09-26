@@ -10,7 +10,7 @@ def jwt_required(fn):
     def wrapper(*args, **kwargs):
         try:
             verify_jwt_in_request()
-        except Exception as e:
+        except Exception:
             return jsonify({"message": "Unauthorized"}), 401
         return fn(*args, **kwargs)
 
@@ -25,7 +25,7 @@ def admin_required(fn):
             current_user = get_jwt_identity()
             if current_user["role"] != "admin":
                 return jsonify({"message": "Unauthorized"}), 401
-        except Exception as e:
+        except Exception:
             return jsonify({"message": "Unauthorized"}), 401
         return fn(*args, **kwargs)
 
