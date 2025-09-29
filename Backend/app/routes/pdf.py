@@ -78,7 +78,7 @@ def export_pdf():
             if os.path.exists(pdf_filepath):
                 os.remove(pdf_filepath)
                 logging.info(f"Deleted file: {pdf_filepath}")
-        except Exception as e:
+        except Exception:
             logging.error(f"Error deleting file: {traceback.format_exc()}")
 
     try:
@@ -89,6 +89,6 @@ def export_pdf():
         # Run cleanup in a background thread
         threading.Thread(target=cleanup, daemon=True).start()
         return response
-    except Exception as e:
+    except Exception:
         logging.error(f"Error sending PDF: {traceback.format_exc()}")
         return format_response(None, "Error generating PDF", 500)

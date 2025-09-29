@@ -15,7 +15,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from tqdm import tqdm
 from collections import Counter
 import time

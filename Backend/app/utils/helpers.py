@@ -1,5 +1,4 @@
 from flask import jsonify
-import time
 from newspaper import article
 from googlenewsdecoder import new_decoderv1
 import os
@@ -9,7 +8,6 @@ import re
 import pandas as pd
 from rapidfuzz import process, fuzz
 import spacy
-import subprocess
 from .helpers_constants import (
     sp500_plus2_dict,
     SECTOR_KEYWORDS,
@@ -48,6 +46,7 @@ known_companies = sp500_plus2["Security"].tolist()
 
 # Create list of unique GICS sectors
 sectors = sp500_plus2["GICS Sector"].unique().tolist()
+
 
 # ** General-purpose helper functions for common tasks like formatting responses or handling dates.
 
@@ -188,9 +187,9 @@ def news_interpreter_summariser(news_text, summary_length):
 
     # Check if we have a valid response
     if (
-        not response
-        or not response.candidates
-        or not response.candidates[0].content.parts
+            not response
+            or not response.candidates
+            or not response.candidates[0].content.parts
     ):
         print("Error: No valid response received from the model")
         return None
@@ -234,9 +233,9 @@ def extract_info_from_article(article):
         response_obj = model.generate_content(prompt)
 
         if (
-            not response_obj
-            or not response_obj.candidates
-            or not response_obj.candidates[0].content.parts
+                not response_obj
+                or not response_obj.candidates
+                or not response_obj.candidates[0].content.parts
         ):
             print("Error: No valid response from Gemini model")
             return None
@@ -257,8 +256,8 @@ def combine_company_names(row):
         set(
             x
             for x in (
-                (ner if isinstance(ner, list) else [ner])
-                + (llm if isinstance(llm, list) else [llm])
+                    (ner if isinstance(ner, list) else [ner])
+                    + (llm if isinstance(llm, list) else [llm])
             )
             if x is not None
         )
@@ -273,8 +272,8 @@ def combine_sectors(row):
         set(
             x
             for x in (
-                (ner if isinstance(ner, list) else [ner])
-                + (llm if isinstance(llm, list) else [llm])
+                    (ner if isinstance(ner, list) else [ner])
+                    + (llm if isinstance(llm, list) else [llm])
             )
             if x is not None
         )
@@ -287,8 +286,8 @@ def combine_columns_single(val1, val2):
         set(
             x
             for x in (
-                (val1 if isinstance(val1, list) else [val1])
-                + (val2 if isinstance(val2, list) else [val2])
+                    (val1 if isinstance(val1, list) else [val1])
+                    + (val2 if isinstance(val2, list) else [val2])
             )
             if x is not None
         )

@@ -1,5 +1,5 @@
 from app.models.news import News
-from sqlalchemy import any_, func, or_
+from sqlalchemy import any_, or_
 from datetime import datetime, timedelta
 from app import db
 import time

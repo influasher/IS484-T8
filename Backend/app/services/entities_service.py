@@ -1,5 +1,5 @@
 from app.models import Entity
-from sqlalchemy import any_, or_, asc, desc, func
+from sqlalchemy import or_, asc, desc, func
 from app import db
 
 

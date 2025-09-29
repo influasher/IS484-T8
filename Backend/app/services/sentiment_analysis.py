@@ -1,11 +1,9 @@
 from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
 from dotenv import load_dotenv
 import os
-import numpy as np
 import re
 import logging
 import json
-import requests
 import google.generativeai as genai
 
 # Configure logging
@@ -371,14 +369,14 @@ class SentimentAnalyzer:
         """
         # Check model agreement
         models_agree = (
-            finbert_result["classification"] == second_model_result["classification"]
+                finbert_result["classification"] == second_model_result["classification"]
         )
 
         # Calculate base score (average of the two models)
         # FinBERT range: -1.0 to +1.0, Second model range is similar for our purposes
         base_score = (
-            finbert_result["numerical_score"] + second_model_result["numerical_score"]
-        ) / 2
+                             finbert_result["numerical_score"] + second_model_result["numerical_score"]
+                     ) / 2
 
         # Calculate confidence score based on model agreement and score differences
         score_difference = abs(
@@ -469,26 +467,26 @@ class SentimentAnalyzer:
 
         # Calculate final scores
         final_score = (
-            sum(
-                result["numerical_score"] * result["confidence"]
-                for result in integrated_results
-            )
-            / total_weight
+                sum(
+                    result["numerical_score"] * result["confidence"]
+                    for result in integrated_results
+                )
+                / total_weight
         )
         final_finbert_score = (
-            sum(
-                result["model_scores"]["finbert"] * result["confidence"]
-                for result in integrated_results
-            )
-            / total_weight
-        ) * 100
+                                      sum(
+                                          result["model_scores"]["finbert"] * result["confidence"]
+                                          for result in integrated_results
+                                      )
+                                      / total_weight
+                              ) * 100
         final_second_model_score = (
-            sum(
-                result["model_scores"]["second_model"] * result["confidence"]
-                for result in integrated_results
-            )
-            / total_weight
-        ) * 100
+                                           sum(
+                                               result["model_scores"]["second_model"] * result["confidence"]
+                                               for result in integrated_results
+                                           )
+                                           / total_weight
+                                   ) * 100
 
         # Final classification
         if final_score > 10:
@@ -522,7 +520,7 @@ class SentimentAnalyzer:
 
 
 # Expose a simple interface for external use
-def get_sentiment(text, use_openai=False, use_gemini=True):
+def get_sentiment(text, use_openai=True, use_gemini=False):
     """
     Analyze the sentiment of a financial text using the SentimentAnalyzer
 
@@ -551,20 +549,20 @@ def get_sentiment(text, use_openai=False, use_gemini=True):
 
         # Combine results
         result["numerical_score"] = (
-            result_with_open_ai["numerical_score"]
-            + result_with_gemini["numerical_score"]
-        ) / 2
+                                            result_with_open_ai["numerical_score"]
+                                            + result_with_gemini["numerical_score"]
+                                    ) / 2
         result["finbert_score"] = (
-            result_with_open_ai["finbert_score"] + result_with_gemini["finbert_score"]
-        ) / 2
+                                          result_with_open_ai["finbert_score"] + result_with_gemini["finbert_score"]
+                                  ) / 2
         result["second_model_score"] = result_with_gemini["second_model_score"]
         result["third_model_score"] = result_with_open_ai["numerical_score"]
         result["confidence"] = (
-            result_with_open_ai["confidence"] + result_with_gemini["confidence"]
-        ) / 2
+                                       result_with_open_ai["confidence"] + result_with_gemini["confidence"]
+                               ) / 2
         result["agreement_rate"] = (
-            result_with_open_ai["agreement_rate"] + result_with_gemini["agreement_rate"]
-        ) / 2
+                                           result_with_open_ai["agreement_rate"] + result_with_gemini["agreement_rate"]
+                                   ) / 2
 
         # get calculated classification
         if result["numerical_score"] > 10:

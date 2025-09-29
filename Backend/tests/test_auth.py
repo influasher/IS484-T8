@@ -1,8 +1,6 @@
 import unittest
-from flask import Flask
 from app import create_app, db
 from app.models.user import User
-from flask_jwt_extended import create_access_token
 import random
 import string
 

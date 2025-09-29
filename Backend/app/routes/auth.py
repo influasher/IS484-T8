@@ -1,13 +1,10 @@
 import random
 from flask import Blueprint, request
-from werkzeug.security import generate_password_hash, check_password_hash
-from app.utils.helpers import format_response, password_rule_checker
+from app.utils.helpers import format_response
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.models.user_otp import UserOTP
 from app.services.email_service import EmailService
-from app.utils.helpers import format_response
-from app import db
 
 auth_bp = Blueprint("auth", __name__)
 

@@ -1,5 +1,4 @@
 from app.models import Feedback
-from sqlalchemy import any_
 from app import db
 
 

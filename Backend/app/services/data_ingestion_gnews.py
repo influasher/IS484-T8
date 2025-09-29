@@ -1,9 +1,10 @@
+import logging
 import time
+
 from gnews import GNews
 from app import db
 from app.models.news import News
 from app.utils.helpers import URL_decoder, get_article_details
-from app.services.sentiment_analysis import get_sentiment
 from app.services.article_scraper import scrape_article
 from datetime import datetime, timedelta
 from app.utils.scraping_quality import (
@@ -11,8 +12,21 @@ from app.utils.scraping_quality import (
 )  # assuming you've saved the modular quality function
 
 
-def insert_data_to_db(news, query):
+def configure_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler("data_ingestion_gnews.log"),
+            logging.StreamHandler()
+        ]
+    )
 
+
+configure_logging()
+
+
+def insert_data_to_db(news, query):
     entities_list = [query]
 
     print("inserting data to db")
@@ -50,6 +64,187 @@ def check_if_data_exists(url):
         return True
     print("Data does not exist")
     return False
+
+
+PREMIUM_SOURCES = {
+    "reuters.com": {
+        "reliability": 0.90, "paywall": False, "specialization": ["markets", "macro"],
+        "max_results": 4, "min_text_len": 300, "min_ratio": 0.15}
+    ,
+    "wsj.com": {
+        "reliability": 0.88, "paywall": True, "specialization": ["markets", "equities"],
+        "max_results": 3, "min_text_len": 320, "min_ratio": 0.16
+    },
+    "ft.com": {
+        "reliability": 0.90, "paywall": True, "specialization": ["global", "fx"],
+        "max_results": 3, "min_text_len": 330, "min_ratio": 0.17
+    },
+    "bloomberg.com": {
+        "reliability": 0.92, "paywall": True, "specialization": ["financial", "commodities"],
+        "max_results": 3, "min_text_len": 340, "min_ratio": 0.18
+    },
+    "barrons.com": {
+        "reliability": 0.86, "paywall": True, "specialization": ["equities", "analysis"],
+        "max_results": 2, "min_text_len": 320, "min_ratio": 0.17
+    },
+    "marketwatch.com": {
+        "reliability": 0.80, "paywall": False, "specialization": ["retail investors"],
+        "max_results": 4, "min_text_len": 290, "min_ratio": 0.14
+    },
+    "cnbc.com": {
+        "reliability": 0.78, "paywall": False, "specialization": ["breaking", "tv"],
+        "max_results": 4, "min_text_len": 280, "min_ratio": 0.14
+    },
+    "seekingalpha.com": {
+        "reliability": 0.74, "paywall": True, "specialization": ["analysis", "earnings"],
+        "max_results": 3, "min_text_len": 300, "min_ratio": 0.15
+    },
+    "morningstar.com": {
+        "reliability": 0.82, "paywall": True, "specialization": ["funds", "valuation"],
+        "max_results": 2, "min_text_len": 300, "min_ratio": 0.16
+    },
+    "investing.com": {
+        "reliability": 0.72, "paywall": False, "specialization": ["fx", "macro", "commodities"],
+        "max_results": 3, "min_text_len": 270, "min_ratio": 0.13
+    },
+    "fortune.com": {
+        "reliability": 0.78, "paywall": True, "specialization": ["corporate", "leadership"],
+        "max_results": 3, "min_text_len": 300, "min_ratio": 0.15
+    },
+    "nikkei.com": {
+        "reliability": 0.85, "paywall": True, "specialization": ["asia", "macro", "supply chain"],
+        "max_results": 2, "min_text_len": 310, "min_ratio": 0.16
+    },
+    "economist.com": {
+        "reliability": 0.90, "paywall": True, "specialization": ["macro", "geopolitics"],
+        "max_results": 2, "min_text_len": 350, "min_ratio": 0.19
+    }}
+
+EXCLUDED_SOURCES = {
+    "mix941kmxj.com", "wibx950.com", "cheap-sound.com", "retro1025.com",
+    "wrrv.com", "apnnews.com"
+}
+
+PAYWALL_KEY_HINTS = ["subscribe", "paywall", "premium", "metered"]  # crude heuristic
+
+
+def looks_paywalled(html: str) -> bool:
+    low = html.lower()
+    return any(k in low for k in PAYWALL_KEY_HINTS) and len(low) < 5000  # simple heuristic
+
+
+def get_premium_news_sources(query, start_date, end_date):
+    metrics = {
+        "total_articles_fetched": 0,
+        "successful_scrapes": 0,
+        "low_quality_skipped": 0,
+        "failed_scrapes": 0,
+        "duplicates_skipped": 0,
+        "paywall_flagged": 0
+    }
+
+    final_data = []
+    rate_counter = 0
+
+    for domain, meta in PREMIUM_SOURCES.items():
+        site_query = f"{query} site:{domain}"
+        gn = GNews(
+            start_date=start_date,
+            end_date=end_date,
+            max_results=meta.get("max_results", 3),
+            exclude_websites=list(EXCLUDED_SOURCES)
+        )
+
+        articles = gn.get_news(site_query) or []
+        metrics["total_articles_fetched"] += len(articles)
+
+        for news in articles:
+            raw_url = news.get("url")
+            if not raw_url:
+                continue
+
+            decoded = URL_decoder(raw_url)
+            url = decoded["decoded_url"]
+
+            if check_if_data_exists(url):
+                continue
+
+            rate_counter += 1
+            if rate_counter >= 15:
+                time.sleep(60)
+                rate_counter = 0
+
+            try:
+                article_html = scrape_article(url)
+
+            except Exception as e:
+                metrics["failed_scrapes"] += 1
+                logging.warning("Error scraping %s: %s", url, str(e))
+                continue
+
+            if meta["paywall"] and looks_paywalled(article_html):
+                metrics["paywall_flagged"] += 1
+                logging.warning("Article likely paywalled, skipping: %s", url)
+                continue
+
+            try:
+                details = get_article_details(url, article_html)
+            except Exception as e:
+                metrics["failed_scrapes"] += 1
+                logging.warning("Error getting details for %s: %s", url, str(e))
+                continue
+
+            quality = evaluate_scraping_quality(
+                url,
+                article_html,
+                details
+            )
+
+            if not quality["is_clean"]:
+                metrics["low_quality_skipped"] += 1
+                logging.warning("Low quality article skipped: %s", url)
+                continue
+
+            news.update({
+                "url": url,
+                "source_metadata": {
+                    "reliability": meta["reliability"],
+                    "paywall": meta["paywall"],
+                    "specialization": meta["specialization"]
+                },
+                "description": details["text"],
+                "summary": details["summary"],
+                "score": details["numerical_score"],
+                "finbert_score": details["finbert_score"],
+                "second_model_score": details["second_model_score"],
+                "third_model_score": details["third_model_score"],
+                "sentiment": details["classification"],
+                "confidence": details["confidence"],
+                "agreement_rate": details["agreement_rate"],
+                "tags": details["keywords"],
+                "company_names": details["companies"],
+                "regions": details["regions"],
+                "sectors": details["sectors"],
+            })
+
+            if news["description"] in ("", "An error occurred while fetching the article details"):
+                ## if gemini fails
+                logging.info("AI news details fetch error, skipping: %s", url)
+                continue
+
+            if insert_data_to_db(news, query):
+                final_data.append(news)
+                metrics["successful_scrapes"] += 1
+                logging.info("Inserted article from %s: %s", domain, url)
+
+        # Soft delay between domains to reduce burst risk
+        time.sleep(4)
+
+    metrics["scrape_success_rate"] = (
+        round(metrics["successful_scrapes"] / metrics["total_articles_fetched"], 2)
+        if metrics["total_articles_fetched"] else 0
+    )
+    return {"data": final_data, "metrics": metrics}
 
 
 def get_gnews_news_by_ticker(query, start_date, end_date):
