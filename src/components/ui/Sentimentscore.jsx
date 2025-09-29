@@ -94,7 +94,7 @@ const SentimentScore = ({
 
   return (
     <Box className="sentiment-score-container">
-      <Grid container spacing={1} alignItems="center" justifyContent="flex-end" sx={{ mb: 4 }}>
+      <Grid container spacing={1} alignItems="center" justifyContent="flex-end">
         {chipData.map((chip, i) => (
           <Grid item key={i}>
             <Tooltip title={chip.tooltip} arrow>
