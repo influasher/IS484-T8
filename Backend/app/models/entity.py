@@ -16,6 +16,11 @@ class Entity(db.Model):
     time_decay = db.Column(db.Float, nullable=True)
     simple_average = db.Column(db.Float, nullable=True)
     classification = db.Column(db.String(50), nullable=True)
+    asset_type = db.Column(db.String(20), nullable=True)
+    sector = db.Column(
+        ARRAY(db.String), nullable=True
+    )
+
 
     def __repr__(self):
         return f"<Entity {self.name}>"
