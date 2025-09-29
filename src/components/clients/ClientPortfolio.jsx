@@ -10,40 +10,18 @@ import {
   CardContent,
   Divider,
   CircularProgress,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Chip,
-  Pagination,
-  InputAdornment,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Grid,
-  Paper,
 } from '@mui/material';
-import { Search } from '@mui/icons-material';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { PieChart } from '@mui/x-charts/PieChart';
-import { ChartsReferenceLine } from '@mui/x-charts/ChartsReferenceLine';
+import ClientTransactionTable from './ClientTransactionTable';
 
 const PortfolioDashboard = () => {
-  // All hooks declared at the top level - this fixes the hook order issue
+  // Portfolio-related state
   const [timeRange, setTimeRange] = useState('1Y');
   const [portfolioData, setPortfolioData] = useState(null);
   const [transactionData, setTransactionData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortOrder, setSortOrder] = useState('date_desc');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [filteredTransactions, setFilteredTransactions] = useState([]);
-  
-  const itemsPerPage = 10;
+  const [transactionLoading, setTransactionLoading] = useState(true);
 
   const timeRanges = [
     { label: '1M', value: '1M' },
@@ -52,15 +30,6 @@ const PortfolioDashboard = () => {
     { label: '1Y', value: '1Y' },
     { label: '2Y', value: '2Y' },
     { label: '5Y', value: '5Y' },
-  ];
-
-  // Transaction sort options - moved outside of functions to avoid recreation
-  const transactionSortOptions = [
-    { label: 'Latest First', value: 'date_desc' },
-    { label: 'Oldest First', value: 'date_asc' },
-    { label: 'Amount (High to Low)', value: 'amount_desc' },
-    { label: 'Amount (Low to High)', value: 'amount_asc' },
-    { label: 'Type (A-Z)', value: 'type_asc' },
   ];
 
   // Mock portfolio data - replace with actual API calls
@@ -77,10 +46,10 @@ const PortfolioDashboard = () => {
       { date: new Date('2022-01-01'), value: 8000 },
     ],
     allocation: [
-        { name: 'AAPL', value: 80, color: '#6366f1' },
-        { name: 'HSBC', value: 41, color: '#10b981' },
-        { name: 'TSMC', value: 35, color: '#f59e0b' },
-      ]
+      { name: 'AAPL', value: 80, color: '#6366f1' },
+      { name: 'HSBC', value: 41, color: '#10b981' },
+      { name: 'TSMC', value: 35, color: '#f59e0b' },
+    ]
   };
 
   const mockTransactionData = [
@@ -336,101 +305,6 @@ const PortfolioDashboard = () => {
     }
   ];
 
-  // Helper functions (moved up to be defined before use)
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-  
-  const formatAmount = (amount, currency) => {
-    const isPositive = amount >= 0;
-    const formattedAmount = `${currency} ${Math.abs(amount).toLocaleString()}`;
-    return {
-      amount: formattedAmount,
-      isPositive,
-      color: isPositive ? '#10b981' : '#ef4444'
-    };
-  };
-  
-  const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return 'success';
-      case 'processing':
-        return 'warning';
-      case 'pending':
-        return 'info';
-      case 'failed':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
-  
-  const getTypeColor = (type) => {
-    switch (type.toLowerCase()) {
-      case 'deposit':
-        return '#10b981';
-      case 'withdrawal':
-        return '#ef4444';
-      case 'purchase':
-        return '#f59e0b';
-      case 'sale':
-        return '#06b6d4';
-      case 'dividend':
-        return '#8b5cf6';
-      case 'capital gains':
-        return '#ec4899';
-      case 'interest':
-        return '#84cc16';
-      default:
-        return '#6b7280';
-    }
-  };
-
-  const filterAndSortTransactions = (data, search, sort) => {
-    let filtered = [...data];
-    
-    // Apply search filter
-    if (search) {
-      filtered = filtered.filter(transaction =>
-        transaction.source.toLowerCase().includes(search.toLowerCase()) ||
-        transaction.type.toLowerCase().includes(search.toLowerCase()) ||
-        transaction.description.toLowerCase().includes(search.toLowerCase()) ||
-        transaction.status.toLowerCase().includes(search.toLowerCase()) ||
-        transaction.id.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-    
-    // Apply sorting
-    switch (sort) {
-      case 'date_desc':
-        filtered.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
-        break;
-      case 'date_asc':
-        filtered.sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
-        break;
-      case 'amount_desc':
-        filtered.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
-        break;
-      case 'amount_asc':
-        filtered.sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount));
-        break;
-      case 'type_asc':
-        filtered.sort((a, b) => a.type.localeCompare(b.type));
-        break;
-      default:
-        filtered.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
-    }
-    
-    return filtered;
-  };
-
   // Function to calculate portfolio metrics from transaction data
   const calculatePortfolioMetrics = (transactions) => {
     let totalDeposits = 0;
@@ -449,10 +323,10 @@ const PortfolioDashboard = () => {
           totalDeposits += amount;
           break;
         case 'withdrawal':
-          totalWithdrawals += Math.abs(amount); // Convert to positive for calculation
+          totalWithdrawals += Math.abs(amount);
           break;
         case 'purchase':
-          totalPurchases += Math.abs(amount); // Convert to positive for calculation
+          totalPurchases += Math.abs(amount);
           break;
         case 'sale':
           totalSales += amount;
@@ -469,32 +343,13 @@ const PortfolioDashboard = () => {
       }
     });
 
-    // Calculate net cash invested (deposits - withdrawals)
     const netCashInvested = totalDeposits - totalWithdrawals;
-    
-    // Calculate total money put into investments
     const totalInvestmentAmount = totalPurchases;
-    
-    // Calculate current cash position (deposits - withdrawals - purchases + sales + dividends + capital gains + interest)
     const currentCashPosition = totalDeposits - totalWithdrawals - totalPurchases + totalSales + totalDividends + totalCapitalGains + totalInterest;
-    
-    // For current portfolio value, we need current market prices of holdings
-    // Since we don't have real-time prices, we'll estimate based on transactions
-    // This is a simplified calculation - in reality, you'd need current market data
-    
-    // Calculate net investment in securities (purchases - sales)
     const netSecuritiesInvestment = totalPurchases - totalSales;
-    
-    // Estimate current portfolio value (this is simplified - would need real market data)
-    // Assuming 15% growth on net securities investment for demonstration
     const estimatedSecuritiesValue = netSecuritiesInvestment * 1.15; // 15% estimated growth
-    
     const estimatedTotalPortfolioValue = currentCashPosition + estimatedSecuritiesValue;
-    
-    // Calculate total realized gains (sales + dividends + capital gains + interest - original purchase amounts)
     const totalRealizedGains = totalSales + totalDividends + totalCapitalGains + totalInterest - (totalPurchases - netSecuritiesInvestment);
-    
-    // Calculate unrealized P&L (estimated current value - total cash invested)
     const unrealizedPL = estimatedTotalPortfolioValue - netCashInvested;
     const unrealizedPLPercent = netCashInvested > 0 ? (unrealizedPL / netCashInvested) * 100 : 0;
 
@@ -521,18 +376,15 @@ const PortfolioDashboard = () => {
   const fetchPortfolioData = async (period = '1Y') => {
     setLoading(true);
     try {
-      // Calculate metrics from transaction data
       const calculatedMetrics = calculatePortfolioMetrics(mockTransactionData);
       
-      // Create portfolio data with calculated metrics
       const portfolioDataWithCalculatedMetrics = {
         ...mockPortfolioData,
         metrics: calculatedMetrics,
-        // Keep the same performance chart data for now
         performance: mockPortfolioData.performance
       };
       
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
       setPortfolioData(portfolioDataWithCalculatedMetrics);
     } catch (error) {
       console.error('Error fetching portfolio data:', error);
@@ -542,10 +394,14 @@ const PortfolioDashboard = () => {
   };
 
   const fetchTransactionData = async () => {
+    setTransactionLoading(true);
     try {
+      await new Promise(resolve => setTimeout(resolve, 300)); // Simulate API delay
       setTransactionData(mockTransactionData);
     } catch (error) {
       console.log('Error fetching transaction data:', error);
+    } finally {
+      setTransactionLoading(false);
     }
   };
 
@@ -556,35 +412,12 @@ const PortfolioDashboard = () => {
     }
   };
 
-  // Event handlers
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-  };
-  
-  const handleSortChange = (e) => {
-    setSortOrder(e.target.value);
-  };
-  
-  const handlePageChange = (event, pageNumber) => {
-    setCurrentPage(pageNumber);
-  };
-
-  // All useEffect hooks declared together
   useEffect(() => {
     fetchPortfolioData(timeRange);
     fetchTransactionData();
-
   }, []);
 
-  useEffect(() => {
-    if (transactionData.length > 0) {
-      const filtered = filterAndSortTransactions(transactionData, searchTerm, sortOrder);
-      setFilteredTransactions(filtered);
-      setCurrentPage(1); // Reset to first page when filters change
-    }
-  }, [transactionData, searchTerm, sortOrder]);
-
-  // Loading state check AFTER all hooks are declared
+  // Loading state check for portfolio data
   if (loading || !portfolioData) {
     return (
       <Box sx={{
@@ -596,17 +429,11 @@ const PortfolioDashboard = () => {
       }}>
         <CircularProgress size={60} />
         <Typography variant="h6" sx={{ mt: 2 }}>
-          Loading...
+          Loading Portfolio...
         </Typography>
       </Box>
     );
   }
-
-  // Calculate pagination
-  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedTransactions = filteredTransactions.slice(startIndex, endIndex);
 
   const { performance, metrics, allocation } = portfolioData;
   const totalAllocation = allocation.reduce((sum, item) => sum + item.value, 0);
@@ -710,7 +537,6 @@ const PortfolioDashboard = () => {
                         <Typography 
                           variant="h4" 
                           sx={{ 
-                            color: "#10b981",
                             fontSize: "1.75rem" 
                           }}
                         >
@@ -752,7 +578,7 @@ const PortfolioDashboard = () => {
                       <Typography 
                         variant="h6" 
                         sx={{ 
-                          color: "#10b981",
+                          color:  metrics.unrealizedPL >= 0 ? "green" : 'red',
                           fontSize: "1.25rem" 
                         }}
                       >
@@ -878,234 +704,14 @@ const PortfolioDashboard = () => {
             </Box>
           </Stack>
         </Stack>
-        <hr></hr>
-        <Box sx={{ mt: 4 }}>
-            <Typography variant="h5" sx={{ mb: 3 }}>
-                Transaction History
-            </Typography>
-            
-            {/* Search and Filter Controls - Same styling as SearchTable */}
-            <Box
-                sx={{
-                p: 2,
-                mb: 3,
-                borderRadius: 2,
-                backgroundColor: "#fafafa",
-                border: 1,
-                borderColor: "grey.300",
-                boxShadow: 1,
-                }}
-            >
-                <Grid
-                container
-                spacing={2}
-                justifyContent="space-between"
-                alignItems="center"
-                >
-                <Grid item size="grow">
-                    <TextField
-                    fullWidth
-                    variant="outlined"
-                    placeholder="Search transactions by ID, source, type, or description..."
-                    value={searchTerm}
-                    onChange={handleSearchChange}
-                    InputProps={{
-                        startAdornment: (
-                        <InputAdornment position="start">
-                            <Search color="action" />
-                        </InputAdornment>
-                        ),
-                    }}
-                    sx={{
-                        "& .MuiOutlinedInput-root": {
-                        backgroundColor: "white",
-                        },
-                    }}
-                    />
-                </Grid>
-                
-                <Grid item size={{ xs: 6, sm: 4, md: 4, lg: 3, xl: 3 }}>
-                    <FormControl fullWidth variant="outlined">
-                    <InputLabel id="sort-select-label">Sort By</InputLabel>
-                    <Select
-                        labelId="sort-select-label"
-                        value={sortOrder}
-                        onChange={handleSortChange}
-                        label="Sort By"
-                        sx={{
-                        backgroundColor: "white",
-                        }}
-                    >
-                        {transactionSortOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                            {option.label}
-                        </MenuItem>
-                        ))}
-                    </Select>
-                    </FormControl>
-                </Grid>
-                </Grid>
-
-                {/* Results Counter */}
-                <Box sx={{ mt: 2 }}>
-                <Typography variant="body2" color="text.secondary">
-                    Showing {paginatedTransactions.length} transactions on page {currentPage} of{" "}
-                    {totalPages} ({filteredTransactions.length} total)
-                    {searchTerm && ` for "${searchTerm}"`}
-                </Typography>
-                </Box>
-            </Box>
-
-            {/* Transaction Table */}
-            <TableContainer component={Paper} elevation={0}>
-                <Table>
-                <TableHead>
-                    <TableRow>
-                    <TableCell>Transaction ID</TableCell>
-                    <TableCell>Date & Time</TableCell>
-                    <TableCell>Source</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Amount</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Description</TableCell>
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    {loading ? (
-                    <TableRow>
-                        <TableCell colSpan={7} sx={{ textAlign: 'center', py: 4 }}>
-                        <Typography color="text.secondary">Loading transactions...</Typography>
-                        </TableCell>
-                    </TableRow>
-                    ) : paginatedTransactions.length > 0 ? (
-                    paginatedTransactions.map((transaction) => {
-                        const { amount: formattedAmount, isPositive, color } = formatAmount(transaction.amount, transaction.currency);
-                        
-                        return (
-                        <TableRow 
-                            key={transaction.id} 
-                            hover 
-                            sx={{ 
-                            '&:hover': { 
-                                backgroundColor: 'rgba(0, 0, 0, 0.04)' 
-                            } 
-                            }}
-                        >
-                            <TableCell>
-                            <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                color: 'text.secondary'
-                                }}
-                            >
-                                {transaction.id}
-                            </Typography>
-                            </TableCell>
-                            
-                            <TableCell>
-                            <Typography variant="body2">
-                                {formatDate(transaction.dateTime)}
-                            </Typography>
-                            </TableCell>
-                            
-                            <TableCell>
-                            <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                maxWidth: 120,
-                                whiteSpace: 'nowrap'
-                                }}
-                            >
-                                {transaction.source}
-                            </Typography>
-                            </TableCell>
-                            
-                            <TableCell>
-                            <Chip
-                                label={transaction.type}
-                                size="small"
-                                sx={{
-                                backgroundColor: getTypeColor(transaction.type),
-                                color: 'white',
-                                fontWeight: 500,
-                                fontSize: '0.75rem',
-                                }}
-                            />
-                            </TableCell>
-                            
-                            <TableCell>
-                            <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                color: color,
-                                }}
-                            >
-                                {isPositive ? '+' : '-'}{formattedAmount}
-                            </Typography>
-                            </TableCell>
-                            
-                            <TableCell>
-                            <Chip
-                                label={transaction.status}
-                                size="small"
-                                color={getStatusColor(transaction.status)}
-                                variant="outlined"
-                            />
-                            </TableCell>
-                            
-                            <TableCell>
-                            <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                maxWidth: 200,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                color: 'text.secondary'
-                                }}
-                                title={transaction.description}
-                            >
-                                {transaction.description}
-                            </Typography>
-                            </TableCell>
-                        </TableRow>
-                        );
-                    })
-                    ) : (
-                    <TableRow>
-                        <TableCell colSpan={7} sx={{ textAlign: 'center', py: 4 }}>
-                        <Typography color="text.secondary">
-                            No transactions found
-                        </Typography>
-                        </TableCell>
-                    </TableRow>
-                    )}
-                </TableBody>
-                </Table>
-            </TableContainer>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
-                <Pagination
-                    count={totalPages}
-                    page={currentPage}
-                    onChange={handlePageChange}
-                    shape="rounded"
-                    showFirstButton
-                    showLastButton
-                    siblingCount={2}
-                    boundaryCount={1}
-                    sx={{
-                    "& .MuiPaginationItem-root.Mui-selected": {
-                        backgroundColor: "#212121",
-                        color: "#fff",
-                    },
-                    }}
-                />
-                </Box>
-            )}
-            </Box>
+        
+        <hr />
+        
+        {/* Transaction Table Component */}
+        <ClientTransactionTable 
+          transactionData={transactionData} 
+          loading={transactionLoading} 
+        />
       </Box>
     </Box>
   );
