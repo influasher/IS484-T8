@@ -108,6 +108,65 @@ def create_client():
         200
     )
 
+@user_bp.route('/<id>', methods=['PUT'])
+def update_client(id):
+    data = request.get_json()
+
+    # Find user
+    user = User.query.filter_by(id=id).first()
+    if not user:
+        return format_response(None, "User not found", 404)
+
+    # Update User fields (only if provided in body)
+    if "username" in data: 
+        user.username = data["username"]
+    if "first_name" in data:
+        user.first_name = data["first_name"]
+    if "last_name" in data:
+        user.last_name = data["last_name"]
+    if "email" in data:
+        user.email = data["email"]
+    if "rm_id" in data:
+        user.rm_id = data["rm_id"]
+    user.updated_at = data.get("updated_at")
+
+    # Update ClientPreferences
+    preferences = ClientPreferences.query.filter_by(user_id=user.id).first()
+    if preferences:
+        if "holding" in data:
+            preferences.holding = data["holding"]
+        if "overall_pl" in data:
+            preferences.overall_pl = data["overall_pl"]
+        if "stop_loss_tolerance" in data:
+            preferences.stop_loss_tolerance = data["stop_loss_tolerance"]
+        if "risk_cap" in data:
+            preferences.risk_cap = data["risk_cap"]
+        if "sectors" in data:
+            preferences.sectors = data["sectors"]
+
+    db.session.commit()
+
+    # Response
+    user_response = {
+        "id": str(user.id),
+        "username": user.username,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "email": user.email,
+        "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
+        "rm_id": user.rm_id,
+        "created_at": user.created_at,
+        "updated_at": user.updated_at,
+    }
+
+    preferences_response = preferences.to_dict() if preferences else None
+
+    return format_response(
+        {"user": user_response, "preferences": preferences_response},
+        "CLIENT and preferences updated successfully",
+        200
+    )
+
 @user_bp.route('/<id>/preferences', methods=['GET'])
 def get_client_preferences(id):
     """Fetch client preferences for a given user id (UUID)."""
