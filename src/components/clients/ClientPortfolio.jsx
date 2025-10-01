@@ -443,15 +443,19 @@ const PortfolioDashboard = () => {
   const values = performance.map(item => item.value);
 
   return (
-    <Box sx={{ display: "flex", px: 4 }}>
-      <Box sx={{ flex: 1, p: 2 }}>
-        <Stack direction="row" sx={{ width: "100%" }}>
+    <Box sx={{ display: "flex", px: { xs: 1, sm: 2, md: 4 }, width: "100%"}}>
+      <Box sx={{ flex: 1, p: { xs: 1, sm: 2 } }}>
+        <Stack
+          direction={{ xs: "column", lg: "row" }}
+          sx={{ width: "100%" }}
+          spacing={{ xs: 4, lg: 0 }}
+        >
           {/* LEFT: Portfolio Performance Chart */}
           <Stack direction="column" sx={{ flex: 3 }} spacing={4}>
-            <Container>
+            <Container sx={{ px: { xs: 0, sm: 2 } }}>
               <Box
                 sx={{
-                  maxWidth: 900,
+                  maxWidth: { xs: "100%", lg: 900 },
                   mx: "auto",
                   display: "flex",
                   flexDirection: "column",
@@ -460,19 +464,21 @@ const PortfolioDashboard = () => {
                 }}
               >
                 <Stack
-                  direction="row"
-                  alignItems="center"
+                  direction={{ xs: "column", sm: "row" }}
+                  alignItems={{ xs: "start", sm: "center" }}
                   justifyContent="space-between"
-                  sx={{ mt: 2, width: "100%" }}
+                  sx={{ mt: 2, width: "100%", gap: 2 }}
                 >
-                  <Typography variant="h5">
+                  <Typography variant="h5" sx={{ fontSize: { xs: "1.25rem", sm: "1.5rem" } }}>
                     Portfolio Performance
                   </Typography>
 
                   <Box
                     sx={{
                       display: "flex",
-                      justifyContent: "flex-end",
+                      justifyContent: { xs: "flex-start", sm: "flex-end" },
+                      width: { xs: "100%", sm: "auto" },
+                      overflowX: "auto",
                     }}
                   >
                     <ToggleButtonGroup
@@ -483,9 +489,9 @@ const PortfolioDashboard = () => {
                       size="small"
                       sx={{
                         "& .MuiToggleButton-root": {
-                          px: 2,
+                          px: { xs: 1, sm: 2 },
                           py: 0.5,
-                          fontSize: "0.875rem",
+                          fontSize: { xs: "0.75rem", sm: "0.875rem" },
                           color: "#666",
                           "&.Mui-selected": {
                             bgcolor: "#8884d8",
@@ -509,9 +515,9 @@ const PortfolioDashboard = () => {
                 <Stack
                   direction="row"
                   alignItems="start"
-                  sx={{ mt: 1, width: "100%" }}
+                  sx={{ mt: 1, width: "100%", overflowX: "auto" }}
                 >
-                  <Stack direction="column" spacing={3} sx={{ width: "100%" }}>
+                  <Stack direction="column" spacing={3} sx={{ width: "100%", minWidth: { xs: 300, sm: "100%" } }}>
                     <LineChart
                       height={400}
                       xAxis={[
@@ -532,41 +538,47 @@ const PortfolioDashboard = () => {
                     />
 
                     {/* Portfolio Metrics */}
-                    <Stack direction="row" spacing={4} sx={{ mt: 2 }}>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={{ xs: 2, sm: 4 }}
+                      sx={{ mt: 2 }}
+                    >
                       <Box>
-                        <Typography 
-                          variant="h4" 
-                          sx={{ 
-                            fontSize: "1.75rem" 
+                        <Typography
+                          variant="h4"
+                          sx={{
+                            fontSize: { xs: "1.25rem", sm: "1.5rem", md: "1.75rem" }
                           }}
                         >
                           ${metrics.totalInvestment.toFixed(2).toLocaleString()} SGD
                         </Typography>
-                        <Typography 
-                          variant="body2" 
-                          sx={{ 
-                            color: "text.secondary", 
-                            mt: 0.5 
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: "text.secondary",
+                            mt: 0.5,
+                            fontSize: { xs: "0.75rem", sm: "0.875rem" }
                           }}
                         >
                           Total Investment Amount
                         </Typography>
                       </Box>
-                      
+
                       <Box>
-                        <Typography 
-                          variant="h4" 
-                          sx={{ 
-                            fontSize: "1.75rem" 
+                        <Typography
+                          variant="h4"
+                          sx={{
+                            fontSize: { xs: "1.25rem", sm: "1.5rem", md: "1.75rem" }
                           }}
                         >
                           ${metrics.totalMarketValue.toFixed(2).toLocaleString()} SGD
                         </Typography>
-                        <Typography 
-                          variant="body2" 
-                          sx={{ 
-                            color: "text.secondary", 
-                            mt: 0.5 
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: "text.secondary",
+                            mt: 0.5,
+                            fontSize: { xs: "0.75rem", sm: "0.875rem" }
                           }}
                         >
                           Total Market Value
@@ -575,20 +587,21 @@ const PortfolioDashboard = () => {
                     </Stack>
 
                     <Box>
-                      <Typography 
-                        variant="h6" 
-                        sx={{ 
+                      <Typography
+                        variant="h6"
+                        sx={{
                           color:  metrics.unrealizedPL >= 0 ? "green" : 'red',
-                          fontSize: "1.25rem" 
+                          fontSize: { xs: "1rem", sm: "1.25rem" }
                         }}
                       >
                         +{metrics.unrealizedPL.toFixed(2)} ({metrics.unrealizedPLPercent.toFixed(2)}%)
                       </Typography>
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          color: "text.secondary", 
-                          mt: 0.5 
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: "text.secondary",
+                          mt: 0.5,
+                          fontSize: { xs: "0.75rem", sm: "0.875rem" }
                         }}
                       >
                         Total unrealised profit/loss (P/L)
@@ -601,28 +614,39 @@ const PortfolioDashboard = () => {
           </Stack>
 
           {/* Divider between Left & Right */}
-          <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
+          <Divider
+            orientation={{ xs: "horizontal", lg: "vertical" }}
+            flexItem
+            sx={{ mx: { xs: 0, lg: 2 }, my: { xs: 2, lg: 0 } }}
+          />
 
           {/* RIGHT: Product Allocation */}
-          <Stack direction="column" sx={{ flex: 1.2, maxWidth: 400 }}>
-            <Box sx={{ p: 2 }}>
-              <Typography variant="h5" sx={{ mb: 2}}>
-                Product Allocation
-              </Typography>
-              
-              <Card 
-                sx={{ 
-                  borderRadius: 2,
-                  boxShadow: 1,
-                  bgcolor: "background.paper"
+          <Stack
+            direction="column"
+            sx={{
+              flex: { xs: 1, lg: 1.2 },
+              maxWidth: { xs: "100%", lg: 400 },
+              width: "100%"
+            }}
+          >
+            <Box sx={{ p: { xs: 1, sm: 2 } }}>
+              <Typography
+                variant="h5"
+                sx={{
+                  mb: 2,
+                  fontSize: { xs: "1.25rem", sm: "1.5rem" }
                 }}
               >
-                <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ 
-                    display: 'flex', 
-                    flexDirection: 'column', 
+                Product Allocation
+              </Typography>
+
+              <Box>
+                <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                  <Box sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
-                    position: 'relative' 
+                    position: 'relative'
                   }}>
                     <Box sx={{ position: 'relative', display: 'inline-block' }}>
                       <PieChart
@@ -642,7 +666,7 @@ const PortfolioDashboard = () => {
                           legend: { hidden: true }
                         }}
                       />
-                      
+
                       {/* Center Total */}
                       <Typography
                         variant="h3"
@@ -652,7 +676,8 @@ const PortfolioDashboard = () => {
                           left: '50%',
                           transform: 'translate(-50%, -50%)',
                           color: 'text.primary',
-                          pointerEvents: 'none'
+                          pointerEvents: 'none',
+                          fontSize: { xs: "2rem", sm: "3rem" }
                         }}
                       >
                         {totalAllocation}
@@ -662,35 +687,37 @@ const PortfolioDashboard = () => {
                     {/* Legend */}
                     <Stack spacing={1} sx={{ mt: 3, width: '100%' }}>
                       {allocation.map((item, index) => (
-                        <Stack 
-                          key={index} 
-                          direction="row" 
-                          alignItems="center" 
+                        <Stack
+                          key={index}
+                          direction="row"
+                          alignItems="center"
                           justifyContent="space-between"
                           sx={{ px: 1 }}
                         >
                           <Stack direction="row" alignItems="center" spacing={1}>
                             <Box
                               sx={{
-                                width: 12,
-                                height: 12,
+                                width: { xs: 10, sm: 12 },
+                                height: { xs: 10, sm: 12 },
                                 borderRadius: '50%',
                                 bgcolor: item.color,
                               }}
                             />
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
+                            <Typography
+                              variant="body2"
+                              sx={{
                                 color: 'text.secondary',
+                                fontSize: { xs: "0.75rem", sm: "0.875rem" }
                               }}
                             >
                               {item.name}
                             </Typography>
                           </Stack>
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
-                              color: 'text.primary' 
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: 'text.primary',
+                              fontSize: { xs: "0.75rem", sm: "0.875rem" }
                             }}
                           >
                             {item.value}
@@ -700,17 +727,17 @@ const PortfolioDashboard = () => {
                     </Stack>
                   </Box>
                 </CardContent>
-              </Card>
+              </Box>
             </Box>
           </Stack>
         </Stack>
-        
+
         <hr />
-        
+
         {/* Transaction Table Component */}
-        <ClientTransactionTable 
-          transactionData={transactionData} 
-          loading={transactionLoading} 
+        <ClientTransactionTable
+          transactionData={transactionData}
+          loading={transactionLoading}
         />
       </Box>
     </Box>
