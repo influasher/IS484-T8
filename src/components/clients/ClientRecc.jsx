@@ -15,9 +15,11 @@ import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import Slider from "@mui/material/Slider";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import ChipMUI from "@mui/material/Chip";
+import useFetch from "../../hooks/useFetch";
 
 const ALL_SECTORS = [
     "Information Technology",
@@ -33,35 +35,15 @@ const ALL_SECTORS = [
     "Real Estate",
 ];
 
-const MOCK_CLIENTS = [
-    {
-        id: 1,
-        name: "Michael Chen",
-        email: "michael.chen@email.com",
-        riskRating: 10,
-        sectors: ["Information Technology", "Financials"],
-    },
-    {
-        id: 2,
-        name: "Emma Wilson",
-        email: "emma.wilson@email.com",
-        riskRating: 6,
-        sectors: ["Health Care", "Consumer Staples"],
-    },
-];
-
-function getClientById(id) {
-    const n = Number(id);
-    return (
-        MOCK_CLIENTS.find((c) => c.id === n) || {
-            id,
-            name: `Client #${id}`,
-            email: `client${id}@email.com`,
-            riskRating: 5,
-            sectors: ["Information Technology"],
-        }
-    );
+const RISK_LABELS = ["Zero", "Medium", "Moderate", "High", "Very High"];
+function riskValueToLabel(val) {
+    if (typeof val !== "number") return "Zero";
+    return RISK_LABELS[val] ?? "Zero";
 }
+function riskLabelToValue(label) {
+    const idx = RISK_LABELS.indexOf(label);
+    return idx !== -1 ? idx : 0; // default to 0 if not found
+  }
 
 // Small recommendation card
 const PortfRecc = ({ name, sentiment, price }) => {
@@ -88,27 +70,57 @@ const PortfRecc = ({ name, sentiment, price }) => {
 
 const ClientRecc = () => {
     const { id: routeId } = useParams();
-    const initial = React.useMemo(() => getClientById(routeId), [routeId]);
+    const userUrl = `/user/${routeId}`;
+    const url = `/user/${routeId}/preferences`;
+    const { data: userData, loading: userLoading, error: userError } = useFetch(userUrl);
+    const { data, loading, error } = useFetch(url);
 
     // Display state (what the page shows)
-    const [dispName, setDispName] = React.useState(initial.name);
-    const [dispEmail, setDispEmail] = React.useState(initial.email);
-    const [dispRisk, setDispRisk] = React.useState(initial.riskRating);
-    const [dispSectors, setDispSectors] = React.useState(initial.sectors || []);
+    const [dispName, setDispName] = React.useState("");
+    const [dispEmail, setDispEmail] = React.useState("");
+    const [dispOverallPL, setDispOverallPL] = React.useState(0);
+    const [dispRisk, setDispRisk] = React.useState(0);
+    const [dispStopLoss, setDispStopLoss] = React.useState(0);
+    const [dispSectors, setDispSectors] = React.useState([]);
 
     // Editor modal state (pre-filled form values)
     const [openEdit, setOpenEdit] = React.useState(false);
-    const [formName, setFormName] = React.useState(dispName);
+    const [formFirstName, setFormFirstName] = React.useState("");
+    const [formLastName, setFormLastName] = React.useState("");
     const [formEmail, setFormEmail] = React.useState(dispEmail);
-    const [formRisk, setFormRisk] = React.useState(String(dispRisk));
     const [formSectors, setFormSectors] = React.useState(dispSectors);
+    const [formStopLossTolerance, setFormStopLossTolerance] = React.useState(dispStopLoss);
+    const [formRiskThreshold, setFormRiskThreshold] = React.useState(dispRisk);
+
+    // Update state when data arrives
+    React.useEffect(() => {
+        if (data) {
+            console.log("Fetched preferences data:", data);
+            setDispOverallPL(data.data.overall_pl || "");
+            setDispRisk(data.data.risk_cap || 0);
+            setDispStopLoss(data.data.stop_loss_tolerance || 0);
+            setDispSectors(data.data.sectors || []);
+        }
+    }, [data]);
+    
+    React.useEffect(() => {
+        if (userData) {
+            setDispName(`${userData.data.first_name} ${userData.data.last_name}`|| "");
+            setDispEmail(userData.data.email || "");
+            setFormFirstName(userData.data.first_name || "");
+            setFormLastName(userData.data.last_name || "");
+        }
+    }, [userData]);
+
 
     const handleOpenEdit = () => {
         // preload form with current display values
-        setFormName(dispName);
+        setFormFirstName(formFirstName);
+        setFormLastName(formLastName);
         setFormEmail(dispEmail);
-        setFormRisk(String(dispRisk));
         setFormSectors(dispSectors);
+        setFormStopLossTolerance(dispStopLoss);
+        setFormRiskThreshold(riskLabelToValue(dispRisk));
         setOpenEdit(true);
     };
 
@@ -116,14 +128,43 @@ const ClientRecc = () => {
         setOpenEdit(false);
     };
 
-    const handleSaveEdit = (e) => {
+    const handleSaveEdit = async (e) => {
         if (e) e.preventDefault();
-        // apply form values back to display state
-        setDispName(formName.trim());
-        setDispEmail(formEmail.trim());
-        setDispRisk(Number(formRisk) || 0);
-        setDispSectors(formSectors);
-        setOpenEdit(false);
+    
+        const payload = {
+            first_name: formFirstName.trim(),
+            last_name: formLastName.trim(),
+            email: formEmail.trim(),
+            risk_cap: riskValueToLabel(formRiskThreshold),
+            sectors: formSectors,
+            stop_loss_tolerance: formStopLossTolerance,
+            updated_at: new Date().toISOString(),
+        };
+
+        try {
+            // need to change the following to a hostable url instead of localhost
+            const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
+            const res = await fetch(`${API_BASE_URL}/user/${routeId}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) throw new Error("Failed to update client");
+            const result = await res.json();
+            console.log("Update result:", result);
+
+            // apply form values back to display state
+            setDispName(`${formFirstName.trim()} ${formLastName.trim()}`|| "");
+            setDispEmail(formEmail.trim());
+            setDispRisk(riskValueToLabel(formRiskThreshold));
+            setDispSectors(formSectors);
+            handleCloseEdit();
+        } catch (err) {
+            alert("Error updating client: " + err.message);
+        }
     };
 
     const handleDeleteSectorChipInForm = (sector) => {
@@ -160,69 +201,72 @@ const ClientRecc = () => {
                 </Typography>
 
                 {/* Right: info box aligned right */}
-                <Box sx={{ ml: "auto" }}>
-                    <Paper
-                        elevation={0}
-                        sx={{
-                            bgcolor: "white",
-                            borderRadius: 5,
-                            px: 2,
-                            py: 1,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 1.25,
-                            flexWrap: "wrap",
-                            maxWidth: { xs: "100%", md: 720 },
-                            justifyContent: "flex-end",
-                        }}
-                    >
-                        {/* Risk badge */}
-                        <Chip
-                            label={`Risk Rating: ${dispRisk}`}
+                {data && (
+                    <Box sx={{ ml: "auto" }}>
+                        <Paper
+                            elevation={0}
                             sx={{
-                                bgcolor: "#222",
-                                color: "#fff",
-                                borderRadius: 2,
-                                "& .MuiChip-label": { px: 0.75 },
-                            }}
-                        />
-
-                        <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                            Sector
-                        </Typography>
-
-                        {/* Selected sectors (read-only here) */}
-                        <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mr: 0.5 }}>
-                            {dispSectors.map((s) => (
-                                <Chip
-                                    key={s}
-                                    label={s}
-                                    sx={{
-                                        bgcolor: "#222",
-                                        color: "#fff",
-                                        borderRadius: 2,
-                                    }}
-                                />
-                            ))}
-                        </Box>
-
-                        {/* Edit button opens modal */}
-                        <IconButton
-                            aria-label="Edit client"
-                            onClick={handleOpenEdit}
-                            size="small"
-                            sx={{
-                                bgcolor: "#f3f4f6",
-                                border: "1px solid",
-                                borderColor: (t) => t.palette.grey[300],
-                                "&:hover": { bgcolor: "#e5e7eb" },
+                                bgcolor: "white",
+                                borderRadius: 5,
+                                px: 2,
+                                py: 1,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1.25,
+                                flexWrap: "wrap",
+                                maxWidth: { xs: "100%", md: 720 },
+                                justifyContent: "flex-end",
                             }}
                         >
-                            <EditRoundedIcon fontSize="small" />
-                        </IconButton>
-                    </Paper>
-                </Box>
+                            {/* Risk badge */}
+                            <Chip
+                                label={`Risk Rating: ${dispRisk}`}
+                                sx={{
+                                    bgcolor: "#222",
+                                    color: "#fff",
+                                    borderRadius: 2,
+                                    "& .MuiChip-label": { px: 0.75 },
+                                }}
+                            />
+
+                            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                Sector
+                            </Typography>
+
+                            {/* Selected sectors (read-only here) */}
+                            <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mr: 0.5 }}>
+                                {dispSectors.map((s) => (
+                                    <Chip
+                                        key={s}
+                                        label={s}
+                                        sx={{
+                                            bgcolor: "#222",
+                                            color: "#fff",
+                                            borderRadius: 2,
+                                        }}
+                                    />
+                                ))}
+                            </Box>
+
+                            {/* Edit button opens modal */}
+                            <IconButton
+                                aria-label="Edit client"
+                                onClick={handleOpenEdit}
+                                size="small"
+                                sx={{
+                                    bgcolor: "#f3f4f6",
+                                    border: "1px solid",
+                                    borderColor: (t) => t.palette.grey[300],
+                                    "&:hover": { bgcolor: "#e5e7eb" },
+                                }}
+                            >
+                                <EditRoundedIcon fontSize="small" />
+                            </IconButton>
+                        </Paper>
+                    </Box>
+                 )}
             </Box>
+           
 
             {/* Big white recommendations card */}
             <Paper elevation={1} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 }, bgcolor: "white" }}>
@@ -277,12 +321,20 @@ const ClientRecc = () => {
                         sx={{ mt: 1.5, display: "grid", gap: 2 }}
                     >
                         <TextField
-                            label="Name"
+                            label="First Name"
                             type="text"
                             fullWidth
                             required
-                            value={formName}
-                            onChange={(e) => setFormName(e.target.value)}
+                            value={formFirstName}
+                            onChange={(e) => setFormFirstName(e.target.value)}
+                        />
+                        <TextField
+                            label="Last Name"
+                            type="text"
+                            fullWidth
+                            required
+                            value={formLastName}
+                            onChange={(e) => setFormLastName(e.target.value)}
                         />
 
                         <TextField
@@ -292,15 +344,6 @@ const ClientRecc = () => {
                             required
                             value={formEmail}
                             onChange={(e) => setFormEmail(e.target.value)}
-                        />
-
-                        <TextField
-                            label="Risk Threshold (%)"
-                            type="number"
-                            fullWidth
-                            inputProps={{ min: 0, step: 1 }}
-                            value={formRisk}
-                            onChange={(e) => setFormRisk(e.target.value)}
                         />
 
                         <FormControl fullWidth>
@@ -356,6 +399,38 @@ const ClientRecc = () => {
                                 ))}
                             </Select>
                         </FormControl>
+                        <TextField
+                            label="Stop Loss Tolerance"
+                            type="number"
+                            fullWidth
+                            required
+                            value={formStopLossTolerance}
+                            onChange={(e) => setFormStopLossTolerance(e.target.value)}
+                        />
+                        <Box sx={{ px: 0, py: 1, mx: 1.5 }}>
+                            <Typography variant="body1" sx={{ mb: 1, fontWeight: 500 }}>
+                                Risk Threshold
+                            </Typography>
+                            <Slider
+                                value={typeof formRiskThreshold === "number" ? formRiskThreshold : 0}
+                                min={0}
+                                max={4}
+                                step={1}
+                                // show 1dp
+                                precision={1}
+                                marks={[
+                                    { value: 0, label: "Zero" },
+                                    { value: 1, label: "Medium" },
+                                    { value: 2, label: "Moderate" },
+                                    { value: 3, label: "High" },
+                                    { value: 4, label: "Very High" },
+                                ]}
+                                valueLabelDisplay="auto"
+                                valueLabelFormat={(value) => RISK_LABELS[value] || value}
+                                onChange={(_, val) => setFormRiskThreshold(Number(val))}
+                                sx={{ mx: 1, width: "calc(100% - 20px)" }}
+                            />
+                        </Box>
 
                         {/* Hidden submit to allow Enter key save */}
                         <button type="submit" style={{ display: "none" }} />
