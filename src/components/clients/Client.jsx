@@ -5,6 +5,7 @@ import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../routes";
+import { getData } from "../../services/api";
 
 const Client = ({ client }) => {
   const navigate = useNavigate();
@@ -24,15 +25,13 @@ const Client = ({ client }) => {
     if (!client.id) return;
     setLoadingPrefs(true);
 
-    const API_BASE_URL =
-      process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-    fetch(`${API_BASE_URL}/user/${client.id}/preferences`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch preferences");
-        return res.json();
-      })
+    getData(`/user/${client.id}/preferences`)
       .then((data) => {
-        setPreferences(data.data);
+        if (data?.data) {
+          setPreferences(data.data);
+        } else {
+          throw new Error("No data returned");
+        }
         setLoadingPrefs(false);
       })
       .catch(() => {
@@ -103,13 +102,13 @@ const Client = ({ client }) => {
               variant="body2"
               sx={{ color: "text.secondary", mb: 0.5 }}
             >
-              Current holdings: {prefs.holding ?? "NA"}
+              Current holdings: {typeof prefs.holding === 'number' ? `$${prefs.holding.toLocaleString()}` : "NA"}
             </Typography>
             <Typography
               variant="body2"
               sx={{ color: "text.secondary", mb: 0.5 }}
             >
-              Overall P/L: {prefs.overall_pl ?? "NA"}
+              Overall P/L: {typeof prefs.overall_pl === 'number' ? `$${prefs.overall_pl.toLocaleString()}` : "NA"}
             </Typography>
             <Typography
               variant="body2"
@@ -121,7 +120,7 @@ const Client = ({ client }) => {
               variant="body2"
               sx={{ color: "text.secondary", mb: 0.5 }}
             >
-              Stop Loss Tolerance: {prefs.stop_loss_tolerance ?? "NA"}
+              Stop Loss Tolerance: {typeof prefs.stop_loss_tolerance === 'number' ? `${prefs.stop_loss_tolerance}%` : "NA"}
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
               Sectors:{" "}

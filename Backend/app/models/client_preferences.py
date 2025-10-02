@@ -47,7 +47,12 @@ class ClientPreferences(db.Model):
     def get_risk_profile_defaults(self):
         """Returns risk management defaults based on risk_cap"""
         profiles = {
-            'Conservative': {
+            'Zero': {
+                'max_single_position_percent': 5.0,
+                'max_sector_allocation_percent': 20.0,
+                'min_cash_reserve_percent': 25.0
+            },
+            'Medium': {
                 'max_single_position_percent': 10.0,
                 'max_sector_allocation_percent': 30.0,
                 'min_cash_reserve_percent': 15.0
@@ -57,10 +62,15 @@ class ClientPreferences(db.Model):
                 'max_sector_allocation_percent': 40.0,
                 'min_cash_reserve_percent': 10.0
             },
-            'Aggressive': {
+            'High': {
                 'max_single_position_percent': 20.0,
                 'max_sector_allocation_percent': 50.0,
                 'min_cash_reserve_percent': 5.0
+            },
+            'Very High': {
+                'max_single_position_percent': 25.0,
+                'max_sector_allocation_percent': 60.0,
+                'min_cash_reserve_percent': 2.0
             }
         }
         return profiles.get(self.risk_cap, profiles['Moderate'])

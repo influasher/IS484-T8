@@ -332,9 +332,11 @@ class RecommendationEngine:
                                total_portfolio_value: float, investable_cash: float) -> Dict:
 
         base_allocation_percent = {
-            'Conservative': 3.0,
+            'Zero': 1.0,
+            'Medium': 3.0,
             'Moderate': 5.0,
-            'Aggressive': 8.0
+            'High': 8.0,
+            'Very High': 12.0
         }.get(preferences.risk_cap, 5.0)
 
         sentiment_multiplier = min(1.5, max(0.5, (entity.sentiment_score + 100) / 100))

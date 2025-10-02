@@ -132,6 +132,9 @@ def create_client():
         stop_loss_tolerance=data.get("stop_loss_tolerance"),
         risk_cap=data.get("risk_cap"),
         sectors=data.get("sectors"),
+        max_single_position_percent=data.get("max_single_position_percent"),
+        max_sector_allocation_percent=data.get("max_sector_allocation_percent"),
+        min_cash_reserve_percent=data.get("min_cash_reserve_percent"),
     )
     db.session.add(preferences)
     db.session.commit()
@@ -262,7 +265,20 @@ def client_preferences(id):
             preferences.apply_risk_profile_defaults()
             db.session.add(preferences)
             db.session.commit()
-        return format_response(preferences.to_dict(), "Preferences fetched successfully", 200)
+
+        # Get current portfolio data to replace static holding/overall_pl values
+        from app.services.portfolio_service import get_client_portfolio_summary
+        try:
+            portfolio_summary = get_client_portfolio_summary(str(user_uuid))
+            preferences_dict = preferences.to_dict()
+            # Replace static values with calculated portfolio values
+            preferences_dict['holding'] = portfolio_summary.get('total_portfolio_value', 0.0)
+            preferences_dict['overall_pl'] = portfolio_summary.get('total_unrealized_pnl', 0.0)
+        except Exception:
+            # If portfolio calculation fails, use static values
+            preferences_dict = preferences.to_dict()
+
+        return format_response(preferences_dict, "Preferences fetched successfully", 200)
 
     elif request.method == 'PUT':
         data = request.get_json()
