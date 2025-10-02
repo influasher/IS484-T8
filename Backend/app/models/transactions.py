@@ -9,26 +9,33 @@ class Transactions(db.Model):
 
     txn_uuid = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
     client_uuid = db.Column(UUID(as_uuid=True), db.ForeignKey('user.id'), nullable=False, index=True)
-    datetime = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
-    source = db.Column(db.String(100), nullable=False)
-    type = db.Column(db.String(50), nullable=False)
-    currency = db.Column(db.String(10), nullable=False)
+    datetime = db.Column(db.DateTime, nullable=False, index=True)
+    source = db.Column(db.String(100), nullable=True)
+    type = db.Column(db.Enum('Deposit', 'Withdrawal', 'Dividend', 'Buy', 'Sell', name='transactiontype'), nullable=False)
+    currency = db.Column(db.Enum('USD', 'SGD', 'EUR', 'GBP', 'JPY', name='currency'), nullable=False)
     amount = db.Column(db.Numeric(precision=15, scale=2), nullable=False)
     desc = db.Column(db.Text, nullable=True)
+    entity_id = db.Column(UUID(as_uuid=True), db.ForeignKey('entity.id'), nullable=True, index=True)
+    quantity = db.Column(db.Double, nullable=True)
+    price_per_share = db.Column(db.Double, nullable=True)
 
     client = db.relationship('User', backref='transactions')
+    entity = db.relationship('Entity', backref='transactions')
 
     def __repr__(self):
-        return f"<Transactions {self.txn_uuid} client={self.client_uuid} amount={self.amount}>"
+        return f"<Transaction {self.txn_uuid} client={self.client_uuid} type={self.type} amount={self.amount}>"
 
     def to_dict(self):
         return {
             'txn_uuid': str(self.txn_uuid),
             'client_uuid': str(self.client_uuid),
-            'datetime': self.datetime.isoformat(),
+            'datetime': self.datetime.isoformat() if self.datetime else None,
             'source': self.source,
             'type': self.type,
             'currency': self.currency,
-            'amount': float(self.amount),
-            'desc': self.desc
+            'amount': float(self.amount) if self.amount else None,
+            'desc': self.desc,
+            'entity_id': str(self.entity_id) if self.entity_id else None,
+            'quantity': self.quantity,
+            'price_per_share': self.price_per_share
         }
