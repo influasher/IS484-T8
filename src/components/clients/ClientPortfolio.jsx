@@ -127,17 +127,45 @@ const PortfolioDashboard = ({ clientId }) => {
   const fetchPortfolioData = async (transactions, period = '1Y') => {
     setLoading(true);
     try {
+      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
+
+      // Fetch portfolio allocation
+      const portfolioResponse = await fetch(`${API_BASE_URL}/portfolio/${clientId}`);
+      const portfolioResult = portfolioResponse.ok ? await portfolioResponse.json() : null;
+
+      // Fetch performance history
+      const performanceResponse = await fetch(`${API_BASE_URL}/performance/${clientId}`);
+      const performanceResult = performanceResponse.ok ? await performanceResponse.json() : null;
+
       const calculatedMetrics = calculatePortfolioMetrics(transactions);
 
+      // Use fetched data if available, otherwise fall back to mock data
+      const allocation = portfolioResult?.allocation?.length > 0
+        ? portfolioResult.allocation
+        : mockPortfolioData.allocation;
+
+      const performance = performanceResult?.performance?.length > 0
+        ? performanceResult.performance.map(p => ({
+            date: new Date(p.date),
+            value: p.value
+          }))
+        : mockPortfolioData.performance;
+
       const portfolioDataWithCalculatedMetrics = {
-        ...mockPortfolioData,
         metrics: calculatedMetrics,
-        performance: mockPortfolioData.performance
+        allocation: allocation,
+        performance: performance
       };
 
       setPortfolioData(portfolioDataWithCalculatedMetrics);
     } catch (error) {
       console.error('Error fetching portfolio data:', error);
+      // Fall back to mock data on error
+      const calculatedMetrics = calculatePortfolioMetrics(transactions);
+      setPortfolioData({
+        ...mockPortfolioData,
+        metrics: calculatedMetrics
+      });
     } finally {
       setLoading(false);
     }
