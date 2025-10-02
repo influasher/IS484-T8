@@ -73,6 +73,7 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
         >
           {/* Home icon */}
           <IconButton
+            aria-label="home"
             onClick={handleHomeClick}
             sx={{
               p: 0,
@@ -97,13 +98,14 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
             }}
           >
             {baseTabs.map((tab, idx) => (
-              <Tab key={idx} label={tab.label} />
+              <Tab key={idx} label={tab.label} aria-label={tab.label}/>
             ))}
           </Tabs>
         </Stack>
 
         {/* Logout button */}
         <Button
+          aria-label="logout"
           variant="outlined"
           onClick={handleLogout}
           startIcon={<LogoutIcon />}
