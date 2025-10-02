@@ -50,27 +50,27 @@ const ROWS_PER_PAGE = 2;
 
 // --------------------------------
 
-const RISK_LABELS = ["Conservative", "Low", "Moderate", "High", "Aggressive"];
+const RISK_LABELS = ["Zero", "Medium", "Moderate", "High", "Very High"];
 function riskValueToLabel(val) {
-    if (typeof val !== "number") return "Conservative";
-    return RISK_LABELS[val] ?? "Conservative";
+    if (typeof val !== "number") return "Moderate";
+    return RISK_LABELS[val] ?? "Moderate";
 }
 
 // Risk profile templates with smart defaults
 const RISK_PROFILE_TEMPLATES = {
-    0: { // Conservative
+    0: { // Zero
+        maxSinglePosition: 5,
+        maxSectorAllocation: 20,
+        minCashReserve: 25,
+        stopLossTolerance: -5,
+        description: "Zero risk approach with minimal exposure and high cash reserves"
+    },
+    1: { // Medium
         maxSinglePosition: 10,
         maxSectorAllocation: 30,
         minCashReserve: 15,
-        stopLossTolerance: -5,
-        description: "Conservative approach with low risk and high cash reserves"
-    },
-    1: { // Low
-        maxSinglePosition: 12,
-        maxSectorAllocation: 35,
-        minCashReserve: 12,
         stopLossTolerance: -7,
-        description: "Low risk with modest position sizes"
+        description: "Medium risk with modest position sizes"
     },
     2: { // Moderate
         maxSinglePosition: 15,
@@ -80,18 +80,18 @@ const RISK_PROFILE_TEMPLATES = {
         description: "Balanced approach suitable for most clients"
     },
     3: { // High
-        maxSinglePosition: 18,
-        maxSectorAllocation: 45,
-        minCashReserve: 8,
-        stopLossTolerance: -12,
-        description: "Higher risk tolerance with larger positions"
-    },
-    4: { // Aggressive
         maxSinglePosition: 20,
         maxSectorAllocation: 50,
         minCashReserve: 5,
+        stopLossTolerance: -12,
+        description: "Higher risk tolerance with larger positions"
+    },
+    4: { // Very High
+        maxSinglePosition: 25,
+        maxSectorAllocation: 60,
+        minCashReserve: 2,
         stopLossTolerance: -15,
-        description: "Maximum risk tolerance for growth-focused clients"
+        description: "Very high risk tolerance for aggressive growth"
     }
 };
 
