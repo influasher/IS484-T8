@@ -11,7 +11,7 @@ class Transactions(db.Model):
     client_uuid = db.Column(UUID(as_uuid=True), db.ForeignKey('user.id'), nullable=False, index=True)
     datetime = db.Column(db.DateTime, nullable=False, index=True)
     source = db.Column(db.String(100), nullable=True)
-    type = db.Column(db.Enum('Deposit', 'Withdrawal', 'Dividend', 'Buy', 'Sell', name='transactiontype'), nullable=False)
+    type = db.Column(db.Enum('DEPOSIT', 'WITHDRAWAL', 'DIVIDEND', 'BUY', 'SELL', name='transactiontype'), nullable=False)
     currency = db.Column(db.Enum('USD', 'SGD', 'EUR', 'GBP', 'JPY', name='currency'), nullable=False)
     amount = db.Column(db.Numeric(precision=15, scale=2), nullable=False)
     desc = db.Column(db.Text, nullable=True)
