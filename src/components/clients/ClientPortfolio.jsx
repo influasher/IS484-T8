@@ -106,7 +106,7 @@ const PortfolioDashboard = ({ clientId }) => {
 
     return {
       totalInvestment: netCashInvested,
-      totalMarketValue: estimatedTotalPortfolioValue,
+      totalPortfolioValue: estimatedTotalPortfolioValue,
       unrealizedPL: unrealizedPL,
       unrealizedPLPercent: unrealizedPLPercent,
       breakdown: {
@@ -387,7 +387,7 @@ const PortfolioDashboard = ({ clientId }) => {
                             fontSize: { xs: "1.25rem", sm: "1.5rem", md: "1.75rem" }
                           }}
                         >
-                          ${metrics.totalMarketValue.toFixed(2).toLocaleString()} SGD
+                          ${metrics.totalPortfolioValue.toFixed(2).toLocaleString()} SGD
                         </Typography>
                         <Typography
                           variant="body2"
@@ -397,7 +397,7 @@ const PortfolioDashboard = ({ clientId }) => {
                             fontSize: { xs: "0.75rem", sm: "0.875rem" }
                           }}
                         >
-                          Total Market Value
+                          Total Portfolio Value
                         </Typography>
                       </Box>
                     </Stack>
