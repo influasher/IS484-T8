@@ -371,7 +371,6 @@ const ClientCards = () => {
                             type="number"
                             fullWidth
                             required
-                            defaultValue={0}
                             value={formStopLossTolerance}
                             onChange={(e) => setFormStopLossTolerance(e.target.value)}
                         />
