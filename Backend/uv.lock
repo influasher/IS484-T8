@@ -272,7 +272,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "azure-communication-email", specifier = ">=1.0.0" },
-    { name = "coverage", specifier = "==7.6.9" },
+    { name = "coverage", specifier = ">=7.0.0" },
     { name = "crawl4ai", specifier = "==0.4.248" },
     { name = "en-core-web-trf", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.8.0/en_core_web_trf-3.8.0-py3-none-any.whl" },
     { name = "fake-useragent", specifier = ">=2.2.0" },

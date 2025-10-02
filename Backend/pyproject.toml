@@ -9,7 +9,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pip",
     "azure-communication-email>=1.0.0",
-    "coverage==7.6.9",
+    "coverage>=7.0.0",
     "crawl4ai==0.4.248",
     "fake-useragent>=2.2.0",
     "finvizfinance>=1.1.1",
@@ -61,3 +61,20 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
+
+[tool.coverage.run]
+source = ["./"]
+omit = [
+    "tests/*",
+    "venv/*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
