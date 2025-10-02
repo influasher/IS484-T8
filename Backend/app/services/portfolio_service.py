@@ -94,14 +94,18 @@ class PortfolioCalculationService:
 
     def _update_portfolio_record(self, user_id: str, entity_id: str, position_data: Dict) -> Optional[ClientPortfolio]:
         """Update or create ClientPortfolio record"""
+        import uuid as uuid_lib
+        user_uuid = uuid_lib.UUID(user_id)
+        entity_uuid = uuid_lib.UUID(entity_id)
+
         portfolio = ClientPortfolio.query.filter_by(
-            user_id=user_id, entity_id=entity_id
+            user_id=user_uuid, entity_id=entity_uuid
         ).first()
 
         if not portfolio:
             portfolio = ClientPortfolio(
-                user_id=user_id,
-                entity_id=entity_id,
+                user_id=user_uuid,
+                entity_id=entity_uuid,
                 qty=0
             )
             db.session.add(portfolio)
@@ -116,12 +120,12 @@ class PortfolioCalculationService:
             portfolio.average_cost_basis = portfolio.total_invested / portfolio.qty
 
         # Get current market price
-        entity = Entity.query.get(entity_id)
+        entity = Entity.query.get(entity_uuid)
         if entity and entity.ticker:
             try:
-                price_data = get_stock_price(entity.ticker)
-                if price_data:
-                    portfolio.current_price = price_data.get('current_price')
+                current_price = get_stock_price(entity.ticker)
+                if current_price and current_price > 0:
+                    portfolio.current_price = float(current_price)
                     portfolio.calculate_current_values()
             except Exception:
                 pass  # Handle price fetch failures gracefully
@@ -208,9 +212,9 @@ class PortfolioCalculationService:
         for position in portfolio_positions:
             if position.entity and position.entity.ticker:
                 try:
-                    price_data = get_stock_price(position.entity.ticker)
-                    if price_data:
-                        position.current_price = price_data.get('current_price')
+                    current_price = get_stock_price(position.entity.ticker)
+                    if current_price and current_price > 0:
+                        position.current_price = float(current_price)
                         position.calculate_current_values()
                         updated_count += 1
                 except Exception:

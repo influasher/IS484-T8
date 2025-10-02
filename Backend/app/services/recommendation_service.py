@@ -126,7 +126,10 @@ class SectorConcentrationChecker:
 
         for sector in entity.sector:
             current_sector_percent = current_sector_allocation.get(sector, 0)
-            new_allocation_impact = (new_position_value / total_portfolio_value) * 100
+            if total_portfolio_value and total_portfolio_value > 0:
+                new_allocation_impact = (new_position_value / total_portfolio_value) * 100
+            else:
+                new_allocation_impact = 0
             projected_sector_percent = current_sector_percent + new_allocation_impact
 
             if projected_sector_percent > preferences.max_sector_allocation_percent:
@@ -165,7 +168,7 @@ class RecommendationEngine:
         cash_info = self.cash_calculator.get_investable_cash(self.portfolio_service, client_id)
         sector_allocation = self.portfolio_service.get_sector_allocation(client_id)
 
-        total_portfolio_value = max(portfolio_summary['total_portfolio_value'], cash_info['total_available_cash'])
+        total_portfolio_value = max(portfolio_summary['total_portfolio_value'] or 0, cash_info['total_available_cash'] or 0)
         minimum_position = self.position_optimizer.calculate_minimum_viable_position(total_portfolio_value)
 
         entities = Entity.query.filter(
@@ -250,8 +253,11 @@ class RecommendationEngine:
         confidence = self._calculate_recommendation_confidence(entity, preferences, 0.3)
 
         try:
-            price_data = get_stock_price(entity.ticker)
-            current_price = price_data.get('current_price') if price_data else None
+            current_price = get_stock_price(entity.ticker)
+            if current_price and current_price > 0:
+                current_price = float(current_price)
+            else:
+                current_price = None
         except Exception:
             current_price = None
 
@@ -268,7 +274,7 @@ class RecommendationEngine:
             recommendation_confidence=confidence,
             reasoning=reasoning,
             suggested_amount=practical_amount,
-            suggested_allocation_percent=(practical_amount / total_portfolio_value) * 100,
+            suggested_allocation_percent=(practical_amount / total_portfolio_value) * 100 if total_portfolio_value > 0 else 0,
             current_price=current_price,
             risk_level=self._assess_risk_level(entity)
         )
@@ -281,8 +287,11 @@ class RecommendationEngine:
             return None
 
         entity = position.entity
-        total_portfolio_value = portfolio_summary['total_portfolio_value']
-        current_allocation = (position.current_market_value / total_portfolio_value) * 100
+        total_portfolio_value = portfolio_summary['total_portfolio_value'] or 0
+        if total_portfolio_value > 0 and position.current_market_value:
+            current_allocation = (position.current_market_value / total_portfolio_value) * 100
+        else:
+            current_allocation = 0
 
         # Stop loss check
         if (position.unrealized_pnl_percent and
@@ -306,7 +315,10 @@ class RecommendationEngine:
         if current_allocation > preferences.max_single_position_percent:
             excess_allocation = current_allocation - preferences.max_single_position_percent
             sell_amount = (excess_allocation / 100) * total_portfolio_value
-            sell_percent = (sell_amount / position.current_market_value) * 100
+            if position.current_market_value and position.current_market_value > 0:
+                sell_percent = (sell_amount / position.current_market_value) * 100
+            else:
+                sell_percent = 0
 
             return self._create_sell_recommendation(
                 position, entity, RecommendationType.SELL_REBALANCE,
