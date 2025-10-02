@@ -19,10 +19,13 @@ import {
     MenuItem,
     Chip,
     Slider,
+    Alert,
+    FormHelperText,
 } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import Client from "./Client";
 import useFetch from "../../hooks/useFetch";
+import { useForm, Controller } from "react-hook-form";
 
 // ---------- constants ----------
 const ALL_SECTORS = [
@@ -47,11 +50,50 @@ const ROWS_PER_PAGE = 2;
 
 // --------------------------------
 
-const RISK_LABELS = ["Zero", "Medium", "Moderate", "High", "Very High"];
+const RISK_LABELS = ["Conservative", "Low", "Moderate", "High", "Aggressive"];
 function riskValueToLabel(val) {
-    if (typeof val !== "number") return "Zero";
-    return RISK_LABELS[val] ?? "Zero";
+    if (typeof val !== "number") return "Conservative";
+    return RISK_LABELS[val] ?? "Conservative";
 }
+
+// Risk profile templates with smart defaults
+const RISK_PROFILE_TEMPLATES = {
+    0: { // Conservative
+        maxSinglePosition: 10,
+        maxSectorAllocation: 30,
+        minCashReserve: 15,
+        stopLossTolerance: -5,
+        description: "Conservative approach with low risk and high cash reserves"
+    },
+    1: { // Low
+        maxSinglePosition: 12,
+        maxSectorAllocation: 35,
+        minCashReserve: 12,
+        stopLossTolerance: -7,
+        description: "Low risk with modest position sizes"
+    },
+    2: { // Moderate
+        maxSinglePosition: 15,
+        maxSectorAllocation: 40,
+        minCashReserve: 10,
+        stopLossTolerance: -10,
+        description: "Balanced approach suitable for most clients"
+    },
+    3: { // High
+        maxSinglePosition: 18,
+        maxSectorAllocation: 45,
+        minCashReserve: 8,
+        stopLossTolerance: -12,
+        description: "Higher risk tolerance with larger positions"
+    },
+    4: { // Aggressive
+        maxSinglePosition: 20,
+        maxSectorAllocation: 50,
+        minCashReserve: 5,
+        stopLossTolerance: -15,
+        description: "Maximum risk tolerance for growth-focused clients"
+    }
+};
 
 function normalize(u) {
     const sectors = Array.isArray(u?.sectors) && u.sectors.length > 0 ? u.sectors : ["NA"];
@@ -132,40 +174,69 @@ const ClientCards = () => {
 
     // Add-Client modal state
     const [openAdd, setOpenAdd] = React.useState(false);
-    const [formFirstName, setFormFirstName] = React.useState("");
-    const [formLastName, setFormLastName] = React.useState("");
-    // const [formUsername, setFormUsername] = React.useState("");
-    const [formStopLossTolerance, setFormStopLossTolerance] = React.useState(0);
-    const [formEmail, setFormEmail] = React.useState("");
-    const [formRiskThreshold, setFormRiskThreshold] = React.useState("");
-    const [formSectors, setFormSectors] = React.useState([]);
+    const [submitError, setSubmitError] = React.useState("");
 
-    const handleOpenAdd = () => setOpenAdd(true);
-    const handleCloseAdd = () => {
-        setOpenAdd(false);
-        setFormFirstName("");
-        setFormLastName("");
-        // setFormUsername("");
-        setFormStopLossTolerance(0);
-        setFormEmail("");
-        setFormRiskThreshold(0);
-        setFormSectors([]);
+    // React Hook Form setup
+    const {
+        control,
+        handleSubmit,
+        reset,
+        setValue,
+        formState: { errors, isSubmitting },
+        watch,
+    } = useForm({
+        defaultValues: {
+            firstName: "",
+            lastName: "",
+            email: "",
+            sectors: [],
+            stopLossTolerance: -10,
+            riskThreshold: 2, // Default to "Moderate"
+            maxSinglePosition: 15,
+            maxSectorAllocation: 40,
+            minCashReserve: 10,
+        },
+    });
+
+    const watchRiskThreshold = watch("riskThreshold");
+
+    // Apply risk profile template when risk threshold changes
+    React.useEffect(() => {
+        if (watchRiskThreshold !== undefined && RISK_PROFILE_TEMPLATES[watchRiskThreshold]) {
+            const template = RISK_PROFILE_TEMPLATES[watchRiskThreshold];
+            setValue("maxSinglePosition", template.maxSinglePosition);
+            setValue("maxSectorAllocation", template.maxSectorAllocation);
+            setValue("minCashReserve", template.minCashReserve);
+            setValue("stopLossTolerance", template.stopLossTolerance);
+        }
+    }, [watchRiskThreshold, setValue]);
+
+    const handleOpenAdd = () => {
+        setOpenAdd(true);
+        setSubmitError("");
     };
 
-    const handleSubmitAdd = async (e) => {
-        e.preventDefault();
+    const handleCloseAdd = () => {
+        setOpenAdd(false);
+        setSubmitError("");
+        reset(); // Resets all form fields to defaultValues
+    };
+
+    const handleSubmitAdd = async (data) => {
+        setSubmitError("");
 
         const payload = {
             id: crypto.randomUUID(),
-            // username: formUsername.trim(),
-            // for now auto generate the username
-            username: formFirstName.trim().toLowerCase() + "." + formLastName.trim().toLowerCase() + Math.floor(Math.random() * 1000),
-            first_name: formFirstName.trim(),
-            last_name: formLastName.trim(),
-            email: formEmail.trim(),
-            risk_cap: riskValueToLabel(formRiskThreshold),
-            sectors: formSectors,
-            stop_loss_tolerance: formStopLossTolerance,
+            username: data.firstName.trim().toLowerCase() + "." + data.lastName.trim().toLowerCase() + Math.floor(Math.random() * 1000),
+            first_name: data.firstName.trim(),
+            last_name: data.lastName.trim(),
+            email: data.email.trim(),
+            risk_cap: riskValueToLabel(data.riskThreshold),
+            sectors: data.sectors,
+            stop_loss_tolerance: data.stopLossTolerance,
+            max_single_position_percent: data.maxSinglePosition,
+            max_sector_allocation_percent: data.maxSectorAllocation,
+            min_cash_reserve_percent: data.minCashReserve,
             role: "CLIENT",
             rm_id: null,
             created_at: new Date().toISOString(),
@@ -173,7 +244,6 @@ const ClientCards = () => {
         };
 
         try {
-            // need to change the following to a hostable url instead of localhost
             const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
             const res = await fetch(`${API_BASE_URL}/user/create-clients`, {
                 method: "POST",
@@ -183,23 +253,22 @@ const ClientCards = () => {
                 body: JSON.stringify(payload),
             });
 
-            if (!res.ok) throw new Error("Failed to add client");
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.message || "Failed to add client");
+            }
 
             const result = await res.json();
-            // Optionally, normalize result.data if needed
             const newClient = normalize(result.data);
 
             setClients((prev) => [newClient, ...prev]);
             setPage(1);
             handleCloseAdd();
         } catch (err) {
-            alert("Error adding client: " + err.message);
+            setSubmitError(err.message);
         }
     };
 
-    const handleDeleteSector = (sector) => {
-        setFormSectors((prev) => prev.filter((s) => s !== sector));
-    };
 
     return (
         <Box
@@ -280,137 +349,293 @@ const ClientCards = () => {
                         borderRadius: 3,
                         bgcolor: "white",
                         width: "100%",
-                        maxWidth: 520,
+                        maxWidth: 600,
                     },
                 }}
             >
                 <DialogTitle sx={{ fontWeight: 700 }}>Add New Client</DialogTitle>
                 <DialogContent dividers>
-                    <Box component="form" onSubmit={handleSubmitAdd} sx={{ mt: 1.5, display: "grid", gap: 2 }}>
-                        <TextField
-                            label="First Name"
-                            type="text"
-                            fullWidth
-                            required
-                            value={formFirstName}
-                            onChange={(e) => setFormFirstName(e.target.value)}
+                    {submitError && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {submitError}
+                        </Alert>
+                    )}
+                    <Box component="form" onSubmit={handleSubmit(handleSubmitAdd)} sx={{ mt: 1.5, display: "grid", gap: 2 }}>
+                        {/* Basic Information */}
+                        <Typography variant="h6" sx={{ fontWeight: 600, mt: 1 }}>
+                            Basic Information
+                        </Typography>
+
+                        <Controller
+                            name="firstName"
+                            control={control}
+                            rules={{
+                                required: "First name is required",
+                                minLength: { value: 2, message: "First name must be at least 2 characters" }
+                            }}
+                            render={({ field }) => (
+                                <TextField
+                                    {...field}
+                                    label="First Name"
+                                    fullWidth
+                                    error={!!errors.firstName}
+                                    helperText={errors.firstName?.message}
+                                />
+                            )}
                         />
-                        <TextField
-                            label="Last Name"
-                            type="text"
-                            fullWidth
-                            required
-                            value={formLastName}
-                            onChange={(e) => setFormLastName(e.target.value)}
+
+                        <Controller
+                            name="lastName"
+                            control={control}
+                            rules={{
+                                required: "Last name is required",
+                                minLength: { value: 2, message: "Last name must be at least 2 characters" }
+                            }}
+                            render={({ field }) => (
+                                <TextField
+                                    {...field}
+                                    label="Last Name"
+                                    fullWidth
+                                    error={!!errors.lastName}
+                                    helperText={errors.lastName?.message}
+                                />
+                            )}
                         />
-                        {/* <TextField
-                            label="Username"
-                            type="text"
-                            fullWidth
-                            required
-                            value={formUsername}
-                            onChange={(e) => setFormUsername(e.target.value)}
-                        /> */}
-                        <TextField
-                            label="Email"
-                            type="email"
-                            fullWidth
-                            required
-                            value={formEmail}
-                            onChange={(e) => setFormEmail(e.target.value)}
+
+                        <Controller
+                            name="email"
+                            control={control}
+                            rules={{
+                                required: "Email is required",
+                                pattern: {
+                                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                                    message: "Invalid email address"
+                                }
+                            }}
+                            render={({ field }) => (
+                                <TextField
+                                    {...field}
+                                    label="Email"
+                                    type="email"
+                                    fullWidth
+                                    error={!!errors.email}
+                                    helperText={errors.email?.message}
+                                />
+                            )}
                         />
-                        <FormControl fullWidth>
-                            <InputLabel id="sectors-label">Sectors</InputLabel>
-                            <Select
-                                labelId="sectors-label"
-                                label="Sectors"
-                                multiple
-                                value={formSectors}
-                                onChange={(e) => setFormSectors(e.target.value)}
-                                MenuProps={{
-                                    disablePortal: true,
-                                    anchorOrigin: { vertical: "bottom", horizontal: "left" },
-                                    transformOrigin: { vertical: "top", horizontal: "left" },
-                                    PaperProps: { sx: { maxHeight: 200, mt: 1 } },
-                                    MenuListProps: { dense: true },
-                                }}
-                                renderValue={(selected) => (
-                                    <Box
-                                        sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
-                                        onMouseDown={(e) => {
-                                            e.stopPropagation();
+
+                        {/* Investment Preferences */}
+                        <Typography variant="h6" sx={{ fontWeight: 600, mt: 2 }}>
+                            Investment Preferences
+                        </Typography>
+
+                        <Controller
+                            name="sectors"
+                            control={control}
+                            render={({ field }) => (
+                                <FormControl fullWidth>
+                                    <InputLabel id="sectors-label">Preferred Sectors</InputLabel>
+                                    <Select
+                                        {...field}
+                                        labelId="sectors-label"
+                                        label="Preferred Sectors"
+                                        multiple
+                                        MenuProps={{
+                                            disablePortal: true,
+                                            anchorOrigin: { vertical: "bottom", horizontal: "left" },
+                                            transformOrigin: { vertical: "top", horizontal: "left" },
+                                            PaperProps: { sx: { maxHeight: 200, mt: 1 } },
+                                            MenuListProps: { dense: true },
                                         }}
+                                        renderValue={(selected) => (
+                                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                                                {selected.map((value) => (
+                                                    <Chip
+                                                        key={value}
+                                                        label={value}
+                                                        onDelete={() => {
+                                                            field.onChange(field.value.filter(s => s !== value));
+                                                        }}
+                                                        sx={{ borderRadius: 1.5 }}
+                                                    />
+                                                ))}
+                                            </Box>
+                                        )}
                                     >
-                                        {selected.map((value) => (
-                                            <Chip
-                                                key={value}
-                                                label={value}
-                                                onDelete={(evt) => {
-                                                    evt.stopPropagation();
-                                                    handleDeleteSector(value);
-                                                }}
-                                                onMouseDown={(e) => {
-                                                    e.stopPropagation();
-                                                    e.preventDefault();
-                                                }}
-                                                sx={{ borderRadius: 1.5 }}
-                                            />
+                                        {ALL_SECTORS.map((sector) => (
+                                            <MenuItem key={sector} value={sector}>
+                                                {sector}
+                                            </MenuItem>
                                         ))}
-                                    </Box>
-                                )}
-                            >
-                                {ALL_SECTORS.map((sector) => (
-                                    <MenuItem key={sector} value={sector}>
-                                        {sector}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-                        <TextField
-                            label="Stop Loss Tolerance"
-                            type="number"
-                            fullWidth
-                            required
-                            value={formStopLossTolerance}
-                            onChange={(e) => setFormStopLossTolerance(e.target.value)}
+                                    </Select>
+                                    <FormHelperText>Select sectors the client is interested in</FormHelperText>
+                                </FormControl>
+                            )}
                         />
-                        <Box sx={{ px: 0, py: 1, mx: 1.5 }}>
-                            <Typography variant="body1" sx={{ mb: 1, fontWeight: 500 }}>
-                                Risk Threshold
+
+                        {/* Risk Management */}
+                        <Typography variant="h6" sx={{ fontWeight: 600, mt: 2 }}>
+                            Risk Management
+                        </Typography>
+
+                        <Controller
+                            name="riskThreshold"
+                            control={control}
+                            render={({ field }) => (
+                                <Box sx={{ px: 2, py: 1 }}>
+                                    <Typography variant="body1" sx={{ mb: 1, fontWeight: 500 }}>
+                                        Risk Profile: {RISK_LABELS[watchRiskThreshold]}
+                                    </Typography>
+                                    {RISK_PROFILE_TEMPLATES[watchRiskThreshold] && (
+                                        <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary', fontStyle: 'italic' }}>
+                                            {RISK_PROFILE_TEMPLATES[watchRiskThreshold].description}
+                                        </Typography>
+                                    )}
+                                    <Slider
+                                        {...field}
+                                        min={0}
+                                        max={4}
+                                        step={1}
+                                        marks={[
+                                            { value: 0, label: "Conservative" },
+                                            { value: 1, label: "Low" },
+                                            { value: 2, label: "Moderate" },
+                                            { value: 3, label: "High" },
+                                            { value: 4, label: "Aggressive" },
+                                        ]}
+                                        valueLabelDisplay="auto"
+                                        valueLabelFormat={(value) => RISK_LABELS[value] || value}
+                                        sx={{ mx: 1, width: "calc(100% - 20px)" }}
+                                    />
+                                    <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'primary.main' }}>
+                                        Changing risk profile will auto-populate position limits below
+                                    </Typography>
+                                </Box>
+                            )}
+                        />
+
+                        <Controller
+                            name="stopLossTolerance"
+                            control={control}
+                            rules={{
+                                required: "Stop loss tolerance is required",
+                                min: { value: -50, message: "Stop loss cannot be less than -50%" },
+                                max: { value: 0, message: "Stop loss tolerance should be negative or zero" }
+                            }}
+                            render={({ field }) => (
+                                <TextField
+                                    {...field}
+                                    label="Stop Loss Tolerance (%)"
+                                    type="number"
+                                    fullWidth
+                                    error={!!errors.stopLossTolerance}
+                                    helperText={errors.stopLossTolerance?.message || "Maximum loss percentage before selling (e.g., -10 for 10% loss)"}
+                                    inputProps={{ step: 0.1 }}
+                                />
+                            )}
+                        />
+
+                        {/* Position Limits */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 2, mb: 1 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                Position Limits
                             </Typography>
-                            <Slider
-                                value={typeof formRiskThreshold === "number" ? formRiskThreshold : 0}
-                                min={0}
-                                max={4}
-                                step={1}
-                                // show 1dp
-                                precision={1}
-                                marks={[
-                                    { value: 0, label: "Zero" },
-                                    { value: 1, label: "Medium" },
-                                    { value: 2, label: "Moderate" },
-                                    { value: 3, label: "High" },
-                                    { value: 4, label: "Very High" },
-                                ]}
-                                valueLabelDisplay="auto"
-                                valueLabelFormat={(value) => RISK_LABELS[value] || value}
-                                onChange={(_, val) => setFormRiskThreshold(Number(val))}
-                                sx={{ mx: 1, width: "calc(100% - 20px)" }}
-                            />
+                            <Box
+                                sx={{
+                                    ml: 1,
+                                    px: 1,
+                                    py: 0.5,
+                                    bgcolor: 'primary.main',
+                                    color: 'white',
+                                    borderRadius: 1,
+                                    fontSize: '0.75rem',
+                                    fontWeight: 500
+                                }}
+                            >
+                                Auto-filled from {RISK_LABELS[watchRiskThreshold]} template
+                            </Box>
                         </Box>
+                        <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+                            These values are automatically set based on your selected risk profile. You can still modify them if needed.
+                        </Typography>
+
+                        <Controller
+                            name="maxSinglePosition"
+                            control={control}
+                            rules={{
+                                required: "Maximum single position is required",
+                                min: { value: 1, message: "Must be at least 1%" },
+                                max: { value: 50, message: "Cannot exceed 50%" }
+                            }}
+                            render={({ field }) => (
+                                <TextField
+                                    {...field}
+                                    label="Maximum Single Position (%)"
+                                    type="number"
+                                    fullWidth
+                                    error={!!errors.maxSinglePosition}
+                                    helperText={errors.maxSinglePosition?.message || "Maximum percentage of portfolio in any single stock"}
+                                    inputProps={{ step: 0.1, min: 1, max: 50 }}
+                                />
+                            )}
+                        />
+
+                        <Controller
+                            name="maxSectorAllocation"
+                            control={control}
+                            rules={{
+                                required: "Maximum sector allocation is required",
+                                min: { value: 5, message: "Must be at least 5%" },
+                                max: { value: 100, message: "Cannot exceed 100%" }
+                            }}
+                            render={({ field }) => (
+                                <TextField
+                                    {...field}
+                                    label="Maximum Sector Allocation (%)"
+                                    type="number"
+                                    fullWidth
+                                    error={!!errors.maxSectorAllocation}
+                                    helperText={errors.maxSectorAllocation?.message || "Maximum percentage of portfolio in any single sector"}
+                                    inputProps={{ step: 0.1, min: 5, max: 100 }}
+                                />
+                            )}
+                        />
+
+                        <Controller
+                            name="minCashReserve"
+                            control={control}
+                            rules={{
+                                required: "Minimum cash reserve is required",
+                                min: { value: 0, message: "Cannot be negative" },
+                                max: { value: 50, message: "Cannot exceed 50%" }
+                            }}
+                            render={({ field }) => (
+                                <TextField
+                                    {...field}
+                                    label="Minimum Cash Reserve (%)"
+                                    type="number"
+                                    fullWidth
+                                    error={!!errors.minCashReserve}
+                                    helperText={errors.minCashReserve?.message || "Minimum percentage of portfolio to keep as cash"}
+                                    inputProps={{ step: 0.1, min: 0, max: 50 }}
+                                />
+                            )}
+                        />
                     </Box>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, py: 2 }}>
-                    <Button onClick={handleCloseAdd} variant="text">
+                    <Button onClick={handleCloseAdd} variant="text" disabled={isSubmitting}>
                         Cancel
                     </Button>
                     <Button
-                        onClick={handleSubmitAdd}
+                        type="submit"
+                        onClick={handleSubmit(handleSubmitAdd)}
                         variant="contained"
                         color="black"
+                        disabled={isSubmitting}
                         sx={{ "&:hover": { bgcolor: "#6b6b6bff" } }}
                     >
-                        Submit
+                        {isSubmitting ? "Creating..." : "Create Client"}
                     </Button>
                 </DialogActions>
             </Dialog>
