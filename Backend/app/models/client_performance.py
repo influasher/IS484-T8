@@ -13,11 +13,11 @@ class ClientPerformance(db.Model):
     client = db.relationship('User', backref='performance_records')
 
     def __repr__(self):
-        return f"<Performance client={self.client_uuid} datetime={self.datetime}>"
+        return f"<ClientPerformance client={self.client_uuid} datetime={self.datetime}>"
 
     def to_dict(self):
         return {
             'client_uuid': str(self.client_uuid),
-            'datetime': self.datetime.isoformat(),
+            'datetime': self.datetime.isoformat() if self.datetime else None,
             'daily_performance': self.daily_performance
         }
