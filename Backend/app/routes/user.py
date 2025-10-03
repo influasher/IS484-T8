@@ -1,5 +1,5 @@
-from flask import Blueprint, request
 import uuid
+from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.models import User, ClientPreferences
