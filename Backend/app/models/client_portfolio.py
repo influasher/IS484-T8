@@ -1,4 +1,3 @@
-import uuid
 from sqlalchemy.dialects.postgresql import UUID
 from app import db
 from datetime import datetime, timezone
