@@ -6,6 +6,7 @@ import {
   TableBody,
   TableContainer,
   TableRow,
+  TableCell,
   Paper,
   Typography,
   Stack,
@@ -163,7 +164,9 @@ function SearchTable({
             <TableBody>
               {data.map((item, i) => (
                 <TableRow key={i} hover>
-                  <Typography>No custom table body provided</Typography>
+                  <TableCell>
+                    <Typography>No custom table body provided</Typography>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
