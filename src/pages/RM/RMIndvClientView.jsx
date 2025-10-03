@@ -18,7 +18,9 @@ import { Box,
 } from "@mui/material";
 
 const RMIndvClientView = () => {
-  const { clientId } = useParams();
+  const { id: clientId } = useParams();
+
+  console.log('RMIndvClientView - clientId from params:', clientId);
 
   // Add-Transaction modal state
   const [openAdd, setOpenAdd] = React.useState(false);
@@ -75,7 +77,7 @@ const RMIndvClientView = () => {
           elevation={1}
           sx={{ borderRadius: 3, bgcolor: "white", display: "flex", flexDirection: "column", alignItems: "center"}}
         >
-        <ClientPortfolio/>
+        <ClientPortfolio clientId={clientId} />
         <Button onClick={handleOpenAdd} variant="contained" sx={{ m: 2 }} color="">
           Add new transaction
         </Button>

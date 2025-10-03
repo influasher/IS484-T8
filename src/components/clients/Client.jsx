@@ -5,7 +5,8 @@ import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../routes";
-import { apiClient } from "../../services/api";
+
+import { getData } from "../../services/api";
 
 const Client = ({ client }) => {
   const navigate = useNavigate();
@@ -25,9 +26,13 @@ const Client = ({ client }) => {
     if (!client.id) return;
     setLoadingPrefs(true);
 
-    apiClient.get(`/user/${client.id}/preferences`)
-      .then((res) => {
-        setPreferences(res.data.data);
+    getData(`/user/${client.id}/preferences`)
+      .then((data) => {
+        if (data?.data) {
+          setPreferences(data.data);
+        } else {
+          throw new Error("No data returned");
+        }
         setLoadingPrefs(false);
       })
       .catch(() => {
@@ -98,13 +103,13 @@ const Client = ({ client }) => {
               variant="body2"
               sx={{ color: "text.secondary", mb: 0.5 }}
             >
-              Current holdings: {prefs.holding ?? "NA"}
+              Current holdings: {typeof prefs.holding === 'number' ? `$${prefs.holding.toLocaleString()}` : "NA"}
             </Typography>
             <Typography
               variant="body2"
               sx={{ color: "text.secondary", mb: 0.5 }}
             >
-              Overall P/L: {prefs.overall_pl ?? "NA"}
+              Overall P/L: {typeof prefs.overall_pl === 'number' ? `$${prefs.overall_pl.toLocaleString()}` : "NA"}
             </Typography>
             <Typography
               variant="body2"
@@ -116,7 +121,7 @@ const Client = ({ client }) => {
               variant="body2"
               sx={{ color: "text.secondary", mb: 0.5 }}
             >
-              Stop Loss Tolerance: {prefs.stop_loss_tolerance ?? "NA"}
+              Stop Loss Tolerance: {typeof prefs.stop_loss_tolerance === 'number' ? `${prefs.stop_loss_tolerance}%` : "NA"}
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
               Sectors:{" "}

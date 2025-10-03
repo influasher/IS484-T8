@@ -84,15 +84,15 @@ const ClientTransactionTable = ({ transactionData = [], loading = false }) => {
 
   // Categorize transactions
   const categorizeTransactions = (data) => {
-    const trading = data.filter(t => 
-      ['purchase', 'sale'].includes(t.type.toLowerCase())
+    const trading = data.filter(t =>
+      ['purchase', 'sale', 'buy', 'sell'].includes(t.type.toLowerCase())
     );
-    
-    const dividends = data.filter(t => 
+
+    const dividends = data.filter(t =>
       ['dividend', 'capital gains', 'interest'].includes(t.type.toLowerCase())
     );
-    
-    const wallet = data.filter(t => 
+
+    const wallet = data.filter(t =>
       ['deposit', 'withdrawal'].includes(t.type.toLowerCase())
     );
 

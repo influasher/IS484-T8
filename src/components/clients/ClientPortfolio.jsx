@@ -15,7 +15,7 @@ import { LineChart } from '@mui/x-charts/LineChart';
 import { PieChart } from '@mui/x-charts/PieChart';
 import ClientTransactionTable from './ClientTransactionTable';
 
-const PortfolioDashboard = () => {
+const PortfolioDashboard = ({ clientId }) => {
   // Portfolio-related state
   const [timeRange, setTimeRange] = useState('1Y');
   const [portfolioData, setPortfolioData] = useState(null);
@@ -52,258 +52,7 @@ const PortfolioDashboard = () => {
     ]
   };
 
-  const mockTransactionData = [
-    {
-      "id": "txn_001",
-      "dateTime": "2024-09-19T14:30:00Z",
-      "source": "Chase Bank ****1234",
-      "type": "Deposit",
-      "currency": "USD",
-      "amount": 5000.00,
-      "status": "Completed",
-      "description": "Initial funding"
-    },
-    {
-      "id": "txn_002",
-      "dateTime": "2024-09-19T14:35:00Z",
-      "source": "AAPL",
-      "type": "Purchase",
-      "currency": "USD",
-      "amount": -2500.00,
-      "status": "Completed",
-      "description": "Apple Inc. - 15 shares @ $166.67"
-    },
-    {
-      "id": "txn_003",
-      "dateTime": "2024-09-18T16:00:00Z",
-      "source": "KO",
-      "type": "Dividend",
-      "currency": "USD",
-      "amount": 45.50,
-      "status": "Completed",
-      "description": "The Coca-Cola Company quarterly dividend"
-    },
-    {
-      "id": "txn_004",
-      "dateTime": "2024-09-18T11:20:00Z",
-      "source": "Wells Fargo ****5678",
-      "type": "Deposit",
-      "currency": "USD",
-      "amount": 1200.00,
-      "status": "Completed",
-      "description": "Monthly investment contribution"
-    },
-    {
-      "id": "txn_005",
-      "dateTime": "2024-09-17T09:15:00Z",
-      "source": "MSFT",
-      "type": "Sale",
-      "currency": "USD",
-      "amount": 3250.75,
-      "status": "Completed",
-      "description": "Microsoft Corp. - 8 shares @ $406.34"
-    },
-    {
-      "id": "txn_006",
-      "dateTime": "2024-09-17T14:45:00Z",
-      "source": "Bank Transfer",
-      "type": "Withdrawal",
-      "currency": "USD",
-      "amount": -800.00,
-      "status": "Completed",
-      "description": "Transfer to savings account"
-    },
-    {
-      "id": "txn_007",
-      "dateTime": "2024-09-16T10:30:00Z",
-      "source": "VOO",
-      "type": "Purchase",
-      "currency": "USD",
-      "amount": -1500.00,
-      "status": "Completed",
-      "description": "Vanguard S&P 500 ETF - 3.2 shares @ $468.75"
-    },
-    {
-      "id": "txn_008",
-      "dateTime": "2024-09-15T13:22:00Z",
-      "source": "AMZN",
-      "type": "Capital Gains",
-      "currency": "USD",
-      "amount": 125.80,
-      "status": "Completed",
-      "description": "Amazon.com Inc. - Long term capital gains distribution"
-    },
-    {
-      "id": "txn_009",
-      "dateTime": "2024-09-14T16:00:00Z",
-      "source": "Bank of America ****9012",
-      "type": "Deposit",
-      "currency": "USD",
-      "amount": 500.00,
-      "status": "Processing",
-      "description": "ACH transfer"
-    },
-    {
-      "id": "txn_010",
-      "dateTime": "2024-09-13T11:45:00Z",
-      "source": "GOOGL",
-      "type": "Purchase",
-      "currency": "USD",
-      "amount": -2100.50,
-      "status": "Completed",
-      "description": "Alphabet Inc. - 12 shares @ $175.04"
-    },
-    {
-      "id": "txn_011",
-      "dateTime": "2024-09-12T15:30:00Z",
-      "source": "JNJ",
-      "type": "Sale",
-      "currency": "USD",
-      "amount": 4250.00,
-      "status": "Completed",
-      "description": "Johnson & Johnson - 25 shares @ $170.00"
-    },
-    {
-      "id": "txn_012",
-      "dateTime": "2024-09-11T08:15:00Z",
-      "source": "TD",
-      "type": "Dividend",
-      "currency": "USD",
-      "amount": 67.20,
-      "status": "Completed",
-      "description": "Toronto-Dominion Bank quarterly dividend"
-    },
-    {
-      "id": "txn_013",
-      "dateTime": "2024-09-10T12:00:00Z",
-      "source": "JPM",
-      "type": "Dividend",
-      "currency": "USD",
-      "amount": 32.40,
-      "status": "Completed",
-      "description": "JPMorgan Chase & Co. quarterly dividend"
-    },
-    {
-      "id": "txn_014",
-      "dateTime": "2024-09-09T14:20:00Z",
-      "source": "Bank Transfer",
-      "type": "Withdrawal",
-      "currency": "USD",
-      "amount": -1000.00,
-      "status": "Failed",
-      "description": "Insufficient funds - withdrawal cancelled"
-    },
-    {
-      "id": "txn_015",
-      "dateTime": "2024-09-08T16:45:00Z",
-      "source": "NVDA",
-      "type": "Purchase",
-      "currency": "USD",
-      "amount": -3500.00,
-      "status": "Completed",
-      "description": "NVIDIA Corporation - 25 shares @ $140.00"
-    },
-    {
-      "id": "txn_016",
-      "dateTime": "2024-09-07T10:10:00Z",
-      "source": "Interest",
-      "type": "Interest",
-      "currency": "USD",
-      "amount": 15.75,
-      "status": "Completed",
-      "description": "Cash balance interest payment"
-    },
-    {
-      "id": "txn_017",
-      "dateTime": "2024-09-06T13:55:00Z",
-      "source": "PG",
-      "type": "Purchase",
-      "currency": "USD",
-      "amount": -1850.00,
-      "status": "Completed",
-      "description": "Procter & Gamble Co. - 12 shares @ $154.17"
-    },
-    {
-      "id": "txn_018",
-      "dateTime": "2024-09-05T09:30:00Z",
-      "source": "Schwab Transfer",
-      "type": "Deposit",
-      "currency": "USD",
-      "amount": 7500.00,
-      "status": "Completed",
-      "description": "ACATS transfer from Charles Schwab"
-    },
-    {
-      "id": "txn_019",
-      "dateTime": "2024-09-04T11:25:00Z",
-      "source": "SPY",
-      "type": "Capital Gains",
-      "currency": "USD",
-      "amount": 89.25,
-      "status": "Completed",
-      "description": "SPDR S&P 500 ETF Trust - Capital gains distribution"
-    },
-    {
-      "id": "txn_020",
-      "dateTime": "2024-09-03T15:40:00Z",
-      "source": "Wire Transfer",
-      "type": "Deposit",
-      "currency": "USD",
-      "amount": 10000.00,
-      "status": "Pending",
-      "description": "Incoming wire transfer"
-    },
-    {
-      "id": "txn_021",
-      "dateTime": "2024-09-02T13:15:00Z",
-      "source": "VTI",
-      "type": "Purchase",
-      "currency": "USD",
-      "amount": -2200.00,
-      "status": "Completed",
-      "description": "Vanguard Total Stock Market ETF - 8.5 shares @ $258.82"
-    },
-    {
-      "id": "txn_022",
-      "dateTime": "2024-09-01T10:45:00Z",
-      "source": "DIS",
-      "type": "Dividend",
-      "currency": "USD",
-      "amount": 28.60,
-      "status": "Completed",
-      "description": "The Walt Disney Company semi-annual dividend"
-    },
-    {
-      "id": "txn_023",
-      "dateTime": "2024-08-31T14:30:00Z",
-      "source": "BRK.B",
-      "type": "Purchase",
-      "currency": "USD",
-      "amount": -4325.00,
-      "status": "Completed",
-      "description": "Berkshire Hathaway Inc. - 10 shares @ $432.50"
-    },
-    {
-      "id": "txn_024",
-      "dateTime": "2024-08-30T11:20:00Z",
-      "source": "T",
-      "type": "Dividend",
-      "currency": "USD",
-      "amount": 73.50,
-      "status": "Completed",
-      "description": "AT&T Inc. quarterly dividend"
-    },
-    {
-      "id": "txn_025",
-      "dateTime": "2024-08-29T09:00:00Z",
-      "source": "QQQ",
-      "type": "Purchase",
-      "currency": "USD",
-      "amount": -1875.00,
-      "status": "Completed",
-      "description": "Invesco QQQ Trust ETF - 5 shares @ $375.00"
-    }
-  ];
+  
 
   // Function to calculate portfolio metrics from transaction data
   const calculatePortfolioMetrics = (transactions) => {
@@ -317,7 +66,7 @@ const PortfolioDashboard = () => {
 
     transactions.forEach(transaction => {
       const amount = transaction.amount;
-      
+
       switch (transaction.type.toLowerCase()) {
         case 'deposit':
           totalDeposits += amount;
@@ -326,9 +75,11 @@ const PortfolioDashboard = () => {
           totalWithdrawals += Math.abs(amount);
           break;
         case 'purchase':
+        case 'buy':
           totalPurchases += Math.abs(amount);
           break;
         case 'sale':
+        case 'sell':
           totalSales += amount;
           break;
         case 'dividend':
@@ -355,7 +106,7 @@ const PortfolioDashboard = () => {
 
     return {
       totalInvestment: netCashInvested,
-      totalMarketValue: estimatedTotalPortfolioValue,
+      totalPortfolioValue: estimatedTotalPortfolioValue,
       unrealizedPL: unrealizedPL,
       unrealizedPLPercent: unrealizedPLPercent,
       breakdown: {
@@ -373,21 +124,48 @@ const PortfolioDashboard = () => {
     };
   };
 
-  const fetchPortfolioData = async (period = '1Y') => {
+  const fetchPortfolioData = async (transactions, period = '1Y') => {
     setLoading(true);
     try {
-      const calculatedMetrics = calculatePortfolioMetrics(mockTransactionData);
-      
+      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
+
+      // Fetch portfolio allocation
+      const portfolioResponse = await fetch(`${API_BASE_URL}/portfolio/${clientId}`);
+      const portfolioResult = portfolioResponse.ok ? await portfolioResponse.json() : null;
+
+      // Fetch performance history
+      const performanceResponse = await fetch(`${API_BASE_URL}/performance/${clientId}`);
+      const performanceResult = performanceResponse.ok ? await performanceResponse.json() : null;
+
+      const calculatedMetrics = calculatePortfolioMetrics(transactions);
+
+      // Use fetched data if available, otherwise fall back to mock data
+      const allocation = portfolioResult?.allocation?.length > 0
+        ? portfolioResult.allocation
+        : mockPortfolioData.allocation;
+
+      const performance = performanceResult?.performance?.length > 0
+        ? performanceResult.performance.map(p => ({
+            date: new Date(p.date),
+            value: p.value
+          }))
+        : mockPortfolioData.performance;
+
       const portfolioDataWithCalculatedMetrics = {
-        ...mockPortfolioData,
         metrics: calculatedMetrics,
-        performance: mockPortfolioData.performance
+        allocation: allocation,
+        performance: performance
       };
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
+
       setPortfolioData(portfolioDataWithCalculatedMetrics);
     } catch (error) {
       console.error('Error fetching portfolio data:', error);
+      // Fall back to mock data on error
+      const calculatedMetrics = calculatePortfolioMetrics(transactions);
+      setPortfolioData({
+        ...mockPortfolioData,
+        metrics: calculatedMetrics
+      });
     } finally {
       setLoading(false);
     }
@@ -396,10 +174,47 @@ const PortfolioDashboard = () => {
   const fetchTransactionData = async () => {
     setTransactionLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 300)); // Simulate API delay
-      setTransactionData(mockTransactionData);
+      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
+      console.log(`Fetching transactions for client: ${clientId}`);
+      const response = await fetch(`${API_BASE_URL}/transactions/client/${clientId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error response:', errorData);
+        throw new Error('Failed to fetch transactions');
+      }
+
+      const result = await response.json();
+      console.log('Fetched transactions:', result);
+
+      // Transform the data to match the expected format
+      const formattedTransactions = result.transactions.map(txn => ({
+        id: txn.txn_uuid,
+        dateTime: txn.datetime,
+        source: txn.source,
+        type: txn.type,
+        currency: txn.currency,
+        amount: txn.amount,
+        status: "Completed", // You may need to add status field to your DB
+        description: txn.desc
+      }));
+
+      setTransactionData(formattedTransactions);
+
+      // Update portfolio data with real transactions
+      fetchPortfolioData(formattedTransactions, timeRange);
     } catch (error) {
-      console.log('Error fetching transaction data:', error);
+      console.error('Error fetching transaction data:', error);
+      setTransactionData([]);
+      // Create portfolio with empty transactions
+      fetchPortfolioData([], timeRange);
     } finally {
       setTransactionLoading(false);
     }
@@ -408,14 +223,15 @@ const PortfolioDashboard = () => {
   const handleTimeRangeChange = (event, newTimeRange) => {
     if (newTimeRange !== null) {
       setTimeRange(newTimeRange);
-      fetchPortfolioData(newTimeRange);
+      fetchPortfolioData(transactionData, newTimeRange);
     }
   };
 
   useEffect(() => {
-    fetchPortfolioData(timeRange);
-    fetchTransactionData();
-  }, []);
+    if (clientId) {
+      fetchTransactionData();
+    }
+  }, [clientId]);
 
   // Loading state check for portfolio data
   if (loading || !portfolioData) {
@@ -571,7 +387,7 @@ const PortfolioDashboard = () => {
                             fontSize: { xs: "1.25rem", sm: "1.5rem", md: "1.75rem" }
                           }}
                         >
-                          ${metrics.totalMarketValue.toFixed(2).toLocaleString()} SGD
+                          ${metrics.totalPortfolioValue.toFixed(2).toLocaleString()} SGD
                         </Typography>
                         <Typography
                           variant="body2"
@@ -581,7 +397,7 @@ const PortfolioDashboard = () => {
                             fontSize: { xs: "0.75rem", sm: "0.875rem" }
                           }}
                         >
-                          Total Market Value
+                          Total Portfolio Value
                         </Typography>
                       </Box>
                     </Stack>
