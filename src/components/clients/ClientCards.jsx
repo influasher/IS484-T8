@@ -1,4 +1,5 @@
 import React from "react";
+import { apiClient } from "../../services/api";
 import {
     Box,
     Paper,
@@ -173,27 +174,16 @@ const ClientCards = () => {
         };
 
         try {
-            // need to change the following to a hostable url instead of localhost
-            const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-            const res = await fetch(`${API_BASE_URL}/user/create-clients`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-            });
+            const res = await apiClient.post("/user/create-clients", payload);
 
-            if (!res.ok) throw new Error("Failed to add client");
-
-            const result = await res.json();
             // Optionally, normalize result.data if needed
-            const newClient = normalize(result.data);
+            const newClient = normalize(res.data);
 
             setClients((prev) => [newClient, ...prev]);
             setPage(1);
             handleCloseAdd();
         } catch (err) {
-            alert("Error adding client: " + err.message);
+            alert("Error adding client: " + (err.response?.data?.message || err.message));
         }
     };
 

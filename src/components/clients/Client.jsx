@@ -5,6 +5,7 @@ import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../routes";
+import { apiClient } from "../../services/api";
 
 const Client = ({ client }) => {
   const navigate = useNavigate();
@@ -24,15 +25,9 @@ const Client = ({ client }) => {
     if (!client.id) return;
     setLoadingPrefs(true);
 
-    const API_BASE_URL =
-      process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-    fetch(`${API_BASE_URL}/user/${client.id}/preferences`)
+    apiClient.get(`/user/${client.id}/preferences`)
       .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch preferences");
-        return res.json();
-      })
-      .then((data) => {
-        setPreferences(data.data);
+        setPreferences(res.data.data);
         setLoadingPrefs(false);
       })
       .catch(() => {

@@ -1,5 +1,6 @@
 import React from "react";
 import { useParams } from "react-router-dom";
+import { apiClient } from "../../services/api";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -142,19 +143,9 @@ const ClientRecc = () => {
         };
 
         try {
-            // need to change the following to a hostable url instead of localhost
-            const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-            const res = await fetch(`${API_BASE_URL}/user/${routeId}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-            });
+            const res = await apiClient.put(`/user/${routeId}`, payload);
 
-            if (!res.ok) throw new Error("Failed to update client");
-            const result = await res.json();
-            console.log("Update result:", result);
+            console.log("Update result:", res.data);
 
             // apply form values back to display state
             setDispName(`${formFirstName.trim()} ${formLastName.trim()}`|| "");
@@ -163,7 +154,7 @@ const ClientRecc = () => {
             setDispSectors(formSectors);
             handleCloseEdit();
         } catch (err) {
-            alert("Error updating client: " + err.message);
+            alert("Error updating client: " + (err.response?.data?.message || err.message));
         }
     };
 

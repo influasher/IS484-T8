@@ -3,8 +3,6 @@ name: Basic CI Pipeline
 on:
   push:
     branches: [ main, dev ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   # Backend Job
@@ -18,7 +16,8 @@ jobs:
     - name: Set up Python and UV
       uses: astral-sh/setup-uv@v3
       with:
-        python-version: "3.11"
+        version: "latest"
+        enable-cache: true
     
     - name: Install backend dependencies
       run: |
@@ -57,9 +56,15 @@ jobs:
       run: npm ci
     
     - name: Run frontend tests
+      env:
+        REACT_APP_API_BASE_URL: http://localhost:5001
+        REACT_APP_ENV: testing
       run: npm test -- --watchAll=false --passWithNoTests
     
     - name: Build frontend
+      env:
+        REACT_APP_API_BASE_URL: http://localhost:5001
+        REACT_APP_ENV: testing
       run: npm run build
     
     - name: Verify build output
@@ -79,12 +84,13 @@ jobs:
     - name: Set up Python and UV
       uses: astral-sh/setup-uv@v3
       with:
-        python-version: "3.11"
+        version: "latest"
+        enable-cache: true
     
     - name: Install Python linters
       run: |
         cd Backend
-        uv add --dev black flake8
+        uv sync  # This will install dev dependencies from pyproject.toml
     
     - name: Check Python code formatting
       run: |
