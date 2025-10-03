@@ -6,11 +6,11 @@ import uuid
 
 
 class TransactionType(Enum):
-    DEPOSIT = "Deposit"
-    WITHDRAWAL = "Withdrawal"
-    DIVIDEND = "Dividend"
-    BUY = "Buy"
-    SELL = "Sell"
+    DEPOSIT = "DEPOSIT"
+    WITHDRAWAL = "WITHDRAWAL"
+    DIVIDEND = "DIVIDEND"
+    BUY = "BUY"
+    SELL = "SELL"
 
 
 class Currency(Enum):

@@ -69,19 +69,19 @@ def check_if_data_exists(url):
 PREMIUM_SOURCES = {
     "reuters.com": {
         "reliability": 0.90, "paywall": False, "specialization": ["markets", "macro"],
-        "max_results": 4, "min_text_len": 300, "min_ratio": 0.15}
+        "max_results": 2, "min_text_len": 300, "min_ratio": 0.15}
     ,
     "wsj.com": {
         "reliability": 0.88, "paywall": True, "specialization": ["markets", "equities"],
-        "max_results": 3, "min_text_len": 320, "min_ratio": 0.16
+        "max_results": 2, "min_text_len": 320, "min_ratio": 0.16
     },
     "ft.com": {
         "reliability": 0.90, "paywall": True, "specialization": ["global", "fx"],
-        "max_results": 3, "min_text_len": 330, "min_ratio": 0.17
+        "max_results": 2, "min_text_len": 330, "min_ratio": 0.17
     },
     "bloomberg.com": {
         "reliability": 0.92, "paywall": True, "specialization": ["financial", "commodities"],
-        "max_results": 3, "min_text_len": 340, "min_ratio": 0.18
+        "max_results": 2, "min_text_len": 340, "min_ratio": 0.18
     },
     "barrons.com": {
         "reliability": 0.86, "paywall": True, "specialization": ["equities", "analysis"],
@@ -89,15 +89,15 @@ PREMIUM_SOURCES = {
     },
     "marketwatch.com": {
         "reliability": 0.80, "paywall": False, "specialization": ["retail investors"],
-        "max_results": 4, "min_text_len": 290, "min_ratio": 0.14
+        "max_results": 2, "min_text_len": 290, "min_ratio": 0.14
     },
     "cnbc.com": {
         "reliability": 0.78, "paywall": False, "specialization": ["breaking", "tv"],
-        "max_results": 4, "min_text_len": 280, "min_ratio": 0.14
+        "max_results": 2, "min_text_len": 280, "min_ratio": 0.14
     },
     "seekingalpha.com": {
         "reliability": 0.74, "paywall": True, "specialization": ["analysis", "earnings"],
-        "max_results": 3, "min_text_len": 300, "min_ratio": 0.15
+        "max_results": 2, "min_text_len": 300, "min_ratio": 0.15
     },
     "morningstar.com": {
         "reliability": 0.82, "paywall": True, "specialization": ["funds", "valuation"],
@@ -105,11 +105,11 @@ PREMIUM_SOURCES = {
     },
     "investing.com": {
         "reliability": 0.72, "paywall": False, "specialization": ["fx", "macro", "commodities"],
-        "max_results": 3, "min_text_len": 270, "min_ratio": 0.13
+        "max_results": 2, "min_text_len": 270, "min_ratio": 0.13
     },
     "fortune.com": {
         "reliability": 0.78, "paywall": True, "specialization": ["corporate", "leadership"],
-        "max_results": 3, "min_text_len": 300, "min_ratio": 0.15
+        "max_results": 2, "min_text_len": 300, "min_ratio": 0.15
     },
     "nikkei.com": {
         "reliability": 0.85, "paywall": True, "specialization": ["asia", "macro", "supply chain"],
