@@ -1,7 +1,8 @@
 import React from "react";
 import { useParams } from "react-router-dom";
 import ClientRecc from "../../components/clients/ClientRecc";
-import ClientPortfolio from "../../components/clients/ClientPortfolio"
+import ClientPortfolio from "../../components/clients/ClientPortfolio";
+import { apiClient } from "../../services/api";
 import { Box,
   Paper,
   Dialog,
@@ -52,23 +53,13 @@ const RMIndvClientView = () => {
     };
 
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-      const res = await fetch(`${API_BASE_URL}/transactions/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      const res = await apiClient.post("/transactions/create", payload);
 
-      if (!res.ok) throw new Error("Failed to add transaction");
-
-      const result = await res.json();
       alert("Transaction added successfully!");
       handleCloseAdd();
       // Optionally refresh the transaction list
     } catch (err) {
-      alert("Error adding transaction: " + err.message);
+      alert("Error adding transaction: " + (err.response?.data?.message || err.message));
     }
   };
 
