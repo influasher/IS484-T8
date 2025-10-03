@@ -1,14 +1,14 @@
 from sqlalchemy.dialects.postgresql import UUID
 from app import db
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class ClientPerformance(db.Model):
     __tablename__ = 'client_performance'
 
     client_uuid = db.Column(UUID(as_uuid=True), db.ForeignKey('user.id'), primary_key=True, nullable=False)
-    datetime = db.Column(db.DateTime, primary_key=True, nullable=False)
-    daily_performance = db.Column(db.Double, nullable=True)
+    datetime = db.Column(db.DateTime, primary_key=True, nullable=False, default=lambda: datetime.now(timezone.utc))
+    daily_performance = db.Column(db.Double, nullable=False)
 
     client = db.relationship('User', backref='performance_records')
 

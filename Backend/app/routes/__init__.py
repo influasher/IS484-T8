@@ -7,6 +7,7 @@ from app.routes.send_pdf import send_pdf_bp
 from app.routes.feedback import feedback_bp
 from .sentiment_history import sentiment_history_bp
 from .user import user_bp
+from .recommendations import recommendations_bp
 from .transactions import transactions_bp
 from .portfolio import portfolio_bp
 
@@ -21,5 +22,6 @@ def register_routes(app):
     app.register_blueprint(feedback_bp, url_prefix="/feedback")
     app.register_blueprint(sentiment_history_bp, url_prefix="/sentiment_history")
     app.register_blueprint(user_bp, url_prefix="/user")
+    app.register_blueprint(recommendations_bp, url_prefix="/recommendations")
     app.register_blueprint(transactions_bp)
     app.register_blueprint(portfolio_bp)
