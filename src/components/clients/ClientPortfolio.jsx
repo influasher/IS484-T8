@@ -134,7 +134,7 @@ const PortfolioDashboard = ({ clientId }) => {
       const portfolioResult = portfolioResponse.ok ? await portfolioResponse.json() : null;
 
       // Fetch performance history
-      const performanceResponse = await fetch(`${API_BASE_URL}/performance/${clientId}`);
+      const performanceResponse = await fetch(`${API_BASE_URL}/portfolio/performance/${clientId}`);
       const performanceResult = performanceResponse.ok ? await performanceResponse.json() : null;
 
       const calculatedMetrics = calculatePortfolioMetrics(transactions);
