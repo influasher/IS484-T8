@@ -50,6 +50,7 @@ def insert_data_to_db(news, query):
         company_names=news["company_names"],
         regions=news["regions"],
         sectors=news["sectors"],
+        shap=news["shap"]
     )
 
     db.session.add(n)
@@ -94,7 +95,8 @@ PREMIUM_SOURCES = {
     "cnbc.com": {
         "reliability": 0.78, "paywall": False, "specialization": ["breaking", "tv"],
         "max_results": 2, "min_text_len": 280, "min_ratio": 0.14
-    },
+    }
+    ,
     "seekingalpha.com": {
         "reliability": 0.74, "paywall": True, "specialization": ["analysis", "earnings"],
         "max_results": 2, "min_text_len": 300, "min_ratio": 0.15
@@ -118,7 +120,8 @@ PREMIUM_SOURCES = {
     "economist.com": {
         "reliability": 0.90, "paywall": True, "specialization": ["macro", "geopolitics"],
         "max_results": 2, "min_text_len": 350, "min_ratio": 0.19
-    }}
+    }
+}
 
 EXCLUDED_SOURCES = {
     "mix941kmxj.com", "wibx950.com", "cheap-sound.com", "retro1025.com",
@@ -225,6 +228,7 @@ def get_premium_news_sources(query, start_date, end_date):
                 "company_names": details["companies"],
                 "regions": details["regions"],
                 "sectors": details["sectors"],
+                "shap": details["shap"]
             })
 
             if news["description"] in ("", "An error occurred while fetching the article details"):
