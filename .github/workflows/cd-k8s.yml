@@ -62,26 +62,51 @@ jobs:
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }}
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
     
-    - name: Deploy to AKS
+    - name: Deploy to AKS (Hybrid Approach)
       run: |
         # Get AKS credentials
         az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
         
-        # Deploy using kubectl (assumes you have K8s manifests)
-        kubectl set image deployment/sentifinance-backend sentifinance-backend=${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }} || echo "Deployment not found, applying manifests..."
+        # Detect what changed in this commit
+        CHANGED_FILES=$(git diff HEAD~1 --name-only)
+        echo "Changed files: $CHANGED_FILES"
         
-        # Apply K8s manifests if they exist
-        if [ -d "k8s" ]; then
-          kubectl apply -f k8s/
+        # Check if any k8s configuration files changed
+        K8S_CHANGED=$(echo "$CHANGED_FILES" | grep -c "^k8s/" || echo "0")
+        
+        # Check for application code changes (expanded patterns)
+        CODE_CHANGED=$(echo "$CHANGED_FILES" | grep -c -E "^(Backend|src|public|package\.json|package-lock\.json|requirements\.txt|.*Dockerfile.*|pyproject\.toml|uv\.lock)" || echo "0")
+        
+        echo "K8s files changed: $K8S_CHANGED"
+        echo "Code files changed: $CODE_CHANGED"
+        
+        if [ "$K8S_CHANGED" -gt 0 ]; then
+          echo "🔧 K8s configuration changes detected - applying full manifests for safety"
+          kubectl apply -f k8s/ --namespace=sentifinance
+        elif [ "$CODE_CHANGED" -gt 0 ]; then
+          echo "⚡ Only code changes detected - using fast image update"
+          kubectl set image deployment/sentifinance-backend \
+            sentifinance-backend=${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }} \
+            --namespace=sentifinance \
+            || echo "Deployment not found, falling back to full apply..."
+          
+          # Fallback: If deployment doesn't exist, apply manifests
+          if ! kubectl get deployment sentifinance-backend --namespace=sentifinance > /dev/null 2>&1; then
+            echo "📦 Deployment not found - applying manifests for first-time setup"
+            kubectl apply -f k8s/ --namespace=sentifinance
+          fi
+        else
+          echo "❓ No relevant changes detected - applying full manifests to be safe"
+          kubectl apply -f k8s/ --namespace=sentifinance
         fi
     
     - name: Health Check
       run: |
         echo "Waiting for deployment to be ready..."
-        kubectl rollout status deployment/sentifinance-backend --timeout=300s
+        kubectl rollout status deployment/sentifinance-backend --namespace=sentifinance --timeout=300s
         
         # Get service URL (adjust based on your service type)
-        SERVICE_IP=$(kubectl get service sentifinance-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
+        SERVICE_IP=$(kubectl get service sentifinance-service --namespace=sentifinance -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
         
         if [ "$SERVICE_IP" != "pending" ] && [ "$SERVICE_IP" != "" ]; then
           APP_URL="http://$SERVICE_IP"
