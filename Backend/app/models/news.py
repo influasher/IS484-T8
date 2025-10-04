@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSON
 from app import db
 
 
@@ -37,6 +37,7 @@ class News(db.Model):
     sectors = db.Column(
         ARRAY(db.String), nullable=True
     )  # e.g., ["Technology", "Finance"]
+    shap = db.Column(JSON, nullable=True)
 
     def __repr__(self):
         return f"<News {self.title[:30]}...>"

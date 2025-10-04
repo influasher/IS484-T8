@@ -59,17 +59,17 @@ function App() {
           <Route
             path={ROUTES.NEWS}
             element={
-              <ProtectedRoute>
+              // <ProtectedRoute>
                 <NewsPage />
-              </ProtectedRoute>
+              // </ProtectedRoute>
             }
           />
           <Route
             path={ROUTES.INDIVIDUAL_NEWS}
             element={
-              <ProtectedRoute>
+              // <ProtectedRoute>
                 <IndividualNewsPage />
-              </ProtectedRoute>
+              //</ProtectedRoute>
             }
           />
           <Route

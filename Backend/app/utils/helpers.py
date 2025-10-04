@@ -145,6 +145,7 @@ def get_article_details(url, article_html):
             "companies": companies,
             "regions": regions,
             "sectors": sectors,
+            "shap": sentiment["shap"]
         }
 
     except Exception as e:

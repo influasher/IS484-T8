@@ -5,6 +5,7 @@ import re
 import logging
 import json
 import google.generativeai as genai
+import shap
 
 # Configure logging
 logging.basicConfig(
@@ -507,6 +508,10 @@ class SentimentAnalyzer:
         )
         agreement_rate = agreement_count / len(integrated_results)
 
+        # Calculate shap values for FinBert scores
+        shap_explanation = self.get_shap_explanation(preprocessed_text)
+        shap_json = self.shap_explanation_to_json(shap_explanation)
+
         return {
             "numerical_score": final_score,
             "finbert_score": final_finbert_score,
@@ -516,7 +521,31 @@ class SentimentAnalyzer:
             "agreement_rate": agreement_rate,
             "segment_count": len(text_segments),
             "segment_results": integrated_results,
+            "shap": shap_json
         }
+
+    def get_shap_explanation(self, text: str) -> shap.Explanation:
+        """
+        Get SHAP explanation for the sentiment analysis of the text using FinBERT model
+        """
+        explainer = shap.Explainer(self.finbert_pipeline)
+        explanation = explainer([text])
+        return explanation
+
+    def shap_explanation_to_json(self, explanation: shap.Explanation) -> str:
+        """
+        Convert SHAP explanation to JSON serializable format
+        """
+        tokens = explanation.data[0].tolist()
+        shap_values = explanation.values[0].tolist()
+        base_values = explanation.base_values[0].tolist()
+
+        result = {
+            "tokens": tokens,
+            "shap_values": shap_values,
+            "base_values": base_values
+        }
+        return json.dumps(result)
 
 
 # Expose a simple interface for external use
@@ -580,6 +609,7 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
             "classification": result["classification"],
             "confidence": result["confidence"],
             "agreement_rate": result["agreement_rate"],
+            "shap": result["shap"]
         }
 
     elif use_gemini:
@@ -595,6 +625,7 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
             "classification": result["classification"],
             "confidence": result["confidence"],
             "agreement_rate": result["agreement_rate"],
+            "shap": result["shap"]
         }
 
 
@@ -610,6 +641,18 @@ if __name__ == "__main__":
 
     # Test with just FinBERT for simplicity
     finbert_only = analyzer.analyze_with_finbert(sample_text)
+
+    # explainer = shap.Explainer(analyzer.finbert_pipeline)
+    # explanation = explainer([sample_text])
+    # json_data = shap_explanation_to_json(explanation)
+    # print(json_data)
+    # print(explanation[:2])
+    # shap.plots.text(shap_values[0], display=False)  # Get HTML object
+    # html = shap.plots.text(shap_values[0], display=False)
+    # with open("shap_text_explanation.html", "w") as f:
+    #     f.write(html)  # No .data needed
+
+    # shap.save_html(str(out_path), html)
     print("=== FinBERT Analysis Only ===")
     print(f"Sentiment: {finbert_only['classification']}")
     print(f"Score: {finbert_only['numerical_score']:.2f}")
@@ -629,33 +672,35 @@ if __name__ == "__main__":
     """
 
     # Test comparison between FinBERT and both models
-    try:
-        finbert_result = analyzer.analyze_with_finbert(sample_text)
-
-        # Set your API keys here for quick testing
-        analyzer.gemini_client = None  # Reset to force initialization
-        analyzer._load_gemini()
-        gemini_result = analyzer.analyze_with_gemini(sample_text)
-
-        print("\n=== Model Comparison ===")
-        print(f"FinBERT Classification: {finbert_result['classification']}")
-        print(f"FinBERT Score: {finbert_result['numerical_score']:.2f}")
-        print(f"Gemini Classification: {gemini_result['classification']}")
-        print(f"Gemini Score: {gemini_result['numerical_score']:.2f}")
-
-        # Uncomment to also test OpenAI (replace YOUR_OPENAI_API_KEY_HERE with your actual key)
-
-        openai_result = analyzer.analyze_with_openai(sample_text)
-        print(f"OpenAI Classification: {openai_result['classification']}")
-        print(f"OpenAI Score: {openai_result['numerical_score']:.2f}")
-
-        # Integrated results
-        integrated = analyzer.weighted_integration(finbert_result, gemini_result)
-        print("\n=== Integrated Result ===")
-        print(f"Classification: {integrated['classification']}")
-        print(f"Score: {integrated['numerical_score']:.2f}")
-        print(f"Models agree: {integrated['models_agree']}")
-        print(f"Confidence: {integrated['confidence']:.2f}")
-
-    except Exception as e:
-        print(f"Error during comparison test: {e}")
+    # try:
+    #     finbert_result = analyzer.analyze_with_finbert(sample_text)
+    #
+    #     # Set your API keys here for quick testing
+    #     # analyzer.gemini_client = None  # Reset to force initialization
+    #     # analyzer._load_gemini()
+    #     # gemini_result = analyzer.analyze_with_gemini(sample_text)
+    #
+    #     # shap.Explainer()
+    #
+    #     print("\n=== Model Comparison ===")
+    #     print(f"FinBERT Classification: {finbert_result['classification']}")
+    #     print(f"FinBERT Score: {finbert_result['numerical_score']:.2f}")
+    #     # print(f"Gemini Classification: {gemini_result['classification']}")
+    #     # print(f"Gemini Score: {gemini_result['numerical_score']:.2f}")
+    #
+    #     # Uncomment to also test OpenAI (replace YOUR_OPENAI_API_KEY_HERE with your actual key)
+    #
+    #     # openai_result = analyzer.analyze_with_openai(sample_text)
+    #     # print(f"OpenAI Classification: {openai_result['classification']}")
+    #     # print(f"OpenAI Score: {openai_result['numerical_score']:.2f}")
+    #
+    #     # Integrated results
+    #     # integrated = analyzer.weighted_integration(finbert_result, gemini_result)
+    #     # print("\n=== Integrated Result ===")
+    #     # print(f"Classification: {integrated['classification']}")
+    #     # print(f"Score: {integrated['numerical_score']:.2f}")
+    #     # print(f"Models agree: {integrated['models_agree']}")
+    #     # print(f"Confidence: {integrated['confidence']:.2f}")
+    #
+    # except Exception as e:
+    #     print(f"Error during comparison test: {e}")
