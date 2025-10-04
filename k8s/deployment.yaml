@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentifinance-backend
+  labels:
+    app: sentifinance-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sentifinance-backend
+  template:
+    metadata:
+      labels:
+        app: sentifinance-backend
+    spec:
+      containers:
+      - name: sentifinance-backend
+        image: sentifinancetwo.azurecr.io/sentifinance-backend:latest
+        ports:
+        - containerPort: 5001
+        env:
+        - name: FLASK_ENV
+          value: "production"
+        - name: APP_DEBUG
+          value: "False"
+        - name: PORT
+          value: "5001"
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: secret-key
+        - name: DATABASE_URI
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: database-uri
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: jwt-secret-key
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: gemini-api-key
+        - name: GEMINI_API_KEY_SW
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: gemini-api-key-sw
+        - name: OPEN_AI_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: openai-key
+        - name: MAIL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: mail-username
+        - name: MAIL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: mail-password
+        - name: AZURE_COMMUNICATION_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: azure-communication-connection-string
+        - name: AZURE_EMAIL_SENDER
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: azure-email-sender
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
