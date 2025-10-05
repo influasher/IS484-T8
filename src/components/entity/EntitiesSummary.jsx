@@ -19,9 +19,11 @@ const Entities = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("name-asc");
   const [currentPage, setCurrentPage] = useState(1);
+  const [filterOperator, setFilterOperator] = useState("");
+  const [filterValue, setFilterValue] = useState("");
   const entitiesPerPage = 5;
 
-  const url = `/entities/?page=${currentPage}&per_page=${entitiesPerPage}&sort_order=${sortOrder}&search=${encodeURIComponent(searchTerm)}`;
+  const url = `/entities/?page=${currentPage}&per_page=${entitiesPerPage}&sort_order=${sortOrder}&search=${encodeURIComponent(searchTerm)}&filter_operator=${encodeURIComponent(filterOperator)}&filter_value=${encodeURIComponent(filterValue)}`;
   const { data, loading, error } = useFetch(url);
   
   const entityData = data ? data.data.entities : [];
@@ -50,6 +52,13 @@ const Entities = () => {
   // Handle pagination
   const handlePageChange = (event, pageNumber) => {
     setCurrentPage(pageNumber);
+  };
+
+  // Handle advanced filter change
+  const handleFilterChange = (operator, value) => {
+    setFilterOperator(operator);
+    setFilterValue(value);
+    setCurrentPage(1);
   };
 
   // Render entities table body
@@ -128,13 +137,17 @@ const Entities = () => {
         onPageChange={handlePageChange}
         onSearchChange={handleSearchChange}
         onSortChange={handleSortChange}
+        onFilterChange={handleFilterChange}
         searchTerm={searchTerm}
         sortOrder={sortOrder}
+        filterOperator={filterOperator}
+        filterValue={filterValue}
         searchPlaceholder="Search entities by name, ticker, or summary..."
         sortOptions={sortOptions}
         renderTableBody={renderEntitiesTableBody}
         itemsPerPage={entitiesPerPage}
         entityType="entities"
+        enableAdvancedFilter={true}
       />
     </Container>
   );

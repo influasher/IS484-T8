@@ -41,8 +41,10 @@ def get_entities():
     sort_order = request.args.get(
         "sort_order", "name-asc"
     )  # Get sorting params - Default to ascending
+    filter_operator = request.args.get("filter_operator", None)  # Get filter operator
+    filter_value = request.args.get("filter_value", None)  # Get filter value
 
-    entities_list = get_all_entities(page, per_page, sort_order, search_term)
+    entities_list = get_all_entities(page, per_page, sort_order, search_term, filter_operator, filter_value)
 
     if not entities_list:
         return format_response([], "Entities not found", 404)
