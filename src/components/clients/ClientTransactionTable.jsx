@@ -28,6 +28,7 @@ import { Search, TrendingUp, AccountBalance, Wallet } from '@mui/icons-material'
 import { red } from '@mui/material/colors';
 
 const ClientTransactionTable = ({ transactionData = [], loading = false }) => {
+  console.log(transactionData)
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('date_desc');
   const [currentPages, setCurrentPages] = useState({
@@ -66,21 +67,6 @@ const ClientTransactionTable = ({ transactionData = [], loading = false }) => {
       color: isPositive ? "green" : 'red'
     };
   };
-  
-  const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return 'success';
-      case 'processing':
-        return 'warning';
-      case 'pending':
-        return 'info';
-      case 'failed':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
 
   // Categorize transactions
   const categorizeTransactions = (data) => {
@@ -108,7 +94,6 @@ const ClientTransactionTable = ({ transactionData = [], loading = false }) => {
         transaction.source.toLowerCase().includes(search.toLowerCase()) ||
         transaction.type.toLowerCase().includes(search.toLowerCase()) ||
         transaction.description.toLowerCase().includes(search.toLowerCase()) ||
-        transaction.status.toLowerCase().includes(search.toLowerCase()) ||
         transaction.id.toLowerCase().includes(search.toLowerCase())
       );
     }
@@ -219,8 +204,10 @@ const ClientTransactionTable = ({ transactionData = [], loading = false }) => {
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Source</TableCell>
+                {category == "trading" && <TableCell sx={{ fontWeight: 600 }}>Qty</TableCell>}
+                {category == "trading" && <TableCell sx={{ fontWeight: 600 }}>Price per Share</TableCell>}
                 <TableCell sx={{ fontWeight: 600 }}>Amount</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Desc</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -261,6 +248,16 @@ const ClientTransactionTable = ({ transactionData = [], loading = false }) => {
                           {transaction.source}
                         </Typography>
                       </TableCell>
+
+                      {category == "trading" && <TableCell>
+                        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                        {transaction.quantity}
+                        </Typography>
+                        </TableCell>}
+                      {category == "trading" && <TableCell><Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                        {transaction.price_per_share}
+                        </Typography>
+                        </TableCell>}
                       
                       <TableCell>
                         <Typography 
@@ -274,15 +271,21 @@ const ClientTransactionTable = ({ transactionData = [], loading = false }) => {
                           {isPositive ? '+' : '-'}{formattedAmount}
                         </Typography>
                       </TableCell>
-                      
+
                       <TableCell>
-                        <Chip
-                          label={transaction.status}
-                          size="small"
-                          color={getStatusColor(transaction.status)}
-                          variant="outlined"
-                          sx={{ fontSize: '0.75rem' }}
-                        />
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            maxWidth: 1200,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            fontSize: '0.875rem'
+                          }}
+                          title={transaction.description}
+                        >
+                          {transaction.description}
+                        </Typography>
                       </TableCell>
                     </TableRow>
                   );

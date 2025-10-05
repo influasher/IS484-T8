@@ -336,7 +336,8 @@ const PortfolioDashboard = ({ clientId }) => {
         type: txn.type,
         currency: txn.currency,
         amount: txn.amount,
-        status: "Completed", // You may need to add status field to your DB
+        price_per_share: txn.price_per_share,
+        quantity: txn.quantity,
         description: txn.desc
       }));
 
@@ -446,19 +447,19 @@ const PortfolioDashboard = ({ clientId }) => {
   const yAxisDomain = calculateYAxisDomain(portfolioValues, irxValues);
 
   // Log final data for debugging
-  console.log("=== CHART DATA DEBUG ===");
-  console.log("Portfolio values:", portfolioValues);
-  console.log("IRX values:", irxValues);
-  console.log("Portfolio min/max:", Math.min(...portfolioValues), Math.max(...portfolioValues));
-  console.log("IRX min/max:", Math.min(...irxValues), Math.max(...irxValues));
-  console.log("Final Y-axis domain:", yAxisDomain);
-  console.log("Y-axis config will be:", {
-    label: "Percentage Change (%)",
-    min: yAxisDomain[0],
-    max: yAxisDomain[1],
-    domain: yAxisDomain
-  });
-  console.log("=== END CHART DEBUG ===");
+  // console.log("=== CHART DATA DEBUG ===");
+  // console.log("Portfolio values:", portfolioValues);
+  // console.log("IRX values:", irxValues);
+  // console.log("Portfolio min/max:", Math.min(...portfolioValues), Math.max(...portfolioValues));
+  // console.log("IRX min/max:", Math.min(...irxValues), Math.max(...irxValues));
+  // console.log("Final Y-axis domain:", yAxisDomain);
+  // console.log("Y-axis config will be:", {
+  //   label: "Percentage Change (%)",
+  //   min: yAxisDomain[0],
+  //   max: yAxisDomain[1],
+  //   domain: yAxisDomain
+  // });
+  // console.log("=== END CHART DEBUG ===");
 
   // Check if we have performance data to display
   const hasPerformanceData = performance && performance.length > 0;
