@@ -31,7 +31,7 @@ def get_all_ticker_entities():
     return ticker_list
 
 
-def get_all_entities(page=1, per_page=4, sort_order="name-asc", search_term=None):
+def get_all_entities(page=1, per_page=4, sort_order="name-asc", search_term=None, filter_operator=None, filter_value=None):
     """Get paginated and sorted entities by ticker"""
 
     query = Entity.query
@@ -46,6 +46,24 @@ def get_all_entities(page=1, per_page=4, sort_order="name-asc", search_term=None
                 Entity.classification.ilike(f"%{search_term}%"),
             )
         )
+
+    # Apply advanced filter (if filter_operator and filter_value exist)
+    if filter_operator and filter_value:
+        try:
+            filter_val = float(filter_value)
+            if filter_operator == ">":
+                query = query.filter(Entity.sentiment_score > filter_val)
+            elif filter_operator == ">=":
+                query = query.filter(Entity.sentiment_score >= filter_val)
+            elif filter_operator == "=":
+                query = query.filter(Entity.sentiment_score == filter_val)
+            elif filter_operator == "<=":
+                query = query.filter(Entity.sentiment_score <= filter_val)
+            elif filter_operator == "<":
+                query = query.filter(Entity.sentiment_score < filter_val)
+        except (ValueError, TypeError):
+            # If filter_value cannot be converted to float, skip filtering
+            pass
 
     # Apply sorting
 
