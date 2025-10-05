@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Box, Card, CardContent, Stack } from '@mui/material';
+import { Typography, Box, Card, CardContent, Stack, Grid, Divider, useTheme, useMediaQuery } from '@mui/material';
 import { AccountBalanceWallet, TrendingUp } from '@mui/icons-material';
 import Watchlist from '../../components/ui/Watchlist';
 import ClientPortfolio from '../../components/clients/ClientPortfolio';
@@ -11,6 +11,9 @@ function ClientHomePage() {
   const [walletBalance, setWalletBalance] = useState(null);
   const [totalPortfolioValue, setTotalPortfolioValue] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   console.log('ClientHomePage rendered, clientId:', clientId);
 
@@ -89,43 +92,92 @@ function ClientHomePage() {
         Hello, {getUserFullName()}
       </Typography>
 
-      {/* Wallet Balance Cards */}
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 4 }}>
-        <Card sx={{ flex: 1, bgcolor: 'secondary' }}>
-          <CardContent>
-            <Stack direction="row" alignItems="center" spacing={2}>
-              <AccountBalanceWallet sx={{ fontSize: 40, color: 'secondary' }} />
+      {/* Mobile Wallet Balance Cards */}
+      {isMobile && (
+        <Stack direction="column" spacing={2} sx={{ mb: 4 }}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" alignItems="center" spacing={2}>
+                <Box>
+                  <Typography variant="body2" sx={{ opacity: 0.8, mb: 1 }}>
+                    Cash Balance
+                  </Typography>
+                  <Typography variant="h5">
+                    {loading ? '...' : `$${(walletBalance || 0).toFixed(2)} USD`}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <Stack direction="row" alignItems="center" spacing={2}>
+                <Box>
+                  <Typography variant="body2" sx={{ opacity: 0.8, mb: 1 }}>
+                    Total Portfolio Value
+                  </Typography>
+                  <Typography variant="h5">
+                    {loading ? '...' : `$${(totalPortfolioValue || 0).toFixed(2)} USD`}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Stack>
+      )}
+
+      {/* Desktop/Tablet Layout */}
+      {!isMobile ? (
+        <Stack direction="row" sx={{ width: "100%" }}>
+          <ClientPortfolio clientId={clientId} />
+
+          {/* Divider between Left & Right */}
+          <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
+
+          {/* RIGHT: Sticky Sidebar */}
+          <Stack
+            direction="column"
+            sx={{
+              flex: 1.2,
+              maxWidth: 400,
+              position: 'sticky',
+              top: "15%",
+              alignSelf: 'flex-start',
+              height: 'fit-content'
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
               <Box>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                   Cash Balance
                 </Typography>
-                <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                  {loading ? '...' : `$${(walletBalance || 0).toFixed(2)} SGD`}
+                <Typography variant="h5">
+                  {loading ? '...' : `$${(walletBalance || 0).toFixed(2)} USD`}
                 </Typography>
               </Box>
             </Stack>
-          </CardContent>
-        </Card>
 
-        <Card sx={{ flex: 1, bgcolor: 'secondary' }}>
-          <CardContent>
+            <Divider sx={{ my: 2 }} />
+
             <Stack direction="row" alignItems="center" spacing={2}>
-              <TrendingUp sx={{ fontSize: 40, color: 'secondary' }} />
               <Box>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                   Total Portfolio Value
                 </Typography>
-                <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                  {loading ? '...' : `$${(totalPortfolioValue || 0).toFixed(2)} SGD`}
+                <Typography variant="h5">
+                  {loading ? '...' : `$${(totalPortfolioValue || 0).toFixed(2)} USD`}
                 </Typography>
               </Box>
             </Stack>
-          </CardContent>
-        </Card>
-      </Stack>
-
-      <ClientPortfolio clientId={clientId} />
-      {/* <Watchlist /> */}
+          </Stack>
+        </Stack>
+      ) : (
+        /* Mobile Layout - Only Portfolio */
+        <Box sx={{ width: "100%" }}>
+          <ClientPortfolio clientId={clientId} />
+        </Box>
+      )}
     </Box>
   );
 }
