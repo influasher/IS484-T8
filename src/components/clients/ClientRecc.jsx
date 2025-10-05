@@ -1,31 +1,11 @@
 import React from "react";
 import { useParams } from "react-router-dom";
 import { apiClient } from "../../services/api";
-import Box from "@mui/material/Box";
-import Paper from "@mui/material/Paper";
-import Typography from "@mui/material/Typography";
-import Chip from "@mui/material/Chip";
-import IconButton from "@mui/material/IconButton";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
-import Alert from "@mui/material/Alert";
-import Grid from "@mui/material/Grid";
-import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
-import EditRoundedIcon from "@mui/icons-material/EditRounded";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
-import HealthAndSafetyIcon from "@mui/icons-material/HealthAndSafety";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
-import TextField from "@mui/material/TextField";
-import FormControl from "@mui/material/FormControl";
-import InputLabel from "@mui/material/InputLabel";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
-import ChipMUI from "@mui/material/Chip";
-import Slider from "@mui/material/Slider";
+import { Box, Paper, Typography, Chip, IconButton, Button, CircularProgress, Alert, Grid, Dialog, DialogTitle, 
+DialogContent, DialogActions, TextField, FormControl, InputLabel, Select, MenuItem, Slider } from "@mui/material";
+import { DownloadOutlined as DownloadOutlinedIcon, EditRounded as EditRoundedIcon, TrendingUp as TrendingUpIcon, 
+TrendingDown as TrendingDownIcon, HealthAndSafety as HealthAndSafetyIcon } from "@mui/icons-material";
+import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import useFetch from "../../hooks/useFetch";
 import recommendationService from "../../services/recommendationService";
 import { putData } from "../../services/api";
@@ -58,6 +38,31 @@ const RISK_VALUES = {
 // Reverse mapping for getting string from index
 const getRiskLabelFromIndex = (index) => RISK_LABELS[index] || "Moderate";
 
+// Sector color mapping
+const SECTOR_COLORS = {
+    "Information Technology": "#2196F3",
+    "Financials": "#FF9800",
+    "Health Care": "#4CAF50",
+    "Consumer Staples": "#9C27B0",
+    "Industrials": "#795548",
+    "Materials": "#607D8B",
+    "Communication Services": "#E91E63",
+    "Consumer Discretionary": "#00BCD4",
+    "Utilities": "#FFEB3B",
+    "Energy": "#F44336",
+    "Real Estate": "#8BC34A",
+    "Automotive": "#3F51B5",
+    "Technology": "#2196F3",
+    "Finance": "#FF9800",
+    "Healthcare": "#4CAF50",
+};
+
+const getSectorColor = (sectors) => {
+    if (!sectors || sectors.length === 0) return '#9e9e9e';
+    // Return the color of the first sector if available
+    return SECTOR_COLORS[sectors[0]] || '#9e9e9e';
+};
+
 const getActionColor = (action) => {
     return action === 'BUY' ? '#4caf50' : '#f44336';
 };
@@ -77,15 +82,104 @@ const getHealthScoreColor = (score) => {
     return '#f44336';
 };
 
+// Bubble Chart Component
+const RecommendationBubbleChart = ({ recommendations, onBubbleClick, selectedRecommendation }) => {
+    // Transform recommendations into bubble chart data
+    const chartData = recommendations.map((rec) => ({
+        x: rec.sentiment_score || 0,
+        y: rec.recommendation_confidence * 100 || 50,
+        z: (rec.recommendation_confidence * 100) * 5, // Size based on confidence
+        name: rec.ticker,
+        fullName: rec.entity_name,
+        sector: rec.sector,
+        action: rec.action,
+        entity_id: rec.entity_id,
+        isSelected: selectedRecommendation === rec.entity_id,
+    }));
+
+    const CustomTooltip = ({ active, payload }) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            return (
+                <Paper sx={{ p: 1.5}}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                        {data.fullName} ({data.name})
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                        Sentiment: {data.x.toFixed(1)}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                        Confidence: {data.y.toFixed(1)}%
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                        Sector: {data.sector && data.sector.length > 0 ? data.sector.join(', ') : 'N/A'}
+                    </Typography>
+                    <Typography variant="caption" display="block" sx={{ color: getActionColor(data.action) }}>
+                        Action: {data.action}
+                    </Typography>
+                </Paper>
+            );
+        }
+        return null;
+    };
+
+    return (
+        <ResponsiveContainer width="100%" height={400}>
+            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                <XAxis
+                    type="number"
+                    dataKey="x"
+                    name="Sentiment Score"
+                    domain={[-100, 100]}
+                    label={{ value: 'Sentiment Score', position: 'insideBottom', offset: -10 }}
+                />
+                <YAxis
+                    type="number"
+                    dataKey="y"
+                    name="Confidence"
+                    domain={[0, 100]}
+                    label={{ value: 'Confidence (%)', angle: -90, position: 'insideLeft' }}
+                />
+                <ZAxis type="number" dataKey="z" range={[100, 1000]} />
+                <Tooltip content={<CustomTooltip />} />
+                <Scatter
+                    data={chartData}
+                    onClick={(data) => onBubbleClick(data.entity_id)}
+                    style={{ cursor: 'pointer' }}
+                >
+                    {chartData.map((entry, index) => (
+                        <Cell
+                            key={`cell-${index}`}
+                            fill={getSectorColor(entry.sector)}
+                            opacity={entry.isSelected ? 1 : 0.7}
+                            stroke={entry.isSelected ? '#000' : 'none'}
+                            strokeWidth={entry.isSelected ? 3 : 0}
+                        />
+                    ))}
+                </Scatter>
+            </ScatterChart>
+        </ResponsiveContainer>
+    );
+};
+
 // Enhanced recommendation card
-const RecommendationCard = ({ recommendation }) => {
+const RecommendationCard = ({ recommendation, isHighlighted }) => {
     const actionColor = getActionColor(recommendation.action);
     const riskColor = getRiskColor(recommendation.risk_level);
 
     return (
         <Paper
             variant="outlined"
-            sx={{ borderRadius: 2, bgcolor: "white", px: 2, py: 2, width: "100%" }}
+            id={`rec-${recommendation.entity_id}`}
+            sx={{
+                borderRadius: 2,
+                bgcolor: isHighlighted ? "#fffde7" : "white",
+                px: 2,
+                py: 2,
+                width: "100%",
+                border: isHighlighted ? "2px solid #fbc02d" : "1px solid rgba(0, 0, 0, 0.12)",
+                transition: "all 0.3s ease",
+            }}
         >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                 <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: 0.2 }}>
@@ -190,6 +284,9 @@ const ClientRecc = () => {
     const [updateError, setUpdateError] = React.useState('');
     const [isUpdating, setIsUpdating] = React.useState(false);
 
+    // Bubble chart selection state
+    const [selectedRecommendation, setSelectedRecommendation] = React.useState(null);
+
     const handleOpenEdit = () => {
         // Pre-fill form with current client and preferences data
         setFormData({
@@ -251,6 +348,16 @@ const ClientRecc = () => {
             ...prev,
             sectors: prev.sectors.filter(s => s !== sector)
         }));
+    };
+
+    // Handle bubble chart click
+    const handleBubbleClick = (entityId) => {
+        setSelectedRecommendation(entityId);
+        // Scroll to the recommendation card
+        const element = document.getElementById(`rec-${entityId}`);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
     };
 
 
@@ -387,48 +494,118 @@ const ClientRecc = () => {
                     </IconButton>
                 </Box>
             </Box>
-           
 
-            {/* Big white recommendations card */}
-            <Paper elevation={1} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 }, bgcolor: "white" }}>
-                <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 2 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                        Today&apos;s Top Recommendations
-                    </Typography>
+            {/* Header with Generate Report button */}
+            <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                    Today&apos;s Top Recommendations
+                </Typography>
 
-                    <Box sx={{ ml: "auto" }}>
-                        <Button
-                            variant="contained"
-                            onClick={handleGeneratePDF}
-                            disabled={isGeneratingPDF}
-                            sx={{
-                                bgcolor: "#212121",
-                                color: "#fff",
-                                textTransform: "none",
-                                borderRadius: 2,
-                                px: 2,
-                                "&:hover": { bgcolor: "#111" },
-                            }}
-                            startIcon={isGeneratingPDF ? <CircularProgress size={16} color="inherit" /> : <DownloadOutlinedIcon />}
-                        >
-                            {isGeneratingPDF ? "Generating..." : "Generate Report"}
-                        </Button>
-                    </Box>
+                <Box sx={{ ml: "auto" }}>
+                    <Button
+                        variant="contained"
+                        onClick={handleGeneratePDF}
+                        disabled={isGeneratingPDF}
+                        sx={{
+                            bgcolor: "#212121",
+                            color: "#fff",
+                            textTransform: "none",
+                            borderRadius: 2,
+                            px: 2,
+                            "&:hover": { bgcolor: "#111" },
+                        }}
+                        startIcon={isGeneratingPDF ? <CircularProgress size={16} color="inherit" /> : <DownloadOutlinedIcon />}
+                    >
+                        {isGeneratingPDF ? "Generating..." : "Generate Report"}
+                    </Button>
                 </Box>
+            </Box>
+
+            {/* Two column layout: Bubble Chart (top/left) and Recommendations (bottom/right) */}
+            <Box sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1.2fr" },
+                gap: 3
+            }}>
+                {/* Bubble Chart */}
+                <Paper elevation={1} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 }, bgcolor: "white" }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                        Recommendation Landscape
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
+                        Click on a bubble to highlight the recommendation. Size = Confidence, Color = Sector
+                    </Typography>
+                    {clientRecommendations.length === 0 ? (
+                        <Alert severity="info">
+                            No data to display
+                        </Alert>
+                    ) : (
+                        <>
+                            <RecommendationBubbleChart
+                                recommendations={clientRecommendations}
+                                onBubbleClick={handleBubbleClick}
+                                selectedRecommendation={selectedRecommendation}
+                            />
+                            {/* Sector Legend */}
+                            <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid #e0e0e0" }}>
+                                <Typography variant="caption" sx={{ fontWeight: 600, mb: 1, display: "block" }}>
+                                    Sector Legend:
+                                </Typography>
+                                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                                    {[...new Set(clientRecommendations
+                                        .filter(rec => rec.sector && rec.sector.length > 0)
+                                        .flatMap(rec => rec.sector)
+                                    )].map((sector) => (
+                                        <Box
+                                            key={sector}
+                                            sx={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 0.5,
+                                            }}
+                                        >
+                                            <Box
+                                                sx={{
+                                                    width: 12,
+                                                    height: 12,
+                                                    borderRadius: "50%",
+                                                    bgcolor: SECTOR_COLORS[sector] || "#9e9e9e",
+                                                }}
+                                            />
+                                            <Typography variant="caption" sx={{ fontSize: "0.7rem" }}>
+                                                {sector}
+                                            </Typography>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </Box>
+                        </>
+                    )}
+
+                </Paper>
 
                 {/* Recommendations List */}
-                {clientRecommendations.length === 0 ? (
-                    <Alert severity="info">
-                        No recommendations available for this client at the moment.
-                    </Alert>
-                ) : (
-                    <Box sx={{ display: "grid", gap: 2.25 }}>
-                        {clientRecommendations.map((rec, index) => (
-                            <RecommendationCard key={`${rec.entity_id}-${index}`} recommendation={rec} />
-                        ))}
-                    </Box>
-                )}
-            </Paper>
+                <Paper elevation={1} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 }, bgcolor: "white" }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                        Recommendations
+                    </Typography>
+                    {clientRecommendations.length === 0 ? (
+                        <Alert severity="info">
+                            No recommendations available for this client at the moment.
+                        </Alert>
+                    ) : (
+                        <Box sx={{ display: "grid", gap: 2.25, maxHeight: "600px", overflowY: "auto", pr: 1 }}>
+                            {clientRecommendations.map((rec, index) => (
+                                <RecommendationCard
+                                    key={`${rec.entity_id}-${index}`}
+                                    recommendation={rec}
+                                    isHighlighted={selectedRecommendation === rec.entity_id}
+                                />
+                            ))}
+                        </Box>
+                    )}
+                </Paper>
+            </Box>
 
             {/* Edit Client Modal */}
             <Dialog

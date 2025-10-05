@@ -43,6 +43,7 @@ class Recommendation:
     current_allocation_percent: Optional[float] = None
     current_price: Optional[float] = None
     risk_level: str = "MODERATE"
+    sector: Optional[List[str]] = None
 
 
 class EnhancedCashCalculator:
@@ -276,7 +277,8 @@ class RecommendationEngine:
             suggested_amount=practical_amount,
             suggested_allocation_percent=(practical_amount / total_portfolio_value) * 100 if total_portfolio_value > 0 else 0,
             current_price=current_price,
-            risk_level=self._assess_risk_level(entity)
+            risk_level=self._assess_risk_level(entity),
+            sector=entity.sector
         )
 
     def _evaluate_sell_opportunity(self, position: ClientPortfolio,
@@ -393,7 +395,8 @@ class RecommendationEngine:
             suggested_amount=practical_sell_amount,
             current_position_value=position.current_market_value,
             current_allocation_percent=position.portfolio_allocation_percent,
-            risk_level=self._assess_risk_level(entity)
+            risk_level=self._assess_risk_level(entity),
+            sector=entity.sector
         )
 
     def _calculate_recommendation_confidence(self, entity: Entity, preferences: ClientPreferences,
@@ -452,7 +455,8 @@ def get_client_recommendations(client_id: str, limit: int = 10) -> List[Dict]:
             'current_position_value': rec.current_position_value,
             'current_allocation_percent': rec.current_allocation_percent,
             'current_price': rec.current_price,
-            'risk_level': rec.risk_level
+            'risk_level': rec.risk_level,
+            'sector': rec.sector
         }
         for rec in recommendations
     ]
