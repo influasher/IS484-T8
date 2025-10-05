@@ -7,8 +7,6 @@ import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../routes";
 import { getData } from "../../services/api";
 
-import { getData } from "../../services/api";
-
 const Client = ({ client }) => {
   const navigate = useNavigate();
   const handleOpen = () => {
