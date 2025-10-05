@@ -521,63 +521,6 @@ const ClientRecc = () => {
                             />
                         </Box>
 
-                        <TextField
-                            label="Stop Loss Tolerance (%)"
-                            type="number"
-                            fullWidth
-                            value={formData.email}
-                            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                            disabled
-                            helperText="Email cannot be changed from this view"
-                        />
-
-                        {/* Risk Management */}
-                        <Typography variant="h6" sx={{ fontWeight: 600, mt: 2 }}>
-                            Risk Management
-                        </Typography>
-
-                        <Box sx={{ px: 0, py: 1, mx: 1.5 }}>
-                            <Typography variant="body1" sx={{ mb: 1, fontWeight: 500 }}>
-                                Risk Profile
-                            </Typography>
-                            <Slider
-                                value={RISK_VALUES[formData.risk_cap] !== undefined ? RISK_VALUES[formData.risk_cap] : 2}
-                                min={0}
-                                max={4}
-                                step={1}
-                                marks={[
-                                    { value: 0, label: "Zero" },
-                                    { value: 1, label: "Medium" },
-                                    { value: 2, label: "Moderate" },
-                                    { value: 3, label: "High" },
-                                    { value: 4, label: "Very High" },
-                                ]}
-                                valueLabelDisplay="auto"
-                                valueLabelFormat={(value) => getRiskLabelFromIndex(value)}
-                                onChange={(_, val) => {
-                                    const newRiskCap = getRiskLabelFromIndex(val);
-                                    // Get risk profile defaults for dynamic updates
-                                    const riskDefaults = {
-                                        'Zero': { max_single: 5.0, max_sector: 20.0, min_cash: 25.0 },
-                                        'Medium': { max_single: 10.0, max_sector: 30.0, min_cash: 15.0 },
-                                        'Moderate': { max_single: 15.0, max_sector: 40.0, min_cash: 10.0 },
-                                        'High': { max_single: 20.0, max_sector: 50.0, min_cash: 5.0 },
-                                        'Very High': { max_single: 25.0, max_sector: 60.0, min_cash: 2.0 }
-                                    };
-                                    const defaults = riskDefaults[newRiskCap] || riskDefaults['Moderate'];
-
-                                    setFormData(prev => ({
-                                        ...prev,
-                                        risk_cap: newRiskCap,
-                                        max_single_position_percent: defaults.max_single,
-                                        max_sector_allocation_percent: defaults.max_sector,
-                                        min_cash_reserve_percent: defaults.min_cash
-                                    }));
-                                }}
-                                sx={{ mx: 1, width: "calc(100% - 20px)" }}
-                            />
-                        </Box>
-
                         {/* <TextField
                             label="Stop Loss Tolerance (%)"
                             type="number"
