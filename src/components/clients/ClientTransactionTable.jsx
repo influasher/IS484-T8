@@ -214,7 +214,7 @@ const ClientTransactionTable = ({ transactionData = [], loading = false }) => {
       />
       <CardContent sx={{ pt: 0 }}>
         <TableContainer>
-          <Table size="small">
+          <Table size="small" aria-label={`${title} table`}>
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>

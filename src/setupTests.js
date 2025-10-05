@@ -14,3 +14,7 @@ global.ResizeObserver = ResizeObserver;
 
 import axios from 'axios';
 jest.mock('axios');
+
+if (typeof global.structuredClone === "undefined") {
+  global.structuredClone = (val) => JSON.parse(JSON.stringify(val));
+}

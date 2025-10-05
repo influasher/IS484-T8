@@ -519,7 +519,7 @@ const ClientRecc = () => {
                             />
                         </Box>
 
-                        <TextField
+                        {/* <TextField
                             label="Stop Loss Tolerance (%)"
                             type="number"
                             fullWidth
@@ -527,7 +527,7 @@ const ClientRecc = () => {
                             onChange={(e) => setFormData(prev => ({ ...prev, stop_loss_tolerance: parseFloat(e.target.value) }))}
                             helperText="Maximum loss percentage before selling (e.g., -10 for 10% loss)"
                             inputProps={{ step: 0.1, max: 0 }}
-                        />
+                        /> */}
 
                         {/* Investment Preferences */}
                         <Typography variant="h6" sx={{ fontWeight: 600, mt: 2 }}>
