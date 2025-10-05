@@ -47,7 +47,7 @@ describe("ClientTransactionTable", () => {
     expect(screen.getByText(/Date/i)).toBeInTheDocument();
     expect(screen.getByText(/Source/i)).toBeInTheDocument();
     expect(screen.getByText(/Amount/i)).toBeInTheDocument();
-    expect(screen.getByText(/Status/i)).toBeInTheDocument();
+    expect(screen.getByText(/Desc/i)).toBeInTheDocument();
   });
 
   test("renders transactions correctly in the active tab", async () => {
@@ -72,8 +72,8 @@ describe("ClientTransactionTable", () => {
     const txnRow = rows.find(
       (row) =>
         row.textContent.includes("Trading") &&
-        row.textContent.includes("SGD 2,000") &&
-        row.textContent.includes('Completed')           
+        row.textContent.includes("-SGD 2,000") &&
+        row.textContent.includes('Bought AAPL')           
     );
 
     expect(txnRow).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe("ClientTransactionTable", () => {
     expect(getByTextInTable(/Date/i)).toBeInTheDocument();
     expect(getByTextInTable(/Source/i)).toBeInTheDocument();
     expect(getByTextInTable(/Amount/i)).toBeInTheDocument();
-    expect(getByTextInTable(/Status/i)).toBeInTheDocument();
+    expect(getByTextInTable(/Desc/i)).toBeInTheDocument();
   });
 
   test("switches tabs to Dividends", async () => {
@@ -122,7 +122,7 @@ describe("ClientTransactionTable", () => {
       (row) =>
         row.textContent.includes("Bank") &&
         row.textContent.includes("SGD 5,000") &&
-        row.textContent.includes('Completed')           
+        row.textContent.includes('Initial deposit')           
     );
 
     expect(txnRow).toBeInTheDocument();
