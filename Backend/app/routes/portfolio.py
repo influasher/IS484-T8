@@ -11,7 +11,7 @@ import uuid
 portfolio_bp = Blueprint('portfolio', __name__)
 
 
-@portfolio_bp.route('/portfolio/<client_id>', methods=['GET'])
+@portfolio_bp.route('/<client_id>', methods=['GET'])
 def get_client_portfolio(client_id):
     """Get portfolio allocation for a specific client"""
     try:

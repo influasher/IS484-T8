@@ -9,7 +9,7 @@ import uuid
 transactions_bp = Blueprint('transactions', __name__)
 
 
-@transactions_bp.route('/transactions', methods=['POST'])
+@transactions_bp.route('/', methods=['POST'])
 def add_transaction():
     """Add a new transaction"""
     try:
@@ -54,7 +54,7 @@ def add_transaction():
         return jsonify({'error': 'Failed to create transaction', 'details': str(e)}), 500
 
 
-@transactions_bp.route('/transactions', methods=['GET'])
+@transactions_bp.route('/', methods=['GET'])
 def get_all_transactions():
     print("entered get transactions")
     """Retrieve all transactions"""
@@ -68,7 +68,7 @@ def get_all_transactions():
         return jsonify({'error': 'Failed to retrieve transactions', 'details': str(e)}), 500
 
 
-@transactions_bp.route('/transactions/client', methods=['GET'])
+@transactions_bp.route('/client', methods=['GET'])
 def get_transactions_by_client():
     """Retrieve all transactions for a specific client"""
     try:
@@ -96,7 +96,7 @@ def get_transactions_by_client():
 
 
 # Alternative route using query parameters instead of request body
-@transactions_bp.route('/transactions/client/<client_id>', methods=['GET'])
+@transactions_bp.route('/client/<client_id>', methods=['GET'])
 def get_transactions_by_client_param(client_id):
     """Retrieve all transactions for a specific client using URL parameter"""
     try:

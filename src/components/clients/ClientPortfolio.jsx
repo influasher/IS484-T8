@@ -229,7 +229,7 @@ const PortfolioDashboard = ({ clientId }) => {
 
       // Fetch performance history
       console.log(`Fetching performance data from: ${API_BASE_URL}/performance/${clientId}`);
-      const performanceResponse = await fetch(`${API_BASE_URL}/performance/${clientId}`);
+      const performanceResponse = await fetch(`${API_BASE_URL}/portfolio/performance/${clientId}`);
       console.log('Performance response status:', performanceResponse.status);
       console.log('Performance response ok:', performanceResponse.ok);
 

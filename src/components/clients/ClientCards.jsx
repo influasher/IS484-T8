@@ -245,7 +245,6 @@ const ClientCards = () => {
         };
 
         try {
-
             const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
             const res = await fetch(`${API_BASE_URL}/user/create-clients`, {
                 method: "POST",
@@ -268,10 +267,7 @@ const ClientCards = () => {
             setPage(1);
             handleCloseAdd();
         } catch (err) {
-  alert("Error adding client: " + (err.response?.data?.message || err.message));
-
             setSubmitError(err.message);
-
         }
     };
 

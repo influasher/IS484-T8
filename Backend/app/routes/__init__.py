@@ -23,5 +23,5 @@ def register_routes(app):
     app.register_blueprint(sentiment_history_bp, url_prefix="/sentiment_history")
     app.register_blueprint(user_bp, url_prefix="/user")
     app.register_blueprint(recommendations_bp, url_prefix="/recommendations")
-    app.register_blueprint(transactions_bp)
-    app.register_blueprint(portfolio_bp)
+    app.register_blueprint(transactions_bp, url_prefix="/transactions")
+    app.register_blueprint(portfolio_bp, url_prefix="/portfolio")
