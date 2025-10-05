@@ -6,11 +6,11 @@ import uuid
 
 
 class TransactionType(Enum):
-    DEPOSIT = "Deposit"
-    WITHDRAWAL = "Withdrawal"
-    DIVIDEND = "Dividend"
-    BUY = "Buy"
-    SELL = "Sell"
+    DEPOSIT = "DEPOSIT"
+    WITHDRAWAL = "WITHDRAWAL"
+    DIVIDEND = "DIVIDEND"
+    BUY = "BUY"
+    SELL = "SELL"
 
 
 class Currency(Enum):
@@ -32,9 +32,6 @@ class Transactions(db.Model):
     currency = db.Column(db.Enum(Currency), nullable=False)
     amount = db.Column(db.Numeric(precision=15, scale=2), nullable=False)
     desc = db.Column(db.Text, nullable=True)
-    entity_id = db.Column(UUID(as_uuid=True), db.ForeignKey('entity.id'), nullable=True, index=True)
-    quantity = db.Column(db.Double, nullable=True)
-    price_per_share = db.Column(db.Double, nullable=True)
 
     # Stock-specific fields (for Buy/Sell transactions)
     entity_id = db.Column(UUID(as_uuid=True), db.ForeignKey('entity.id'), nullable=True)
@@ -45,13 +42,13 @@ class Transactions(db.Model):
     entity = db.relationship('Entity', backref='stock_transactions')
 
     def __repr__(self):
-        return f"<Transaction {self.txn_uuid} client={self.client_uuid} type={self.type} amount={self.amount}>"
+        return f"<Transactions {self.txn_uuid} client={self.client_uuid} amount={self.amount}>"
 
     def to_dict(self):
         return {
             'txn_uuid': str(self.txn_uuid),
             'client_uuid': str(self.client_uuid),
-            'datetime': self.datetime.isoformat() if self.datetime else None,
+            'datetime': self.datetime.isoformat(),
             'source': self.source,
             'type': self.type.value if self.type else None,
             'currency': self.currency.value if self.currency else None,

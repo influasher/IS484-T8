@@ -262,6 +262,7 @@ const ClientCards = () => {
             const result = await res.json();
             const newClient = normalize(result.data);
 
+
             setClients((prev) => [newClient, ...prev]);
             setPage(1);
             handleCloseAdd();
