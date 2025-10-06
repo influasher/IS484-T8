@@ -23,7 +23,7 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
   const baseTabs = [
     { label: "Entities", path: ROUTES.ENTITIES },
     { label: "News", path: ROUTES.NEWS },
-    { label: "Dashboard", path: ROUTES.DASHBOARD },
+    // { label: "Dashboard", path: ROUTES.DASHBOARD },
   ];
 
   const paths = baseTabs.map((t) => t.path);
