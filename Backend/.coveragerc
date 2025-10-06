@@ -1,0 +1,37 @@
+[run]
+source =
+    app
+omit =
+    run.py
+    app/config.py
+    app/routes/__init__.py
+    app/__init__.py
+    */__init__.py
+    */migrations/*
+    */venv/*
+    */.venv/*
+    */env/*
+    */.env/*
+    # keep or remove these two depending on your intent:
+    app/services/email_service.py
+    app/utils/helpers.py
+    app/utils/decorators.py
+
+[report]
+fail_under = 60
+omit =
+    ./run.py
+    ./app/config.py
+    ./app/routes/__init__.py
+    ./app/__init__.py
+    */__init__.py
+    */migrations/*
+    */venv/*
+    */.venv/*
+    */env/*
+    */.env/*
+    ./tests/*
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
