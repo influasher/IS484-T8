@@ -89,9 +89,3 @@ class TestSummariseNews(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-        except ImportError:
-            self.skipTest("news_interpreter_summariser function not available")
-
-
-if __name__ == "__main__":
-    unittest.main()
