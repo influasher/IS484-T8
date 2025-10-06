@@ -1,0 +1,9 @@
+# Optional: Create a dedicated namespace for your application
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sentifinance
+  labels:
+    name: sentifinance
+    environment: production
+---

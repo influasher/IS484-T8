@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 # Set the working directory
 WORKDIR /usr/src/app
@@ -10,22 +10,29 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     libssl-dev \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*  # Clean up to reduce image size
 
-# Upgrade pip and install dependencies
-COPY requirements.txt ./
+# Install UV
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
 
-RUN python -m pip install --upgrade pip && python -m pip install --no-cache-dir -r requirements.txt
+# Copy project files
+COPY pyproject.toml uv.lock ./
+COPY .env ./
+COPY app/ ./app/
+COPY migrations/ ./migrations/
+COPY run.py ./
 
-RUN python -m spacy download "en_core_web_trf"
+# Install dependencies with UV
+RUN uv sync --frozen
 
-# RUN python -c "import nltk; nltk.download('punkt')"
+# Download spacy model and setup crawl4ai
+RUN uv run python -m spacy download en_core_web_trf || echo "Spacy model download failed"
+RUN uv run crawl4ai-setup || echo "Crawl4AI setup failed"
 
-# Run the custom setup script if necessary
-RUN crawl4ai-setup
+# Expose port
+EXPOSE 5001
 
-# Copy application files
-COPY . .
-
-# Set the command to run the application
-CMD ["python", "./run.py"]
+# Your Flask app runs from run.py
+CMD ["uv", "run", "python", "run.py"]

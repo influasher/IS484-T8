@@ -26,5 +26,10 @@ def create_app():
         from app.routes import register_routes
 
         register_routes(app)
+        
+        # Add a root route for health check
+        @app.route('/')
+        def health_check():
+            return {"status": "SentiFinance API is running", "version": "1.0"}, 200
 
     return app

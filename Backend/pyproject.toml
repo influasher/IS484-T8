@@ -1,4 +1,4 @@
-[build-system]
+w[build-system]
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
@@ -47,6 +47,7 @@ dependencies = [
     "yfinance[nospam]>=0.2.65",
     "en-core-web-trf @ https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.8.0/en_core_web_trf-3.8.0-py3-none-any.whl",
     "playwright>=1.55.0",
+    "shap>=0.48.0",
 ]
 
 [dependency-groups]

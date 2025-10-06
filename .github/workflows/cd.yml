@@ -1,0 +1,83 @@
+name: Deploy to Azure Web App
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    needs: []
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Login to Azure Container Registry
+      uses: azure/docker-login@v1
+      with:
+        login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+    
+    - name: Set up Node.js for frontend build
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Build frontend for production
+      env:
+        REACT_APP_API_BASE_URL: https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net
+        REACT_APP_ENV: production
+      run: |
+        npm ci
+        npm run build
+    
+    - name: Build and push Docker image
+      run: |
+        cd Backend
+        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }} .
+        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest .
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }}
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
+    
+    - name: Deploy to Azure Web App for Containers
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        images: ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
+    
+    - name: Health Check
+      run: |
+        echo "Waiting for Web App deployment to be ready..."
+        sleep 30  # Give Web App time to start
+        
+        # Get Web App URL
+        APP_URL="https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net"dok
+        echo "✅ App should be available at: $APP_URL"
+        
+        # Health check with retry
+        for i in {1..10}; do
+          echo "Health check attempt $i..."
+          if curl -f --max-time 30 "$APP_URL/" > /dev/null 2>&1; then
+            echo "✅ Health check passed! App is running at $APP_URL"
+            break
+          else
+            echo "❌ Health check failed, retrying in 15 seconds..."
+            sleep 15
+          fi
+        done

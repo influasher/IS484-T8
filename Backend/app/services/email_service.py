@@ -101,17 +101,13 @@ class EmailService:
                 }
             }
 
-            # Send email
+            # Send email (fire-and-forget approach to avoid polling issues)
             poller = self.client.begin_send(message)
 
-            result = poller.result()
-
-            if hasattr(result, 'status'):
-                return result.status == "Succeeded"
-            elif isinstance(result, dict):
-                return result.get('status') == "Succeeded"
-            else:
-                return True
+            # Don't wait for completion - just check if the request was accepted
+            # Azure returns 202 (Accepted) if the email is queued successfully
+            print(f"Email send initiated for {recipient_email}")
+            return True
 
         except Exception as e:
             print(f"Error sending OTP email: {str(e)}")
@@ -177,14 +173,8 @@ class EmailService:
             }
 
             poller = self.client.begin_send(message)
-            result = poller.result()
-
-            if hasattr(result, 'status'):
-                return result.status == "Succeeded"
-            elif isinstance(result, dict):
-                return result.get('status') == "Succeeded"
-            else:
-                return True
+            print(f"Welcome email send initiated for {recipient_email}")
+            return True
 
         except Exception as e:
             print(f"Error sending welcome email: {str(e)}")

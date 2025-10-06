@@ -6,6 +6,7 @@ import {
   TableBody,
   TableContainer,
   TableRow,
+  TableCell,
   Paper,
   Typography,
   Stack,
@@ -16,8 +17,11 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Collapse,
+  Button,
+  IconButton,
 } from "@mui/material";
-import { Search, Sort } from "@mui/icons-material";
+import { Search, Sort, FilterList, Close } from "@mui/icons-material";
 import { useState } from "react";
 import { useEffect } from "react";
 
@@ -29,16 +33,23 @@ function SearchTable({
   onPageChange,
   onSearchChange,
   onSortChange,
+  onFilterChange,
   searchTerm = "",
   sortOrder = "",
+  filterOperator = "",
+  filterValue = "",
   searchPlaceholder = "Search...",
   sortOptions = [],
   renderTableBody,
   itemsPerPage = 5,
   entityType = "items",
+  enableAdvancedFilter = false,
 }) {
   const [internalSearchTerm, setInternalSearchTerm] = useState(searchTerm);
   const [internalSortOrder, setInternalSortOrder] = useState(sortOrder);
+  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
+  const [internalFilterOperator, setInternalFilterOperator] = useState(filterOperator);
+  const [internalFilterValue, setInternalFilterValue] = useState(filterValue);
 
   // Update internal state when props change
   useEffect(() => {
@@ -48,6 +59,14 @@ function SearchTable({
   useEffect(() => {
     setInternalSortOrder(sortOrder);
   }, [sortOrder]);
+
+  useEffect(() => {
+    setInternalFilterOperator(filterOperator);
+  }, [filterOperator]);
+
+  useEffect(() => {
+    setInternalFilterValue(filterValue);
+  }, [filterValue]);
 
   // Handle search input change
   const handleSearchChange = (e) => {
@@ -71,6 +90,33 @@ function SearchTable({
   const handlePageChange = (event, pageNumber) => {
     if (pageNumber >= 1 && pageNumber <= totalPages && onPageChange) {
       onPageChange(event, pageNumber);
+    }
+  };
+
+  // Handle filter operator change
+  const handleFilterOperatorChange = (e) => {
+    const value = e.target.value;
+    setInternalFilterOperator(value);
+    if (onFilterChange) {
+      onFilterChange(value, internalFilterValue);
+    }
+  };
+
+  // Handle filter value change
+  const handleFilterValueChange = (e) => {
+    const value = e.target.value;
+    setInternalFilterValue(value);
+    if (onFilterChange) {
+      onFilterChange(internalFilterOperator, value);
+    }
+  };
+
+  // Clear advanced filter
+  const handleClearFilter = () => {
+    setInternalFilterOperator("");
+    setInternalFilterValue("");
+    if (onFilterChange) {
+      onFilterChange("", "");
     }
   };
 
@@ -143,12 +189,87 @@ function SearchTable({
           )}
         </Grid>
 
+        {/* Advanced Filter Toggle Button */}
+        {enableAdvancedFilter && (
+          <Grid item xs={12} sx={{ mt: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<FilterList />}
+              onClick={() => setShowAdvancedFilter(!showAdvancedFilter)}
+              size="small"
+            >
+              {showAdvancedFilter ? "Hide" : "Show"} Advanced Filter
+            </Button>
+          </Grid>
+        )}
+
+        {/* Advanced Filter Section */}
+        {enableAdvancedFilter && (
+          <Grid item xs={12}>
+            <Collapse in={showAdvancedFilter}>
+              <Box
+                sx={{
+                  mt: 2,
+                  p: 2,
+                  borderRadius: 1,
+                  backgroundColor: "white",
+                  border: 1,
+                  borderColor: "grey.300",
+                }}
+              >
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Typography variant="body2" sx={{ minWidth: "120px" }}>
+                    Sentiment Score:
+                  </Typography>
+                  <FormControl sx={{ minWidth: 120 }} size="small">
+                    <InputLabel id="filter-operator-label">Operator</InputLabel>
+                    <Select
+                      labelId="filter-operator-label"
+                      value={internalFilterOperator}
+                      onChange={handleFilterOperatorChange}
+                      label="Operator"
+                    >
+                      <MenuItem value="">None</MenuItem>
+                      <MenuItem value=">">&gt;</MenuItem>
+                      <MenuItem value=">=">&gt;=</MenuItem>
+                      <MenuItem value="=">=</MenuItem>
+                      <MenuItem value="<=">&lt;=</MenuItem>
+                      <MenuItem value="<">&lt;</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    size="small"
+                    type="number"
+                    placeholder="Value"
+                    value={internalFilterValue}
+                    onChange={handleFilterValueChange}
+                    inputProps={{ step: "0.01", min: "-1", max: "1" }}
+                    sx={{ width: "150px" }}
+                  />
+                  {(internalFilterOperator || internalFilterValue) && (
+                    <IconButton
+                      size="small"
+                      onClick={handleClearFilter}
+                      color="error"
+                      title="Clear filter"
+                    >
+                      Clear Filter
+                    </IconButton>
+                  )}
+                </Stack>
+              </Box>
+            </Collapse>
+          </Grid>
+        )}
+
         {/* Results Counter */}
         <Box sx={{ mt: 2 }}>
           <Typography variant="body2" color="text.secondary">
             Showing {data.length} {entityType} on page {currentPage} of{" "}
             {totalPages}
             {internalSearchTerm && ` for "${internalSearchTerm}"`}
+            {internalFilterOperator && internalFilterValue &&
+              ` with sentiment score ${internalFilterOperator} ${internalFilterValue}`}
           </Typography>
         </Box>
       </Box>
@@ -163,7 +284,9 @@ function SearchTable({
             <TableBody>
               {data.map((item, i) => (
                 <TableRow key={i} hover>
-                  <Typography>No custom table body provided</Typography>
+                  <TableCell>
+                    <Typography>No custom table body provided</Typography>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

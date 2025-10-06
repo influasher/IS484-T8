@@ -1,7 +1,8 @@
 import React from "react";
 import { useParams } from "react-router-dom";
 import ClientRecc from "../../components/clients/ClientRecc";
-import ClientPortfolio from "../../components/clients/ClientPortfolio"
+import ClientPortfolio from "../../components/clients/ClientPortfolio";
+import { apiClient } from "../../services/api";
 import { Box,
   Paper,
   Dialog,
@@ -17,7 +18,9 @@ import { Box,
 } from "@mui/material";
 
 const RMIndvClientView = () => {
-  const { clientId } = useParams();
+  const { id: clientId } = useParams();
+
+  console.log('RMIndvClientView - clientId from params:', clientId);
 
   // Add-Transaction modal state
   const [openAdd, setOpenAdd] = React.useState(false);
@@ -50,23 +53,13 @@ const RMIndvClientView = () => {
     };
 
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-      const res = await fetch(`${API_BASE_URL}/transactions/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      const res = await apiClient.post("/transactions/create", payload);
 
-      if (!res.ok) throw new Error("Failed to add transaction");
-
-      const result = await res.json();
       alert("Transaction added successfully!");
       handleCloseAdd();
       // Optionally refresh the transaction list
     } catch (err) {
-      alert("Error adding transaction: " + err.message);
+      alert("Error adding transaction: " + (err.response?.data?.message || err.message));
     }
   };
 
@@ -84,7 +77,7 @@ const RMIndvClientView = () => {
           elevation={1}
           sx={{ borderRadius: 3, bgcolor: "white", display: "flex", flexDirection: "column", alignItems: "center"}}
         >
-        <ClientPortfolio/>
+        <ClientPortfolio clientId={clientId} />
         <Button onClick={handleOpenAdd} variant="contained" sx={{ m: 2 }} color="">
           Add new transaction
         </Button>
