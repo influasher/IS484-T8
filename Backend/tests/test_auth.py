@@ -152,12 +152,3 @@ class AuthTestCase(BaseTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-            # Logout
-            logout_response = self.client.post(
-                "/logout", headers={"Authorization": f"Bearer {token}"}
-            )
-            self.assertEqual(logout_response.status_code, 200)
-
-
-if __name__ == "__main__":
-    unittest.main()
