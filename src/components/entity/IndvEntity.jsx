@@ -313,11 +313,6 @@ const IndvEntity = () => {
               </Stack>
             </Stack>
 
-            {/* Action Buttons */}
-            <Stack direction="row" spacing={2}>
-              <ReportButton EntityName={EntityName} />
-              <SendPDF EntityName={EntityName} />
-            </Stack>
           </Box>
           <Divider sx={{ mt: 2, mb: 3 }} />
         </Box>

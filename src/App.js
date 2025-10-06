@@ -80,14 +80,14 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
+          {/* <Route
             path={ROUTES.DASHBOARD}
             element={
               <ProtectedRoute>
                 <DashboardPage />
               </ProtectedRoute>
             }
-          />
+          /> */}
 
           {/* RM-only routes */}
           <Route
