@@ -5,7 +5,7 @@ import { Box, Paper, Typography, Chip, IconButton, Button, CircularProgress, Ale
 DialogContent, DialogActions, TextField, FormControl, InputLabel, Select, MenuItem, Slider } from "@mui/material";
 import { DownloadOutlined as DownloadOutlinedIcon, EditRounded as EditRoundedIcon, TrendingUp as TrendingUpIcon, 
 TrendingDown as TrendingDownIcon, HealthAndSafety as HealthAndSafetyIcon } from "@mui/icons-material";
-import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import useFetch from "../../hooks/useFetch";
 import recommendationService from "../../services/recommendationService";
 import { putData } from "../../services/api";
@@ -97,6 +97,31 @@ const RecommendationBubbleChart = ({ recommendations, onBubbleClick, selectedRec
         isSelected: selectedRecommendation === rec.entity_id,
     }));
 
+    // Calculate dynamic axis domains
+
+    const sentimentScores = chartData.map(d => d.x);
+    const confidenceScores = chartData.map(d => d.y);
+
+    const minSentiment = Math.min(...sentimentScores);
+    const maxSentiment = Math.max(...sentimentScores);
+    const minConfidence = Math.min(...confidenceScores);
+    const maxConfidence = Math.max(...confidenceScores);
+
+    const xaxis_domain = [minSentiment - 5, maxSentiment + 5];
+    const yaxis_domain = [minConfidence - 5, maxConfidence + 5];
+
+    // Calculate bubble size inversely proportional to axis range
+    const xRange = xaxis_domain[1] - xaxis_domain[0];
+    const yRange = yaxis_domain[1] - yaxis_domain[0];
+    const avgRange = (xRange + yRange) / 2;
+
+    // Base range is 200 (for reference), scale inversely
+    const scaleFactor = 200 / avgRange;
+    const minBubbleSize = 100 * scaleFactor;
+    const maxBubbleSize = 1000 * scaleFactor;
+
+    const zaxis_domain = [minBubbleSize, maxBubbleSize];
+
     const CustomTooltip = ({ active, payload }) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
@@ -130,17 +155,17 @@ const RecommendationBubbleChart = ({ recommendations, onBubbleClick, selectedRec
                     type="number"
                     dataKey="x"
                     name="Sentiment Score"
-                    domain={[-100, 100]}
+                    domain={xaxis_domain}
                     label={{ value: 'Sentiment Score', position: 'insideBottom', offset: -10 }}
                 />
                 <YAxis
                     type="number"
                     dataKey="y"
                     name="Confidence"
-                    domain={[0, 100]}
+                    domain={yaxis_domain}
                     label={{ value: 'Confidence (%)', angle: -90, position: 'insideLeft' }}
                 />
-                <ZAxis type="number" dataKey="z" range={[100, 1000]} />
+                <ZAxis type="number" dataKey="z" range={zaxis_domain} />
                 <Tooltip content={<CustomTooltip />} />
                 <Scatter
                     data={chartData}
@@ -157,6 +182,8 @@ const RecommendationBubbleChart = ({ recommendations, onBubbleClick, selectedRec
                         />
                     ))}
                 </Scatter>
+                <ReferenceLine x={0} stroke="grey" strokeDasharray="3 3" />
+                <ReferenceLine y={50} stroke="grey" strokeDasharray="3 3" />
             </ScatterChart>
         </ResponsiveContainer>
     );
