@@ -2,7 +2,7 @@ import React from "react";
 import { useParams } from "react-router-dom";
 import ClientRecc from "../../components/clients/ClientRecc";
 import ClientPortfolio from "../../components/clients/ClientPortfolio";
-import { apiClient } from "../../services/api";
+import { postData, getData } from '../../services/api';
 import { Box,
   Paper,
   Dialog,
@@ -15,6 +15,9 @@ import { Box,
   InputLabel,
   Select,
   MenuItem,
+  Typography,
+  CircularProgress,
+  Alert,
 } from "@mui/material";
 
 const RMIndvClientView = () => {
@@ -24,20 +27,61 @@ const RMIndvClientView = () => {
 
   // Add-Transaction modal state
   const [openAdd, setOpenAdd] = React.useState(false);
-  const [formSource, setFormSource] = React.useState("");
   const [formType, setFormType] = React.useState("");
+  const [formSource, setFormSource] = React.useState("");
+  const [formQty, setFormQty] = React.useState("");
   const [formCurrency, setFormCurrency] = React.useState("");
   const [formAmount, setFormAmount] = React.useState("");
   const [formDesc, setFormDesc] = React.useState("");
+  const [stockPrice, setStockPrice] = React.useState(null);
+  const [loadingPrice, setLoadingPrice] = React.useState(false);
+  const [priceError, setPriceError] = React.useState("");
+
+  // Fetch stock price when source changes for Buy/Sell
+  React.useEffect(() => {
+    const fetchStockPrice = async () => {
+      if ((formType === "Buy" || formType === "Sell") && formSource.trim()) {
+        setLoadingPrice(true);
+        setPriceError("");
+        try {
+          const response = await getData(`/entities/ticker/${formSource.trim()}/price`);
+          if (response && response.data) {
+            setStockPrice(response.data.price);
+          } else {
+            setPriceError("Unable to fetch stock price. Please check the ticker symbol.");
+            setStockPrice(null);
+          }
+        } catch (error) {
+          setPriceError("Unable to fetch stock price. Please check the ticker symbol.");
+          setStockPrice(null);
+        } finally {
+          setLoadingPrice(false);
+        }
+      } else {
+        setStockPrice(null);
+        setPriceError("");
+      }
+    };
+
+    // Debounce the API call
+    const timeoutId = setTimeout(fetchStockPrice, 500);
+    return () => clearTimeout(timeoutId);
+  }, [formSource, formType]);
+
+  // Calculate total amount
+  const totalAmount = stockPrice && formQty ? (stockPrice * parseFloat(formQty)).toFixed(2) : "0.00";
 
   const handleOpenAdd = () => setOpenAdd(true);
   const handleCloseAdd = () => {
     setOpenAdd(false);
-    setFormSource("");
     setFormType("");
+    setFormSource("");
+    setFormQty("");
     setFormCurrency("");
     setFormAmount("");
     setFormDesc("");
+    setStockPrice(null);
+    setPriceError("");
   };
 
   const handleSubmitAdd = async (e) => {
@@ -45,21 +89,30 @@ const RMIndvClientView = () => {
 
     const payload = {
       client_id: clientId,
+      datetime: new Date().toISOString(),
+      type: formType.toUpperCase(),
       source: formSource.trim(),
-      type: formType,
+      qty: formQty,
       currency: formCurrency,
-      amount: parseFloat(formAmount),
-      description: formDesc.trim(),
+      amount: parseFloat(formAmount) || 0,
+      desc: formDesc.trim(),
     };
 
     try {
-      const res = await apiClient.post("/transactions/create", payload);
+      console.log(payload);
+      // TODO: fix postData to ensure /transactions is POST
+      const jsonPayload = JSON.parse(JSON.stringify(payload));
+      const response = await postData("/transactions", jsonPayload);
 
-      alert("Transaction added successfully!");
-      handleCloseAdd();
-      // Optionally refresh the transaction list
+      if (response) {
+        alert("Transaction added successfully!");
+        handleCloseAdd();
+        window.location.reload(); // Refresh to show new transaction
+      } else {
+        alert("Failed to add transaction. Please try again.");
+      }
     } catch (err) {
-      alert("Error adding transaction: " + (err.response?.data?.message || err.message));
+      alert("Error adding transaction: " + (err?.message || "Unknown error"));
     }
   };
 
@@ -104,15 +157,6 @@ const RMIndvClientView = () => {
                       disabled
                       value={clientId || "N/A"}
                   />
-                  <TextField
-                      label="Source"
-                      type="text"
-                      fullWidth
-                      required
-                      value={formSource}
-                      onChange={(e) => setFormSource(e.target.value)}
-                      placeholder="e.g., AAPL, Bank Transfer"
-                  />
                   <FormControl fullWidth required>
                       <InputLabel id="type-label">Type</InputLabel>
                       <Select
@@ -126,10 +170,31 @@ const RMIndvClientView = () => {
                           <MenuItem value="Buy">Buy</MenuItem>
                           <MenuItem value="Sell">Sell</MenuItem>
                           <MenuItem value="Dividend">Dividend</MenuItem>
-                          {/* <MenuItem value="Capital Gains">Capital Gains</MenuItem> */}
-                          {/* <MenuItem value="Interest">Interest</MenuItem> */}
                       </Select>
                   </FormControl>
+                  <TextField
+                      label="Source"
+                      type="text"
+                      fullWidth
+                      required
+                      value={formSource}
+                      onChange={(e) => setFormSource(e.target.value)}
+                      placeholder="e.g., AAPL, Bank Transfer"
+                  />
+                  {(formType === "Buy" || formType === "Sell") && (
+                      <TextField
+                          label="Quantity"
+                          type="number"
+                          fullWidth
+                          required
+                          value={formQty}
+                          min={0}
+                          onChange={(e) => setFormQty(e.target.value)}
+                          placeholder="e.g., 1000.00"
+                          inputProps={{ step: "0.01" }}
+                      />
+                  )}
+                  {!(formType === "Buy" || formType === "Sell") && (
                   <FormControl fullWidth required>
                       <InputLabel id="currency-label">Currency</InputLabel>
                       <Select
@@ -145,16 +210,21 @@ const RMIndvClientView = () => {
                           <MenuItem value="JPY">JPY</MenuItem>
                       </Select>
                   </FormControl>
+                  )}
+                  {!(formType === "Buy" || formType === "Sell") && (
                   <TextField
                       label="Amount"
                       type="number"
                       fullWidth
                       required
                       value={formAmount}
+                      min={0}
                       onChange={(e) => setFormAmount(e.target.value)}
                       placeholder="e.g., 1000.00"
                       inputProps={{ step: "0.01" }}
                   />
+                  )}
+                  {!(formType === "Buy" || formType === "Sell") && (
                   <TextField
                       label="Description"
                       type="text"
@@ -166,6 +236,34 @@ const RMIndvClientView = () => {
                       onChange={(e) => setFormDesc(e.target.value)}
                       placeholder="Transaction details"
                   />
+                  )}
+                  {(formType === "Buy" || formType === "Sell") && (
+                      <Box sx={{ p: 2, bgcolor: "grey.50", borderRadius: 2 }}>
+                          {loadingPrice && (
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                  <CircularProgress size={20} />
+                                  <Typography variant="body2">Fetching stock price...</Typography>
+                              </Box>
+                          )}
+                          {priceError && (
+                              <Alert severity="error" sx={{ mb: 1 }}>
+                                  {priceError}
+                              </Alert>
+                          )}
+                          {stockPrice && !loadingPrice && (
+                              <>
+                                  <Typography variant="body2" sx={{ mb: 1 }}>
+                                      <strong>Current Stock Price:</strong> ${stockPrice.toFixed(2)} USD
+                                  </Typography>
+                                  {formQty && (
+                                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                          <strong>Total Amount:</strong> ${totalAmount} USD
+                                      </Typography>
+                                  )}
+                              </>
+                          )}
+                      </Box>
+                  )}
               </Box>
           </DialogContent>
           <DialogActions sx={{ px: 3, py: 2 }}>
