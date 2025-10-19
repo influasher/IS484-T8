@@ -12,7 +12,7 @@ from app.utils.decorators import jwt_required
 transactions_bp = Blueprint('transactions', __name__)
 
 
-@transactions_bp.route('/', methods=['POST'])
+@transactions_bp.route('/add_transaction', methods=['POST'])
 def add_transaction():
     print("add_transaction")
     """Add a new transaction"""

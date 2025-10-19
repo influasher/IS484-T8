@@ -102,7 +102,7 @@ const RMIndvClientView = () => {
       console.log(payload);
       // TODO: fix postData to ensure /transactions is POST
       const jsonPayload = JSON.parse(JSON.stringify(payload));
-      const response = await postData("/transactions", jsonPayload);
+      const response = await postData("/transactions/add_transaction", jsonPayload);
 
       if (response) {
         alert("Transaction added successfully!");
