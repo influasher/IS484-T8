@@ -15,6 +15,7 @@ import { LineChart } from '@mui/x-charts/LineChart';
 import { ChartsReferenceLine } from '@mui/x-charts/ChartsReferenceLine';
 import { PieChart } from '@mui/x-charts/PieChart';
 import ClientTransactionTable from './ClientTransactionTable';
+import ClientPortfolioTable from './ClientPortfolioTable';
 
 const PortfolioDashboard = ({ clientId }) => {
   // Portfolio-related state
@@ -446,21 +447,6 @@ const PortfolioDashboard = ({ clientId }) => {
 
   const yAxisDomain = calculateYAxisDomain(portfolioValues, irxValues);
 
-  // Log final data for debugging
-  // console.log("=== CHART DATA DEBUG ===");
-  // console.log("Portfolio values:", portfolioValues);
-  // console.log("IRX values:", irxValues);
-  // console.log("Portfolio min/max:", Math.min(...portfolioValues), Math.max(...portfolioValues));
-  // console.log("IRX min/max:", Math.min(...irxValues), Math.max(...irxValues));
-  // console.log("Final Y-axis domain:", yAxisDomain);
-  // console.log("Y-axis config will be:", {
-  //   label: "Percentage Change (%)",
-  //   min: yAxisDomain[0],
-  //   max: yAxisDomain[1],
-  //   domain: yAxisDomain
-  // });
-  // console.log("=== END CHART DEBUG ===");
-
   // Check if we have performance data to display
   const hasPerformanceData = performance && performance.length > 0;
   const hasAllocationData = allocation && allocation.length > 0;
@@ -806,6 +792,8 @@ const PortfolioDashboard = ({ clientId }) => {
             </Box>
           </Stack>
         </Stack>
+
+        <ClientPortfolioTable clientId={clientId} />
 
         <hr />
 

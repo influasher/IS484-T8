@@ -31,8 +31,12 @@ def get_client_portfolio(client_id):
                 allocation.append({
                     'name': entity.ticker,
                     'value': portfolio.qty or 0,
+                    'average_cost_basis': portfolio.average_cost_basis,
+                    'total_invested': portfolio.total_invested,
                     'color': f'#{hash(entity.ticker) % 0xFFFFFF:06x}',  # Generate color from ticker
                     'market_value': portfolio.current_market_value,
+                    'unrealized_pnl': portfolio.unrealized_pnl,
+                    'unrealized_pnl_percent': portfolio.unrealized_pnl_percent,
                     'allocation_percent': portfolio.portfolio_allocation_percent
                 })
 
