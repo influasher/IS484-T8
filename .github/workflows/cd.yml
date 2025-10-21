@@ -8,6 +8,12 @@ name: Deploy to Azure Kubernetes (K8s)
 # 3. Create k8s/ directory with your Kubernetes manifests
 
 on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       environment:
