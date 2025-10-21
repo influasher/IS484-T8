@@ -1,19 +1,6 @@
 name: Deploy to Azure Kubernetes (K8s)
 
-# This file contains the original Kubernetes deployment configuration
-# It's preserved for future use when AKS becomes available
-# To use this configuration:
-# 1. Rename this file back to cd.yml
-# 2. Ensure you have AKS cluster and required secrets configured
-# 3. Create k8s/ directory with your Kubernetes manifests
-
 on:
-  push:
-    branches:
-      - dev
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       environment:
@@ -24,13 +11,28 @@ on:
         options:
         - production
         - staging
+  workflow_run:
+    workflows:
+      - "Basic CI Pipeline"
+    types:
+      - completed
 
 jobs:
   deploy:
+    # Only run this job when triggered by a workflow_run and the upstream CI concluded successfully
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     needs: []
     
     steps:
+    - name: Ensure upstream CI succeeded (guard)
+      if: ${{ github.event_name == 'workflow_run' }}
+      run: |
+        echo "Upstream CI workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
+        if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+          echo "Upstream CI did not succeed. Aborting CD.";
+          exit 1;
+        fi
     - name: Checkout code
       uses: actions/checkout@v4
     
