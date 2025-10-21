@@ -1,4 +1,11 @@
-name: Deploy to Azure Web App
+name: Deploy to Azure Kubernetes (K8s)
+
+# This file contains the original Kubernetes deployment configuration
+# It's preserved for future use when AKS becomes available
+# To use this configuration:
+# 1. Rename this file back to cd.yml
+# 2. Ensure you have AKS cluster and required secrets configured
+# 3. Create k8s/ directory with your Kubernetes manifests
 
 on:
   workflow_dispatch:
@@ -41,7 +48,7 @@ jobs:
     
     - name: Build frontend for production
       env:
-        REACT_APP_API_BASE_URL: https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net
+        REACT_APP_API_BASE_URL: http://${{ secrets.AKS_LOADBALANCER_IP }}
         REACT_APP_ENV: production
       run: |
         npm ci
@@ -55,29 +62,67 @@ jobs:
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }}
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
     
-    - name: Deploy to Azure Web App for Containers
-      uses: azure/webapps-deploy@v2
-      with:
-        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-        images: ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
+    - name: Deploy to AKS (Hybrid Approach)
+      run: |
+        # Get AKS credentials
+        az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
+        
+        # Detect what changed in this commit
+        CHANGED_FILES=$(git diff HEAD~1 --name-only)
+        echo "Changed files: $CHANGED_FILES"
+        
+        # Check if any k8s configuration files changed
+        K8S_CHANGED=$(echo "$CHANGED_FILES" | grep -c "^k8s/" || echo "0")
+        
+        # Check for application code changes (expanded patterns)
+        CODE_CHANGED=$(echo "$CHANGED_FILES" | grep -c -E "^(Backend|src|public|package\.json|package-lock\.json|requirements\.txt|.*Dockerfile.*|pyproject\.toml|uv\.lock)" || echo "0")
+        
+        echo "K8s files changed: $K8S_CHANGED"
+        echo "Code files changed: $CODE_CHANGED"
+        
+        if [ "$K8S_CHANGED" -gt 0 ]; then
+          echo "🔧 K8s configuration changes detected - applying full manifests for safety"
+          kubectl apply -f k8s/ --namespace=sentifinance
+        elif [ "$CODE_CHANGED" -gt 0 ]; then
+          echo "⚡ Only code changes detected - using fast image update"
+          kubectl set image deployment/sentifinance-backend \
+            sentifinance-backend=${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }} \
+            --namespace=sentifinance \
+            || echo "Deployment not found, falling back to full apply..."
+          
+          # Fallback: If deployment doesn't exist, apply manifests
+          if ! kubectl get deployment sentifinance-backend --namespace=sentifinance > /dev/null 2>&1; then
+            echo "📦 Deployment not found - applying manifests for first-time setup"
+            kubectl apply -f k8s/ --namespace=sentifinance
+          fi
+        else
+          echo "❓ No relevant changes detected - applying full manifests to be safe"
+          kubectl apply -f k8s/ --namespace=sentifinance
+        fi
     
     - name: Health Check
       run: |
-        echo "Waiting for Web App deployment to be ready..."
-        sleep 30  # Give Web App time to start
+        echo "Waiting for deployment to be ready..."
+        kubectl rollout status deployment/sentifinance-backend --namespace=sentifinance --timeout=300s
         
-        # Get Web App URL
-        APP_URL="https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net"dok
-        echo "✅ App should be available at: $APP_URL"
+        # Get service URL (adjust based on your service type)
+        SERVICE_IP=$(kubectl get service sentifinance-service --namespace=sentifinance -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
         
-        # Health check with retry
-        for i in {1..10}; do
-          echo "Health check attempt $i..."
-          if curl -f --max-time 30 "$APP_URL/" > /dev/null 2>&1; then
-            echo "✅ Health check passed! App is running at $APP_URL"
-            break
-          else
-            echo "❌ Health check failed, retrying in 15 seconds..."
-            sleep 15
-          fi
-        done
+        if [ "$SERVICE_IP" != "pending" ] && [ "$SERVICE_IP" != "" ]; then
+          APP_URL="http://$SERVICE_IP"
+          echo "✅ App should be available at: $APP_URL"
+          
+          # Health check with retry
+          for i in {1..5}; do
+            echo "Health check attempt $i..."
+            if curl -f --max-time 30 "$APP_URL/" > /dev/null 2>&1; then
+              echo "✅ Health check passed! App is running at $APP_URL"
+              break
+            else
+              echo "❌ Health check failed, retrying in 10 seconds..."
+              sleep 10
+            fi
+          done
+        else
+          echo "⏳ LoadBalancer IP still pending, check kubectl get services"
+        fi
