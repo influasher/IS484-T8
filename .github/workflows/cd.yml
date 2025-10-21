@@ -67,6 +67,26 @@ jobs:
         npm ci
         npm run build
     
+    - name: Create temporary .env for Docker build
+      run: |
+        cat > Backend/.env << 'ENV_EOF'
+        FLASK_ENV=${{ secrets.FLASK_ENV }}
+        FLASK_APP=${{ secrets.FLASK_APP }}
+        SECRET_KEY=${{ secrets.SECRET_KEY }}
+        DATABASE_URI=${{ secrets.DATABASE_URI }}
+        JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+        LOG_LEVEL=${{ secrets.LOG_LEVEL }}
+        APP_DEBUG=${{ secrets.APP_DEBUG }}
+        APP_PORT=${{ secrets.APP_PORT }}
+        GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+        GEMINI_API_KEY_SW=${{ secrets.GEMINI_API_KEY_SW }}
+        OPEN_AI_KEY=${{ secrets.OPEN_AI_KEY }}
+        MAIL_USERNAME=${{ secrets.MAIL_USERNAME }}
+        MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}
+        AZURE_COMMUNICATION_CONNECTION_STRING=${{ secrets.AZURE_COMMUNICATION_CONNECTION_STRING }}
+        AZURE_EMAIL_SENDER=${{ secrets.AZURE_EMAIL_SENDER }}
+        ENV_EOF
+    
     - name: Build and push Docker image
       run: |
         cd Backend
@@ -74,11 +94,31 @@ jobs:
         docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest .
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }}
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
+        
+        # Clean up .env
+        rm -f .env
     
-    - name: Deploy to AKS (Hybrid Approach)
+    - name: Create Kubernetes secrets from GitHub Actions
       run: |
         # Get AKS credentials
         az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
+        
+        # Create or update secrets from GitHub Actions secrets
+        kubectl create secret generic sentifinance-secrets \
+          --from-literal=secret-key="${{ secrets.SECRET_KEY }}" \
+          --from-literal=database-uri="${{ secrets.DATABASE_URI }}" \
+          --from-literal=jwt-secret-key="${{ secrets.JWT_SECRET_KEY }}" \
+          --from-literal=gemini-api-key="${{ secrets.GEMINI_API_KEY }}" \
+          --from-literal=gemini-api-key-sw="${{ secrets.GEMINI_API_KEY_SW }}" \
+          --from-literal=openai-key="${{ secrets.OPEN_AI_KEY }}" \
+          --from-literal=mail-username="${{ secrets.MAIL_USERNAME }}" \
+          --from-literal=mail-password="${{ secrets.MAIL_PASSWORD }}" \
+          --from-literal=azure-communication-connection-string="${{ secrets.AZURE_COMMUNICATION_CONNECTION_STRING }}" \
+          --from-literal=azure-email-sender="${{ secrets.AZURE_EMAIL_SENDER }}" \
+          --namespace=sentifinance --dry-run=client -o yaml | kubectl apply -f -
+    
+    - name: Deploy to AKS (Hybrid Approach)
+      run: |
         
         # Detect what changed in this commit
         CHANGED_FILES=$(git diff HEAD~1 --name-only)
@@ -95,7 +135,13 @@ jobs:
         
         if [ "$K8S_CHANGED" -gt 0 ]; then
           echo "🔧 K8s configuration changes detected - applying full manifests for safety"
-          kubectl apply -f k8s/ --namespace=sentifinance
+          # Apply manifests individually to skip kustomization.yaml (not a k8s resource)
+          for file in k8s/*.yaml; do
+            if [[ "$(basename "$file")" != "kustomization.yaml" ]]; then
+              echo "Applying $file..."
+              kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
+            fi
+          done
         elif [ "$CODE_CHANGED" -gt 0 ]; then
           echo "⚡ Only code changes detected - using fast image update"
           kubectl set image deployment/sentifinance-backend \
@@ -106,11 +152,19 @@ jobs:
           # Fallback: If deployment doesn't exist, apply manifests
           if ! kubectl get deployment sentifinance-backend --namespace=sentifinance > /dev/null 2>&1; then
             echo "📦 Deployment not found - applying manifests for first-time setup"
-            kubectl apply -f k8s/ --namespace=sentifinance
+            for file in k8s/*.yaml; do
+              if [[ "$(basename "$file")" != "kustomization.yaml" ]]; then
+                kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
+              fi
+            done
           fi
         else
           echo "❓ No relevant changes detected - applying full manifests to be safe"
-          kubectl apply -f k8s/ --namespace=sentifinance
+          for file in k8s/*.yaml; do
+            if [[ "$(basename "$file")" != "kustomization.yaml" ]]; then
+              kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
+            fi
+          done
         fi
     
     - name: Health Check

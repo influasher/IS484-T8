@@ -5,7 +5,7 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secrets-template.yaml  # Remember to create actual secrets separately
+  # secrets created via kubectl in CD workflow, not from file
   - deployment.yaml
   - service.yaml
   - hpa.yaml
