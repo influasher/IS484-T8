@@ -7,6 +7,7 @@ metadata:
     app: sentifinance-backend
 spec:
   replicas: 1
+  progressDeadlineSeconds: 900  # 15 minutes for slow starts
   selector:
     matchLabels:
       app: sentifinance-backend
@@ -15,8 +16,6 @@ spec:
       labels:
         app: sentifinance-backend
     spec:
-      imagePullSecrets:
-      - name: acr-secret
       containers:
       - name: sentifinance-backend
         image: sentifinancetwo.azurecr.io/sentifinance-backend:latest
@@ -86,16 +85,20 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "200m"
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 5001
-          initialDelaySeconds: 30
-          periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /
             port: 5001
-          initialDelaySeconds: 5
-          periodSeconds: 5
----
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5001
+          initialDelaySeconds: 90
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3

@@ -67,26 +67,6 @@ jobs:
         npm ci
         npm run build
     
-    - name: Create temporary .env for Docker build
-      run: |
-        cat > Backend/.env << 'ENV_EOF'
-        FLASK_ENV=${{ secrets.FLASK_ENV }}
-        FLASK_APP=${{ secrets.FLASK_APP }}
-        SECRET_KEY=${{ secrets.SECRET_KEY }}
-        DATABASE_URI=${{ secrets.DATABASE_URI }}
-        JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
-        LOG_LEVEL=${{ secrets.LOG_LEVEL }}
-        APP_DEBUG=${{ secrets.APP_DEBUG }}
-        APP_PORT=${{ secrets.APP_PORT }}
-        GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-        GEMINI_API_KEY_SW=${{ secrets.GEMINI_API_KEY_SW }}
-        OPEN_AI_KEY=${{ secrets.OPEN_AI_KEY }}
-        MAIL_USERNAME=${{ secrets.MAIL_USERNAME }}
-        MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}
-        AZURE_COMMUNICATION_CONNECTION_STRING=${{ secrets.AZURE_COMMUNICATION_CONNECTION_STRING }}
-        AZURE_EMAIL_SENDER=${{ secrets.AZURE_EMAIL_SENDER }}
-        ENV_EOF
-    
     - name: Build and push Docker image
       run: |
         cd Backend
@@ -94,9 +74,6 @@ jobs:
         docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest .
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }}
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
-        
-        # Clean up .env
-        rm -f .env
     
     - name: Create Kubernetes secrets from GitHub Actions
       run: |
