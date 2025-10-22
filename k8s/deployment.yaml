@@ -84,12 +84,12 @@ spec:
             cpu: "100m"
           limits:
             memory: "512Mi"
-            cpu: "200m"
+            cpu: "250m"
         readinessProbe:
           httpGet:
             path: /
             port: 5001
-          initialDelaySeconds: 60
+          initialDelaySeconds: 45
           periodSeconds: 10
           timeoutSeconds: 5
           successThreshold: 1
@@ -98,7 +98,7 @@ spec:
           httpGet:
             path: /
             port: 5001
-          initialDelaySeconds: 90
+          initialDelaySeconds: 75
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
