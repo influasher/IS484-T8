@@ -15,6 +15,8 @@ spec:
       labels:
         app: sentifinance-backend
     spec:
+      imagePullSecrets:
+      - name: acr-secret
       containers:
       - name: sentifinance-backend
         image: sentifinancetwo.azurecr.io/sentifinance-backend:latest
@@ -79,11 +81,11 @@ spec:
               key: azure-email-sender
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "50m"
-          limits:
             memory: "256Mi"
-            cpu: "150m"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
         livenessProbe:
           httpGet:
             path: /
