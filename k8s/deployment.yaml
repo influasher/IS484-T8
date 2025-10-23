@@ -91,10 +91,10 @@ spec:
               key: azure-email-sender
         resources:
           requests:
-            memory: "512Mi"  # Increased for model loading
-            cpu: "100m"
+            memory: "768Mi"  # Increased for model loading
+            cpu: "200m"
           limits:
-            memory: "1Gi"  # Increased to prevent OOM during model initialization
+            memory: "1536Mi"  # 1.5Gi - FinBERT requires >1Gi during initialization
             cpu: "500m"
         readinessProbe:
           httpGet:
