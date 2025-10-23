@@ -16,6 +16,17 @@ spec:
       labels:
         app: sentifinance-backend
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                - aks-agentpool-25263993-vmss00000h  # Avoid old node with stale credentials
+      imagePullSecrets:
+      - name: acr-secret  # Use explicit ACR credentials while managed identity propagates
       containers:
       - name: sentifinance-backend
         image: sentifinancetwo.azurecr.io/sentifinance-backend:latest
@@ -89,7 +100,7 @@ spec:
           httpGet:
             path: /
             port: 5001
-          initialDelaySeconds: 45
+          initialDelaySeconds: 180  # 3 minutes for model loading
           periodSeconds: 10
           timeoutSeconds: 5
           successThreshold: 1
@@ -98,7 +109,7 @@ spec:
           httpGet:
             path: /
             port: 5001
-          initialDelaySeconds: 75
+          initialDelaySeconds: 240  # 4 minutes before first liveness check
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3

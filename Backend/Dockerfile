@@ -34,4 +34,5 @@ RUN uv run crawl4ai-setup || echo "Crawl4AI setup failed"
 EXPOSE 5001
 
 # Your Flask app runs from run.py
-CMD ["uv", "run", "python", "run.py"]
+# Use .venv/bin/python directly instead of 'uv run' to avoid rebuild on every start
+CMD [".venv/bin/python", "run.py"]
