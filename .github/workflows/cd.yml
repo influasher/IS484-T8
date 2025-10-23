@@ -75,18 +75,25 @@ jobs:
           exit 0
         fi
         
-        # Auto-detect changes for push/workflow_run events
-        CHANGED_FILES=$(git diff HEAD~1 --name-only)
-        BACKEND_CHANGED=$(echo "$CHANGED_FILES" | grep -c -E "^(Backend/)" || echo "0")
-        FRONTEND_CHANGED=$(echo "$CHANGED_FILES" | grep -c -E "^(src/|public/|package\.json|package-lock\.json)" || echo "0")
-        K8S_CHANGED=$(echo "$CHANGED_FILES" | grep -c "^k8s/" || echo "0")
+        # Auto-detect changes for push events
+        CHANGED_FILES=$(git diff HEAD~1 --name-only || echo "")
+        
+        # Count changes (use grep -c which always returns a number, then trim whitespace)
+        BACKEND_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^Backend/" | wc -l | tr -d ' ')
+        FRONTEND_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^(src/|public/|package\.json|package-lock\.json)" | wc -l | tr -d ' ')
+        K8S_CHANGED=$(echo "$CHANGED_FILES" | grep "^k8s/" | wc -l | tr -d ' ')
+        
+        # Ensure variables are integers (default to 0 if empty)
+        BACKEND_CHANGED=${BACKEND_CHANGED:-0}
+        FRONTEND_CHANGED=${FRONTEND_CHANGED:-0}
+        K8S_CHANGED=${K8S_CHANGED:-0}
         
         echo "📊 Change Detection:"
         echo "  Backend changed: $BACKEND_CHANGED files"
         echo "  Frontend changed: $FRONTEND_CHANGED files"
         echo "  K8s manifests changed: $K8S_CHANGED files"
         
-        if [ "$BACKEND_CHANGED" -gt 0 ]; then
+        if [[ "$BACKEND_CHANGED" -gt 0 ]]; then
           echo "skip_build=false" >> $GITHUB_OUTPUT
           echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
           echo "🔨 Backend changed - will build new Docker image"
@@ -96,7 +103,7 @@ jobs:
           echo "⏭️  No Backend changes - reusing existing :latest image (saves ~5-8 min)"
         fi
         
-        if [ "$FRONTEND_CHANGED" -gt 0 ]; then
+        if [[ "$FRONTEND_CHANGED" -gt 0 ]]; then
           echo "skip_frontend=false" >> $GITHUB_OUTPUT
           echo "🔨 Frontend changed - will build frontend"
         else
