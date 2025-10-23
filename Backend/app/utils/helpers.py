@@ -1,3 +1,5 @@
+import logging
+
 from flask import jsonify
 from newspaper import article
 from googlenewsdecoder import new_decoderv1
@@ -14,6 +16,8 @@ from .helpers_constants import (
     country_to_region,
     regions,
 )
+from azure.storage.blob import BlobServiceClient
+from azure.core.exceptions import AzureError
 
 load_dotenv()
 
@@ -145,7 +149,8 @@ def get_article_details(url, article_html):
             "companies": companies,
             "regions": regions,
             "sectors": sectors,
-            "shap": sentiment["shap"]
+            "shap": sentiment["shap"],
+            "shap_html": sentiment["shap_html"]
         }
 
     except Exception as e:
@@ -431,3 +436,54 @@ def news_interpreter(news_text, summary_length):
         "summary": summary,
         "metadata": {"companies": companies, "regions": regions, "sectors": sectors},
     }
+
+
+def upload_shap_to_blob(html_content, news_url):
+    """
+    Upload SHAP HTML explanation to Azure Blob Storage
+
+    Args:
+        html_content (str): The HTML content to upload
+        news_url (str): The news article URL
+
+    Returns:
+        str: The blob URL if successful, None if failed
+    """
+    try:
+        # Get connection string from environment
+        connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+        if not connection_string:
+            logging.error("Azure Storage connection string not found")
+            return None
+
+        # Initialize blob service client
+        blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+
+        # Container name (you can change this)
+        container_name = "shap"
+
+        # Generate blob name from URL hash for uniqueness
+        import hashlib
+        url_hash = hashlib.md5(news_url.encode()).hexdigest()[:12]
+        blob_name = f"shap_explanation_{url_hash}.html"
+
+        # Get blob client
+        blob_client = blob_service_client.get_blob_client(
+            container=container_name,
+            blob=blob_name
+        )
+
+        # Upload the HTML content
+        blob_client.upload_blob(html_content, overwrite=True, content_type='text/html')
+
+        # Return the blob URL
+        blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{container_name}/{blob_name}"
+        logging.info(f"SHAP HTML uploaded successfully: {blob_url}")
+        return blob_url
+
+    except AzureError as e:
+        logging.error(f"Azure error uploading SHAP HTML: {str(e)}")
+        return None
+    except Exception as e:
+        logging.error(f"Error uploading SHAP HTML: {str(e)}")
+        return None

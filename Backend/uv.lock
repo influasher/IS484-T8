@@ -214,11 +214,28 @@ wheels = [
 ]
 
 [[package]]
+name = "azure-storage-blob"
+version = "12.27.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "azure-core" },
+    { name = "cryptography" },
+    { name = "isodate" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/02/32/0476f18ac82ef1def115dfabaa53170c5a71605c00b4e66c740b07abae71/azure_storage_blob-12.27.0.tar.gz", hash = "sha256:99e8e2cd2a6a723930c364ea0a0539d28e465bc77cf94ef12813c465dc09cb9a", size = 597402, upload-time = "2025-10-15T13:26:15.718Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b5/55/5c8aec0544007ec8f9ddd0e3b69939a3a41eb6c3897e2454797021753478/azure_storage_blob-12.27.0-py3-none-any.whl", hash = "sha256:b7bef8acb79825f96f2fa24c7535e2924fb3dbc4840a2eebb5f117175bde3657", size = 428916, upload-time = "2025-10-15T13:26:17.607Z" },
+]
+
+[[package]]
 name = "backend"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "azure-communication-email" },
+    { name = "azure-core" },
+    { name = "azure-storage-blob" },
     { name = "coverage" },
     { name = "crawl4ai" },
     { name = "en-core-web-trf" },
@@ -273,6 +290,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "azure-communication-email", specifier = ">=1.0.0" },
+    { name = "azure-core", specifier = ">=1.35.1" },
+    { name = "azure-storage-blob", specifier = ">=12.27.0" },
     { name = "coverage", specifier = ">=7.0.0" },
     { name = "crawl4ai", specifier = "==0.4.248" },
     { name = "en-core-web-trf", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.8.0/en_core_web_trf-3.8.0-py3-none-any.whl" },

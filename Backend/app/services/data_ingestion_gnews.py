@@ -4,7 +4,7 @@ import time
 from gnews import GNews
 from app import db
 from app.models.news import News
-from app.utils.helpers import URL_decoder, get_article_details
+from app.utils.helpers import URL_decoder, get_article_details, upload_shap_to_blob
 from app.services.article_scraper import scrape_article
 from datetime import datetime, timedelta
 from app.utils.scraping_quality import (
@@ -50,7 +50,8 @@ def insert_data_to_db(news, query):
         company_names=news["company_names"],
         regions=news["regions"],
         sectors=news["sectors"],
-        shap=news["shap"]
+        shap=news["shap"],
+        shapUrl=news.get("shapUrl", None)
     )
 
     db.session.add(n)
@@ -208,6 +209,12 @@ def get_premium_news_sources(query, start_date, end_date):
                 logging.warning("Low quality article skipped: %s", url)
                 continue
 
+            try:
+                shapUrl = upload_shap_to_blob(details['shap_html'], url)
+            except Exception as e:
+                shapUrl = None
+                logging.warning(str(e))
+
             news.update({
                 "url": url,
                 "source_metadata": {
@@ -228,7 +235,8 @@ def get_premium_news_sources(query, start_date, end_date):
                 "company_names": details["companies"],
                 "regions": details["regions"],
                 "sectors": details["sectors"],
-                "shap": details["shap"]
+                "shap": details["shap"],
+                "shapUrl": shapUrl
             })
 
             if news["description"] in ("", "An error occurred while fetching the article details"):
@@ -365,6 +373,7 @@ def get_gnews_news_by_ticker(query, start_date, end_date):
                 "company_names": article_details["companies"],
                 "regions": article_details["regions"],
                 "sectors": article_details["sectors"],
+                "shap": article_details["shap"]
             }
         )
 
@@ -519,6 +528,7 @@ def get_all_top_gnews():
                     "company_names": article_details["companies"],
                     "regions": article_details["regions"],
                     "sectors": article_details["sectors"],
+                    "shap": article_details["shap"]
                 }
             )
 

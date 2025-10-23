@@ -1,6 +1,6 @@
 ## Database Migrations
 
-We are using `Flask-Migrate` to manage our database migartions, this will help version our database schema as our development progresses. However, this involves steps to ensure changes in schema is reflected in our codebase.
+We are using `Flask-Migrate` to manage our database migrations, this will help version our database schema as our development progresses. However, this involves steps to ensure changes in schema is reflected in our codebase.
 
 **NOTE:** `Flask-Migrate` compares between the current database schema and existing models in the codebase to determine differences and generate migrations. This information is crucial for developeres as changes to database (even in development) must be done through migrations or some changes might not be reflected if done incorrectly.
 

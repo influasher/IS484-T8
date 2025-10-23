@@ -157,6 +157,7 @@ def news_by_id(news_id):
             "company_names": news.company_names,
             "regions": news.regions,
             "sectors": news.sectors,
+            "shapUrl": news.shapUrl
         }
     return None
 
