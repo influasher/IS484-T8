@@ -1,55 +1,77 @@
 import asyncio
-from crawl4ai import AsyncWebCrawler
-from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig, CacheMode
-from fake_useragent import UserAgent
-from playwright._impl._errors import TargetClosedError, TimeoutError
 import logging
 
 # Configure logging
 logger = logging.getLogger("crawler")
 logging.basicConfig(level=logging.INFO)
 
+# LAZY LOADING: Heavy imports moved inside functions to avoid loading at app startup
+# These imports (crawl4ai, playwright) can consume 500MB-1GB memory
+_crawler_config_initialized = False
+_browser_config = None
+_run_config = None
+_default_user_agent = None
 
-# Create a reusable user agent
-def get_random_user_agent():
+
+def _initialize_crawler_config():
+    """Lazy initialization of crawler configuration - only loads heavy libraries when first needed."""
+    global _crawler_config_initialized, _browser_config, _run_config, _default_user_agent
+    
+    if _crawler_config_initialized:
+        return
+    
+    logger.info("Initializing crawler configuration (first scrape request)...")
+    
+    # Import heavy libraries only when needed
+    from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig, CacheMode
+    from fake_useragent import UserAgent
+    
+    # Create a reusable user agent
     ua = UserAgent()
-    return ua.random
-
-
-DEFAULT_USER_AGENT = get_random_user_agent()
-
-# Shared browser config (static across scrapes for efficiency)
-BROWSER_CONFIG = BrowserConfig(
-    browser_type="chromium",
-    headless=True,
-    viewport_width=1280,
-    viewport_height=720,
-    user_agent=DEFAULT_USER_AGENT,
-    verbose=False,
-    use_persistent_context=True,
-)
-
-# Reusable crawler run config
-RUN_CONFIG = CrawlerRunConfig(
-    user_agent=DEFAULT_USER_AGENT,
-    word_count_threshold=100,
-    excluded_tags=["form", "header", "footer", "aside"],
-    exclude_external_links=True,
-    exclude_social_media_links=True,
-    process_iframes=False,
-    remove_overlay_elements=True,
-    simulate_user=True,
-    magic=True,
-    cache_mode=CacheMode.ENABLED,
-)
+    _default_user_agent = ua.random
+    
+    # Shared browser config (static across scrapes for efficiency)
+    _browser_config = BrowserConfig(
+        browser_type="chromium",
+        headless=True,
+        viewport_width=1280,
+        viewport_height=720,
+        user_agent=_default_user_agent,
+        verbose=False,
+        use_persistent_context=True,
+    )
+    
+    # Reusable crawler run config
+    _run_config = CrawlerRunConfig(
+        user_agent=_default_user_agent,
+        word_count_threshold=100,
+        excluded_tags=["form", "header", "footer", "aside"],
+        exclude_external_links=True,
+        exclude_social_media_links=True,
+        process_iframes=False,
+        remove_overlay_elements=True,
+        simulate_user=True,
+        magic=True,
+        cache_mode=CacheMode.ENABLED,
+    )
+    
+    _crawler_config_initialized = True
+    logger.info("Crawler configuration initialized successfully")
 
 
 async def scrape_article_async(url, retries=2, delay=2):
     """Scrape article content asynchronously with retry mechanism."""
+    # Initialize crawler config on first use (lazy loading)
+    _initialize_crawler_config()
+    
+    # Import heavy libraries only when scraping
+    from crawl4ai import AsyncWebCrawler
+    from playwright._impl._errors import TargetClosedError, TimeoutError
+    
     for attempt in range(retries + 1):
         try:
-            async with AsyncWebCrawler(config=BROWSER_CONFIG) as crawler:
-                result = await crawler.arun(url=url, config=RUN_CONFIG)
+            async with AsyncWebCrawler(config=_browser_config) as crawler:
+                result = await crawler.arun(url=url, config=_run_config)
                 if result.success:
                     return result.cleaned_html
                 else:
