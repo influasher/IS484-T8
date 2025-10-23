@@ -147,7 +147,7 @@ jobs:
     - name: Health Check
       run: |
         echo "Waiting for deployment to be ready..."
-        kubectl rollout status deployment/sentifinance-backend --namespace=sentifinance --timeout=300s
+        kubectl rollout status deployment/sentifinance-backend --namespace=sentifinance --timeout=600s  # 10 minutes for model loading + image pull
         
         # Get service URL (adjust based on your service type)
         SERVICE_IP=$(kubectl get service sentifinance-service --namespace=sentifinance -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
