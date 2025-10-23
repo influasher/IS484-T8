@@ -7,7 +7,6 @@ import os
 from dotenv import load_dotenv
 import google.generativeai as genai
 import re
-import pandas as pd
 from rapidfuzz import process, fuzz
 # spacy moved to news-processor microservice - not needed in backend API
 # import spacy
@@ -22,7 +21,31 @@ from azure.core.exceptions import AzureError
 
 load_dotenv()
 
-sp500_plus2 = pd.DataFrame.from_dict(sp500_plus2_dict)
+# LAZY LOADING: Defer heavy imports and initialization
+_nlp = None
+_sp500_plus2 = None
+
+
+def _get_nlp():
+    """Lazy load spaCy model (500MB+) only when needed."""
+    global _nlp
+    if _nlp is None:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("Loading spaCy en_core_web_trf model (first use)...")
+        import spacy
+        _nlp = spacy.load("en_core_web_trf")
+        logger.info("spaCy model loaded successfully")
+    return _nlp
+
+
+def _get_sp500_dataframe():
+    """Lazy load pandas DataFrame only when needed."""
+    global _sp500_plus2
+    if _sp500_plus2 is None:
+        import pandas as pd
+        _sp500_plus2 = pd.DataFrame.from_dict(sp500_plus2_dict)
+    return _sp500_plus2
 
 # Add to the dictionary
 for region in regions:
@@ -46,11 +69,17 @@ for region in regions:
 # Concatenate the new rows
 # sp500_plus2 = pd.concat([sp500_plus2, new_row_1, new_row_2], ignore_index=True)
 
-# Create list of known companies
-known_companies = sp500_plus2["Security"].tolist()
+# Create list of known companies (lazy loaded)
+def get_known_companies():
+    return _get_sp500_dataframe()["Security"].tolist()
 
-# Create list of unique GICS sectors
-sectors = sp500_plus2["GICS Sector"].unique().tolist()
+known_companies = None  # Will be populated lazily
+
+# Create list of unique GICS sectors (lazy loaded)
+def get_sectors():
+    return _get_sp500_dataframe()["GICS Sector"].unique().tolist()
+
+sectors = None  # Will be populated lazily
 
 
 # ** General-purpose helper functions for common tasks like formatting responses or handling dates.
@@ -416,6 +445,7 @@ def lookup_sectors_from_companies(company_list):
     # print("Running lookup_sectors_from_companies function")
     if not company_list:
         return None
+    sp500_plus2 = _get_sp500_dataframe()  # Lazy load dataframe
     sectors = set()
     for company in company_list:
         # print("Current ner company:" + company)
