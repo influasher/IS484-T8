@@ -10,3 +10,4 @@ if __name__ == "__main__":
         print(f"  {rule.rule} -> {rule.endpoint}")
     
     app.run(debug=Config.APP_DEBUG, host="0.0.0.0", port=Config.PORT)
+# Force rebuild - Thu Oct 23 16:26:05 +08 2025
