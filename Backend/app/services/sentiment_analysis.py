@@ -7,6 +7,8 @@ import json
 import google.generativeai as genai
 import shap
 
+from app.utils.helpers import upload_shap_to_blob
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -511,6 +513,12 @@ class SentimentAnalyzer:
         # Calculate shap values for FinBert scores
         shap_explanation = self.get_shap_explanation(preprocessed_text)
         shap_json = self.shap_explanation_to_json(shap_explanation)
+        shap_html = self.generate_shap_html(shap_explanation)
+
+        # Upload SHAP HTML to blob storage
+        import hashlib
+        analysis_id = hashlib.md5(text.encode()).hexdigest()[:12]
+        # shap_blob_url = upload_shap_to_blob(shap_html, analysis_id)
 
         return {
             "numerical_score": final_score,
@@ -521,7 +529,9 @@ class SentimentAnalyzer:
             "agreement_rate": agreement_rate,
             "segment_count": len(text_segments),
             "segment_results": integrated_results,
-            "shap": shap_json
+            "shap": shap_json,
+            "shap_html": shap_html
+
         }
 
     def get_shap_explanation(self, text: str) -> shap.Explanation:
@@ -546,6 +556,13 @@ class SentimentAnalyzer:
             "base_values": base_values
         }
         return json.dumps(result)
+
+    def generate_shap_html(self, explanation: shap.Explanation) -> str:
+        """
+        Generate HTML representation of SHAP explanation
+        """
+        html = shap.plots.text(explanation[0], display=False)
+        return html
 
 
 # Expose a simple interface for external use
@@ -574,6 +591,8 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
             "third_model_score": 0,
             "confidence": 0,
             "agreement_rate": 0,
+            "shap": {},
+            "shap_html": ""
         }
 
         # Combine results
@@ -601,6 +620,12 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
         else:
             result["classification"] = "neutral"
 
+        # get shap values
+        result["shap"] = result_with_open_ai["shap"]
+
+        # get shap url
+        result["shap_html"] = result_with_open_ai["shap_html"]
+
         return {
             "numerical_score": result["numerical_score"],
             "finbert_score": result["finbert_score"],
@@ -609,7 +634,8 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
             "classification": result["classification"],
             "confidence": result["confidence"],
             "agreement_rate": result["agreement_rate"],
-            "shap": result["shap"]
+            "shap": result["shap"],
+            "shap_html": result["shap_html"]
         }
 
     elif use_gemini:
@@ -625,7 +651,8 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
             "classification": result["classification"],
             "confidence": result["confidence"],
             "agreement_rate": result["agreement_rate"],
-            "shap": result["shap"]
+            "shap": result["shap"],
+            "shap_html": result["shap_html"]
         }
 
 
@@ -642,15 +669,15 @@ if __name__ == "__main__":
     # Test with just FinBERT for simplicity
     finbert_only = analyzer.analyze_with_finbert(sample_text)
 
-    # explainer = shap.Explainer(analyzer.finbert_pipeline)
-    # explanation = explainer([sample_text])
-    # json_data = shap_explanation_to_json(explanation)
-    # print(json_data)
-    # print(explanation[:2])
-    # shap.plots.text(shap_values[0], display=False)  # Get HTML object
-    # html = shap.plots.text(shap_values[0], display=False)
-    # with open("shap_text_explanation.html", "w") as f:
-    #     f.write(html)  # No .data needed
+    explainer = shap.Explainer(analyzer.finbert_pipeline)
+    explanation = explainer([sample_text])
+    json_data = shap_explanation_to_json(explanation)
+    print(json_data)
+    print(explanation[:2])
+    shap.plots.text(shap_values[0], display=False)  # Get HTML object
+    html = shap.plots.text(shap_values[0], display=False)
+    with open("shap_text_explanation.html", "w") as f:
+        f.write(html)  # No .data needed
 
     # shap.save_html(str(out_path), html)
     print("=== FinBERT Analysis Only ===")
