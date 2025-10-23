@@ -91,11 +91,11 @@ spec:
               key: azure-email-sender
         resources:
           requests:
-            memory: "256Mi"
+            memory: "512Mi"  # Increased for model loading
             cpu: "100m"
           limits:
-            memory: "512Mi"
-            cpu: "250m"
+            memory: "1Gi"  # Increased to prevent OOM during model initialization
+            cpu: "500m"
         readinessProbe:
           httpGet:
             path: /
