@@ -24,10 +24,19 @@ load_dotenv()
 
 class SentimentAnalyzer:
     def __init__(self):
-        self.finbert_pipeline = self._load_finbert()
+        self._finbert_pipeline = None  # Lazy loading - don't load model at startup
         self.gemini_client = None
         self.openai_client = None
-        logger.info("Sentiment Analyzer initialized with FinBERT model")
+        logger.info("Sentiment Analyzer initialized (FinBERT model will be loaded on first use)")
+
+    @property
+    def finbert_pipeline(self):
+        """Lazy load FinBERT model on first access"""
+        if self._finbert_pipeline is None:
+            logger.info("Loading FinBERT model on first use...")
+            self._finbert_pipeline = self._load_finbert()
+            logger.info("FinBERT model loaded successfully")
+        return self._finbert_pipeline
 
     def _load_finbert(self):
         """Initialize and load the FinBERT model"""

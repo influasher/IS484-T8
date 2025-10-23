@@ -91,16 +91,16 @@ spec:
               key: azure-email-sender
         resources:
           requests:
-            memory: "768Mi"  # Increased for model loading
-            cpu: "200m"
+            memory: "256Mi"  # Reduced - lazy loading keeps startup memory low
+            cpu: "100m"
           limits:
-            memory: "1536Mi"  # 1.5Gi - FinBERT requires >1Gi during initialization
+            memory: "1536Mi"  # Sufficient for model when it loads on first request
             cpu: "500m"
         readinessProbe:
           httpGet:
             path: /
             port: 5001
-          initialDelaySeconds: 180  # 3 minutes for model loading
+          initialDelaySeconds: 30  # Reduced - app starts quickly with lazy loading
           periodSeconds: 10
           timeoutSeconds: 5
           successThreshold: 1
@@ -109,7 +109,7 @@ spec:
           httpGet:
             path: /
             port: 5001
-          initialDelaySeconds: 240  # 4 minutes before first liveness check
+          initialDelaySeconds: 60  # Reduced - app is healthy much faster
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
