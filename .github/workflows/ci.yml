@@ -2,7 +2,7 @@ name: Basic CI Pipeline
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ dev ]  # Only run CI on dev branch
 
 jobs:
   # Backend Job

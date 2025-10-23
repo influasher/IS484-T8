@@ -3,6 +3,18 @@ name: Deploy to Azure Kubernetes (K8s)
 on:
   workflow_dispatch:
     inputs:
+      skip_build:
+        description: 'Skip Docker build and reuse existing image?'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      image_tag:
+        description: 'Image tag to use if skipping build (e.g., latest, abc123)'
+        required: false
+        default: 'latest'
       environment:
         description: 'Environment to deploy to'
         required: true
@@ -11,19 +23,14 @@ on:
         options:
         - production
         - staging
-  workflow_run:
-    workflows:
-      - "Basic CI Pipeline"
-    types:
-      - completed
   push:
     branches:
-      - dev
+      - dev  # Only deploy from dev branch
 
 jobs:
   deploy:
-    # Run when triggered by a successful upstream CI workflow_run OR when pushing to dev OR manual dispatch
-    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'push' && github.ref == 'refs/heads/dev') || github.event_name == 'workflow_dispatch' }}
+    # Run when pushing to dev OR manual dispatch (removed workflow_run trigger)
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/dev') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: []
     
@@ -39,6 +46,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
+        ref: dev  # Explicitly checkout dev branch
         fetch-depth: 0
     
     - name: Azure Login
@@ -53,27 +61,97 @@ jobs:
         username: ${{ secrets.ACR_USERNAME }}
         password: ${{ secrets.ACR_PASSWORD }}
     
+    - name: Determine if build is needed
+      id: check_build
+      run: |
+        echo "🔍 Analyzing what needs to be built..."
+        
+        # Manual workflow_dispatch can skip build
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ "${{ inputs.skip_build }}" == "true" ]]; then
+          echo "skip_build=true" >> $GITHUB_OUTPUT
+          echo "skip_frontend=true" >> $GITHUB_OUTPUT
+          echo "image_tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+          echo "⏭️  Manual run: Skipping build, using image tag: ${{ inputs.image_tag }}"
+          exit 0
+        fi
+        
+        # Auto-detect changes for push/workflow_run events
+        CHANGED_FILES=$(git diff HEAD~1 --name-only)
+        BACKEND_CHANGED=$(echo "$CHANGED_FILES" | grep -c -E "^(Backend/)" || echo "0")
+        FRONTEND_CHANGED=$(echo "$CHANGED_FILES" | grep -c -E "^(src/|public/|package\.json|package-lock\.json)" || echo "0")
+        K8S_CHANGED=$(echo "$CHANGED_FILES" | grep -c "^k8s/" || echo "0")
+        
+        echo "📊 Change Detection:"
+        echo "  Backend changed: $BACKEND_CHANGED files"
+        echo "  Frontend changed: $FRONTEND_CHANGED files"
+        echo "  K8s manifests changed: $K8S_CHANGED files"
+        
+        if [ "$BACKEND_CHANGED" -gt 0 ]; then
+          echo "skip_build=false" >> $GITHUB_OUTPUT
+          echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "🔨 Backend changed - will build new Docker image"
+        else
+          echo "skip_build=true" >> $GITHUB_OUTPUT
+          echo "image_tag=latest" >> $GITHUB_OUTPUT
+          echo "⏭️  No Backend changes - reusing existing :latest image (saves ~5-8 min)"
+        fi
+        
+        if [ "$FRONTEND_CHANGED" -gt 0 ]; then
+          echo "skip_frontend=false" >> $GITHUB_OUTPUT
+          echo "🔨 Frontend changed - will build frontend"
+        else
+          echo "skip_frontend=true" >> $GITHUB_OUTPUT
+          echo "⏭️  No Frontend changes - skipping frontend build (saves ~2-3 min)"
+        fi
+        
+        echo "k8s_changed=$K8S_CHANGED" >> $GITHUB_OUTPUT
+    
     - name: Set up Node.js for frontend build
+      if: steps.check_build.outputs.skip_frontend == 'false'
       uses: actions/setup-node@v4
       with:
         node-version: '18'
         cache: 'npm'
     
     - name: Build frontend for production
+      if: steps.check_build.outputs.skip_frontend == 'false'
       env:
         REACT_APP_API_BASE_URL: http://${{ secrets.AKS_LOADBALANCER_IP }}
         REACT_APP_ENV: production
       run: |
+        echo "🔨 Building frontend..."
         npm ci
         npm run build
     
     - name: Build and push Docker image
+      if: steps.check_build.outputs.skip_build == 'false'
       run: |
+        echo "🔨 Building Docker image for Backend..."
         cd Backend
         docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }} .
         docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest .
+        echo "📤 Pushing images to ACR..."
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }}
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
+        echo "✅ Docker build and push complete"
+    
+    - name: Verify existing image in ACR
+      if: steps.check_build.outputs.skip_build == 'true'
+      run: |
+        echo "✅ Skipping Docker build - verifying existing image..."
+        IMAGE_TAG="${{ steps.check_build.outputs.image_tag }}"
+        echo "Checking if image exists: ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:$IMAGE_TAG"
+        
+        # Try to pull the image to verify it exists
+        if docker pull ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:$IMAGE_TAG; then
+          echo "✅ Image verified: $IMAGE_TAG"
+        else
+          echo "❌ Error: Image not found in ACR"
+          echo "Available tags:"
+          az acr repository show-tags --name $(echo "${{ secrets.ACR_LOGIN_SERVER }}" | cut -d'.' -f1) \
+            --repository sentifinance-backend --orderby time_desc --output table | head -10
+          exit 1
+        fi
     
     - name: Create Kubernetes secrets from GitHub Actions
       run: |
@@ -96,33 +174,27 @@ jobs:
     
     - name: Deploy to AKS (Hybrid Approach)
       run: |
+        IMAGE_TAG="${{ steps.check_build.outputs.image_tag }}"
+        K8S_CHANGED="${{ steps.check_build.outputs.k8s_changed }}"
+        SKIP_BUILD="${{ steps.check_build.outputs.skip_build }}"
         
-        # Detect what changed in this commit
-        CHANGED_FILES=$(git diff HEAD~1 --name-only)
-        echo "Changed files: $CHANGED_FILES"
+        echo "🚀 Deploying to AKS"
+        echo "  Image tag: $IMAGE_TAG"
+        echo "  K8s changed: $K8S_CHANGED files"
+        echo "  Skip build: $SKIP_BUILD"
         
-        # Check if any k8s configuration files changed
-        K8S_CHANGED=$(echo "$CHANGED_FILES" | grep -c "^k8s/" || echo "0")
-        
-        # Check for application code changes (expanded patterns)
-        CODE_CHANGED=$(echo "$CHANGED_FILES" | grep -c -E "^(Backend|src|public|package\.json|package-lock\.json|requirements\.txt|.*Dockerfile.*|pyproject\.toml|uv\.lock)" || echo "0")
-        
-        echo "K8s files changed: $K8S_CHANGED"
-        echo "Code files changed: $CODE_CHANGED"
-        
-        if [ "$K8S_CHANGED" -gt 0 ]; then
-          echo "🔧 K8s configuration changes detected - applying full manifests for safety"
-          # Apply manifests individually to skip kustomization.yaml (not a k8s resource)
+        if [[ "$K8S_CHANGED" -gt 0 ]]; then
+          echo "🔧 K8s configuration changes detected - applying full manifests"
           for file in k8s/*.yaml; do
             if [[ "$(basename "$file")" != "kustomization.yaml" ]]; then
               echo "Applying $file..."
               kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
             fi
           done
-        elif [ "$CODE_CHANGED" -gt 0 ]; then
-          echo "⚡ Only code changes detected - using fast image update"
+        elif [[ "$SKIP_BUILD" == "false" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "⚡ Code or manual deployment - using fast image update"
           kubectl set image deployment/sentifinance-backend \
-            sentifinance-backend=${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }} \
+            sentifinance-backend=${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:$IMAGE_TAG \
             --namespace=sentifinance \
             || echo "Deployment not found, falling back to full apply..."
           
