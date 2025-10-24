@@ -246,7 +246,7 @@ const ClientCards = () => {
 
         try {
             const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-            const res = await fetch(`${API_BASE_URL}/user/create-clients`, {
+            const res = await fetch(`${API_BASE_URL}/api/user/create-clients`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
