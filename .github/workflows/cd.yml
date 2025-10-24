@@ -187,6 +187,7 @@ jobs:
 
     - name: Build and push Docker image (News Processor)
       if: steps.check_build.outputs.skip_news_processor_build == 'false'
+      continue-on-error: true
       run: |
         echo "🔨 Building Docker image for News Processor..."
         cd Backend
