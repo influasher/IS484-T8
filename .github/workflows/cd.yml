@@ -119,12 +119,13 @@ jobs:
         fi
 
         # Determine if frontend needs rebuild
-        if [[ "$FRONTEND_CHANGED" -gt 0 ]]; then
+        # Note: Frontend must be built whenever backend is built (since it's bundled in the Docker image)
+        if [[ "$FRONTEND_CHANGED" -gt 0 ]] || [[ "$BACKEND_API_CHANGED" -gt 0 ]]; then
           echo "skip_frontend=false" >> $GITHUB_OUTPUT
-          echo "🔨 Frontend changed - will build frontend"
+          echo "🔨 Frontend will be built (changed or needed for backend Docker image)"
         else
           echo "skip_frontend=true" >> $GITHUB_OUTPUT
-          echo "⏭️  No Frontend changes - skipping frontend build (saves ~2-3 min)"
+          echo "⏭️  No Frontend or Backend changes - skipping frontend build (saves ~2-3 min)"
         fi
 
         echo "k8s_changed=$K8S_CHANGED" >> $GITHUB_OUTPUT
