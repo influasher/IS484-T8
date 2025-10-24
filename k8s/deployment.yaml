@@ -98,7 +98,7 @@ spec:
             cpu: "500m"
         readinessProbe:
           httpGet:
-            path: /
+            path: /api
             port: 5001
           initialDelaySeconds: 30  # App starts quickly without ML models
           periodSeconds: 10
@@ -107,7 +107,7 @@ spec:
           failureThreshold: 6
         livenessProbe:
           httpGet:
-            path: /
+            path: /api
             port: 5001
           initialDelaySeconds: 60  # Reduced - lightweight backend starts fast
           periodSeconds: 10
