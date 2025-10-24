@@ -178,13 +178,21 @@ jobs:
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
         echo "✅ Docker build and push complete"
     
+    - name: Free up disk space before News Processor build
+      if: steps.check_build.outputs.skip_news_processor_build == 'false'
+      run: |
+        echo "🧹 Cleaning up disk space before large News Processor build..."
+        docker system prune -af --volumes
+        df -h
+
     - name: Build and push Docker image (News Processor)
       if: steps.check_build.outputs.skip_news_processor_build == 'false'
       run: |
         echo "🔨 Building Docker image for News Processor..."
         cd Backend
+        # Build once and tag twice to save space
         docker build -f Dockerfile.news-processor -t ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:${{ github.sha }} .
-        docker build -f Dockerfile.news-processor -t ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:latest .
+        docker tag ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:latest
         echo "📤 Pushing images to ACR..."
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:${{ github.sha }}
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:latest
