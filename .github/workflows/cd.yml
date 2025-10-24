@@ -130,7 +130,7 @@ jobs:
         npm ci
         npm run build
     
-    - name: Build and push Docker image
+    - name: Build and push Docker image (Backend)
       if: steps.check_build.outputs.skip_build == 'false'
       run: |
         echo "🔨 Building Docker image for Backend..."
@@ -141,6 +141,18 @@ jobs:
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }}
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
         echo "✅ Docker build and push complete"
+    
+    - name: Build and push Docker image (News Processor)
+      if: steps.check_build.outputs.skip_build == 'false'
+      run: |
+        echo "🔨 Building Docker image for News Processor..."
+        cd Backend
+        docker build -f Dockerfile.news-processor -t ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:${{ github.sha }} .
+        docker build -f Dockerfile.news-processor -t ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:latest .
+        echo "📤 Pushing images to ACR..."
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:${{ github.sha }}
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:latest
+        echo "✅ News Processor Docker build and push complete"
     
     - name: Verify existing image in ACR
       if: steps.check_build.outputs.skip_build == 'true'
@@ -169,10 +181,17 @@ jobs:
         kubectl create secret generic sentifinance-secrets \
           --from-literal=secret-key="${{ secrets.SECRET_KEY }}" \
           --from-literal=database-uri="${{ secrets.DATABASE_URI }}" \
+          --from-literal=database-url="${{ secrets.DATABASE_URL }}" \
+          --from-literal=db-host="${{ secrets.DB_HOST }}" \
+          --from-literal=db-port="${{ secrets.DB_PORT }}" \
+          --from-literal=db-name="${{ secrets.DB_NAME }}" \
+          --from-literal=db-user="${{ secrets.DB_USER }}" \
+          --from-literal=db-password="${{ secrets.DB_PASSWORD }}" \
           --from-literal=jwt-secret-key="${{ secrets.JWT_SECRET_KEY }}" \
           --from-literal=gemini-api-key="${{ secrets.GEMINI_API_KEY }}" \
           --from-literal=gemini-api-key-sw="${{ secrets.GEMINI_API_KEY_SW }}" \
           --from-literal=openai-key="${{ secrets.OPEN_AI_KEY }}" \
+          --from-literal=openai-api-key="${{ secrets.OPEN_AI_KEY }}" \
           --from-literal=mail-username="${{ secrets.MAIL_USERNAME }}" \
           --from-literal=mail-password="${{ secrets.MAIL_PASSWORD }}" \
           --from-literal=azure-communication-connection-string="${{ secrets.AZURE_COMMUNICATION_CONNECTION_STRING }}" \
@@ -204,6 +223,13 @@ jobs:
             sentifinance-backend=${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:$IMAGE_TAG \
             --namespace=sentifinance \
             || echo "Deployment not found, falling back to full apply..."
+          
+          # Update News Processor CronJob image
+          echo "⚡ Updating News Processor CronJob image..."
+          kubectl set image cronjob/news-processor \
+            news-processor=${{ secrets.ACR_LOGIN_SERVER }}/news-processor:$IMAGE_TAG \
+            --namespace=sentifinance \
+            || echo "CronJob not found, will be created with full apply"
           
           # Fallback: If deployment doesn't exist, apply manifests
           if ! kubectl get deployment sentifinance-backend --namespace=sentifinance > /dev/null 2>&1; then

@@ -26,9 +26,9 @@ COPY run.py ./
 # Install dependencies with UV
 RUN uv sync --frozen
 
-# Download spacy model and setup crawl4ai
-RUN uv run python -m spacy download en_core_web_trf || echo "Spacy model download failed"
-RUN uv run crawl4ai-setup || echo "Crawl4AI setup failed"
+# Note: Heavy ML dependencies (spacy, crawl4ai, torch, transformers) have been
+# removed from the backend. They are now only in the news-processor microservice.
+# This reduces the backend image from ~5.8GB to ~500MB for faster deployment.
 
 # Expose port
 EXPOSE 5001
