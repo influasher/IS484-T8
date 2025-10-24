@@ -35,6 +35,11 @@ RUN which uv && uv sync --frozen
 # Expose port
 EXPOSE 5001
 
-# Your Flask app runs from run.py
-# Use .venv/bin/python directly instead of 'uv run' to avoid rebuild on every start
-CMD [".venv/bin/python", "run.py"]
+# Use production WSGI server (gunicorn) instead of Flask development server
+# --bind 0.0.0.0:5001 - Listen on all interfaces
+# --workers 4 - Multiple worker processes for concurrency
+# --timeout 120 - Allow 2 minutes for slow requests (news scraping can take time)
+# --access-logfile - - Log to stdout
+# --error-logfile - - Log errors to stderr
+# app:create_app() - Import create_app from app module
+CMD [".venv/bin/gunicorn", "--bind", "0.0.0.0:5001", "--workers", "4", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "app:create_app()"]

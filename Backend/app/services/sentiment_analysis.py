@@ -1,11 +1,12 @@
-from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
+# NOTE: Heavy ML dependencies (transformers, shap) are now primarily in news-processor
+# These are imported lazily only when actually needed to avoid startup overhead
+
 from dotenv import load_dotenv
 import os
 import re
 import logging
 import json
 import google.generativeai as genai
-import shap
 
 from app.utils.helpers import upload_shap_to_blob
 
@@ -42,6 +43,16 @@ class SentimentAnalyzer:
 
     def _load_finbert(self):
         """Initialize and load the FinBERT model"""
+        # Lazy import transformers only when actually loading the model
+        try:
+            from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
+        except ImportError as e:
+            logger.error("transformers library not installed - this is expected in lightweight backend")
+            raise ImportError(
+                "transformers is not installed. "
+                "This functionality is only available in the news-processor microservice."
+            ) from e
+
         model_name = "yiyanghkust/finbert-tone"
         try:
             tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -543,15 +554,25 @@ class SentimentAnalyzer:
 
         }
 
-    def get_shap_explanation(self, text: str) -> shap.Explanation:
+    def get_shap_explanation(self, text: str):
         """
         Get SHAP explanation for the sentiment analysis of the text using FinBERT model
         """
+        # Lazy import shap only when actually needed
+        try:
+            import shap
+        except ImportError as e:
+            logger.error("shap library not installed - this is expected in lightweight backend")
+            raise ImportError(
+                "shap is not installed. "
+                "This functionality is only available in the news-processor microservice."
+            ) from e
+
         explainer = shap.Explainer(self.finbert_pipeline)
         explanation = explainer([text])
         return explanation
 
-    def shap_explanation_to_json(self, explanation: shap.Explanation) -> str:
+    def shap_explanation_to_json(self, explanation):
         """
         Convert SHAP explanation to JSON serializable format
         """
@@ -566,10 +587,20 @@ class SentimentAnalyzer:
         }
         return json.dumps(result)
 
-    def generate_shap_html(self, explanation: shap.Explanation) -> str:
+    def generate_shap_html(self, explanation) -> str:
         """
         Generate HTML representation of SHAP explanation
         """
+        # Lazy import shap only when actually needed
+        try:
+            import shap
+        except ImportError as e:
+            logger.error("shap library not installed - this is expected in lightweight backend")
+            raise ImportError(
+                "shap is not installed. "
+                "This functionality is only available in the news-processor microservice."
+            ) from e
+
         html = shap.plots.text(explanation[0], display=False)
         return html
 

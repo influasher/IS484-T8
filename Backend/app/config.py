@@ -10,10 +10,10 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
     JWT_TOKEN_LOCATION = "headers"
-    APP_DEBUG = os.getenv("APP_DEBUG", True)
+    APP_DEBUG = os.getenv("APP_DEBUG", "False").lower() in ("true", "1", "yes")
     PORT = os.getenv("PORT", 5001)
-    LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG")
-    FLASK_ENV = os.getenv("FLASK_ENV", "development")
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    FLASK_ENV = os.getenv("FLASK_ENV", "production")
     FLASK_APP = os.getenv("FLASK_APP", "run.py")
 
     MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
