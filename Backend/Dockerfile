@@ -41,5 +41,6 @@ EXPOSE 5001
 # --timeout 120 - Allow 2 minutes for slow requests (news scraping can take time)
 # --access-logfile - - Log to stdout
 # --error-logfile - - Log errors to stderr
-# app:create_app() - Import create_app from app module
-CMD [".venv/bin/gunicorn", "--bind", "0.0.0.0:5001", "--workers", "4", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "app:create_app()"]
+# --preload - Load app before forking workers (faster startup, lower memory)
+# "app:create_app()" - Call the app factory to get WSGI app instance
+CMD [".venv/bin/gunicorn", "--bind", "0.0.0.0:5001", "--workers", "4", "--timeout", "120", "--preload", "--access-logfile", "-", "--error-logfile", "-", "app:create_app()"]
