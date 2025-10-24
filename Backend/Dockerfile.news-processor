@@ -12,10 +12,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install UV for fast package management
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    mv /root/.cargo/bin/uv /usr/local/bin/uv && \
-    chmod +x /usr/local/bin/uv
-ENV PATH="/usr/local/bin:$PATH"
+# The install script adds UV to ~/.cargo/bin, ensure PATH is set correctly
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
 
 WORKDIR /app
 
@@ -28,9 +27,8 @@ FROM base as dependencies
 COPY jobs/pyproject.toml /app/jobs/pyproject.toml
 
 # Install Python packages with UV (much faster than pip)
-# Use full path to UV binary to ensure it's found
 WORKDIR /app/jobs
-RUN uv pip install --system -e .
+RUN which uv && uv pip install --system -e .
 
 # Install Playwright browsers (required for crawl4ai)
 RUN playwright install chromium
