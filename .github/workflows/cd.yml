@@ -150,6 +150,14 @@ jobs:
       if: steps.check_build.outputs.skip_build == 'false'
       run: |
         echo "🔨 Building Docker image for Backend..."
+        # Copy frontend build into Backend directory for Docker context
+        if [ -d "build" ]; then
+          echo "📦 Copying frontend build to Backend/frontend-build..."
+          cp -r build Backend/frontend-build
+        else
+          echo "⚠️  Frontend build not found - backend will serve error page"
+          mkdir -p Backend/frontend-build
+        fi
         cd Backend
         docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }} .
         docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest .

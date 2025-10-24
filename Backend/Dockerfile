@@ -24,8 +24,8 @@ COPY app/ ./app/
 COPY migrations/ ./migrations/
 COPY run.py ./
 
-# Copy the built React frontend (must be built before Docker build)
-COPY ../build/ ./frontend-build/
+# Copy the built React frontend (copied by CD workflow before Docker build)
+COPY frontend-build/ ./frontend-build/
 
 # Install dependencies with UV
 # Find and use UV wherever it was installed
