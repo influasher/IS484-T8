@@ -34,29 +34,48 @@ spec:
     spec:
       # Job will be marked as failed if not completed within 4 hours
       activeDeadlineSeconds: 14400
-      
-      # Don't retry failed jobs automatically (manual investigation needed)
-      backoffLimit: 0
-      
-      # Clean up completed jobs after 1 day
-      ttlSecondsAfterFinished: 86400
+
+      # Retry failed jobs up to 2 times with exponential backoff
+      # This handles transient failures (API rate limits, network issues)
+      backoffLimit: 2
+
+      # Clean up completed jobs after 3 days (increased for debugging)
+      ttlSecondsAfterFinished: 259200
       
       template:
         metadata:
           labels:
             app: news-processor
             component: batch-job
+          annotations:
+            # ACI-specific annotations for spot instances and configuration
+            # Docs: https://learn.microsoft.com/en-us/azure/container-instances/container-instances-spot-containers
+
+            # Use spot instances for cost savings (up to 70% cheaper)
+            # Suitable for batch jobs that can tolerate interruption and retry
+            virtual-kubelet.io/sku-name: "Standard"
+            virtual-kubelet.io/burst-priority: "spot"
+
+            # Restart policy for pod failures
+            virtual-kubelet.io/restart-policy: "Never"
+
+            # Log analytics integration (requires workspace configured)
+            # Uncomment and configure these after setting up Log Analytics workspace
+            # virtual-kubelet.io/log-analytics-workspace-id: "<WORKSPACE_ID>"
+            # virtual-kubelet.io/log-analytics-workspace-key: "<WORKSPACE_KEY>"
         spec:
           restartPolicy: Never
-          
+
           # Use service account with database access
           serviceAccountName: default
-          
+
           # Deploy to Azure Container Instances (virtual node) for on-demand capacity
+          # Using spot instances for cost optimization (up to 70% cheaper)
           nodeSelector:
             kubernetes.io/role: agent
             type: virtual-kubelet
-          
+            kubernetes.io/os: linux
+
           tolerations:
           - key: virtual-kubelet.io/provider
             operator: Exists
@@ -68,24 +87,34 @@ spec:
             image: sentifinancetwo.azurecr.io/news-processor:latest
             imagePullPolicy: Always
             
-            # Resource limits - allocate enough for all heavy models
+            # Resource limits optimized for ML workload
+            # Models loaded: spaCy (800MB), FinBERT (400MB), Playwright (300MB)
+            # Estimated total: ~2.5GB base + 1.5GB processing = 4GB
             resources:
               requests:
-                memory: "4Gi"
-                cpu: "1000m"
+                memory: "3Gi"      # Reduced from 4Gi - saves cost
+                cpu: "1000m"       # 1 vCPU
               limits:
-                memory: "6Gi"
-                cpu: "2000m"
+                memory: "5Gi"      # Reduced from 6Gi - sufficient headroom
+                cpu: "2000m"       # 2 vCPU for parallel processing
             
             # Environment variables
             env:
             - name: FLASK_ENV
               value: "production"
-            
+
             - name: LOOKBACK_DAYS
               value: "2"
-            
-            # Optional: Limit max articles per run
+
+            # Logging configuration
+            - name: LOG_LEVEL
+              value: "INFO"
+
+            - name: PYTHONUNBUFFERED
+              value: "1"
+
+            # Optional: Limit max articles per run for cost control
+            # Uncomment to enable throttling (useful for testing or cost limits)
             # - name: MAX_ARTICLES
             #   value: "100"
             

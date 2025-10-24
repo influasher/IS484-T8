@@ -22,19 +22,22 @@ WORKDIR /app
 # ============================================
 FROM base as dependencies
 
-# Copy requirements
-COPY jobs/requirements.txt /app/jobs/requirements.txt
+# Copy dependency files
+COPY jobs/pyproject.toml /app/jobs/pyproject.toml
 
 # Install Python packages with UV (much faster than pip)
-RUN uv pip install --system -r /app/jobs/requirements.txt
+# Use full path to UV binary to ensure it's found
+WORKDIR /app/jobs
+RUN /root/.cargo/bin/uv pip install --system -e .
 
 # Install Playwright browsers (required for crawl4ai)
 RUN playwright install chromium
 RUN playwright install-deps chromium
 
 # Download spaCy model (en_core_web_trf - ~500-800MB)
-# Already specified in requirements.txt but verify it's loaded
-RUN python -c "import spacy; spacy.cli.download('en_core_web_trf')" || true
+# Direct download via pip/uv for better caching
+RUN /root/.cargo/bin/uv pip install --system \
+    https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.7.0/en_core_web_trf-3.7.0-py3-none-any.whl
 
 # ============================================
 # Stage 2: Runtime image

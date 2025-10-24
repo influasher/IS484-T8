@@ -1,0 +1,263 @@
+---
+# ConfigMap for monitoring and alerting configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: news-processor-monitoring
+  namespace: sentifinance
+data:
+  # Azure Monitor integration
+  # These values should be configured from Azure Portal
+  # Navigate to: Azure Monitor > Log Analytics Workspaces > [Your Workspace] > Agents management
+
+  # INSTRUCTIONS:
+  # 1. Create a Log Analytics Workspace in Azure Portal
+  # 2. Get Workspace ID and Key from "Agents management" section
+  # 3. Update the CronJob annotations with these values
+  # 4. Logs will be available in Azure Monitor > Logs
+
+  monitoring-enabled: "true"
+  log-retention-days: "30"
+
+  # Alert thresholds
+  max-execution-time-minutes: "240"  # 4 hours
+  min-articles-processed: "10"       # Alert if fewer than 10 articles processed
+  max-error-rate: "0.1"              # Alert if >10% of articles fail
+
+---
+# ServiceMonitor for Prometheus/Grafana (optional)
+# Only apply if you have Prometheus Operator installed
+apiVersion: v1
+kind: Service
+metadata:
+  name: news-processor-metrics
+  namespace: sentifinance
+  labels:
+    app: news-processor
+    component: metrics
+spec:
+  type: ClusterIP
+  selector:
+    app: news-processor
+    component: batch-job
+  ports:
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+
+---
+# Azure Monitor Alert Rules (ARM template format)
+# Deploy these via Azure CLI or Portal after CronJob is running
+#
+# SETUP INSTRUCTIONS:
+# ====================
+#
+# 1. CREATE LOG ANALYTICS WORKSPACE:
+#    az monitor log-analytics workspace create \
+#      --resource-group <your-resource-group> \
+#      --workspace-name sentifinance-logs \
+#      --location eastus
+#
+# 2. GET WORKSPACE ID AND KEY:
+#    WORKSPACE_ID=$(az monitor log-analytics workspace show \
+#      --resource-group <your-resource-group> \
+#      --workspace-name sentifinance-logs \
+#      --query customerId -o tsv)
+#
+#    WORKSPACE_KEY=$(az monitor log-analytics workspace get-shared-keys \
+#      --resource-group <your-resource-group> \
+#      --workspace-name sentifinance-logs \
+#      --query primarySharedKey -o tsv)
+#
+# 3. UPDATE CRONJOB ANNOTATIONS:
+#    Edit k8s/news-processing-cronjob.yaml and uncomment the annotations:
+#    virtual-kubelet.io/log-analytics-workspace-id: "$WORKSPACE_ID"
+#    virtual-kubelet.io/log-analytics-workspace-key: "$WORKSPACE_KEY"
+#
+# 4. CREATE ACTION GROUP FOR ALERTS (email notifications):
+#    az monitor action-group create \
+#      --name news-processor-alerts \
+#      --resource-group <your-resource-group> \
+#      --short-name np-alerts \
+#      --email-receiver name=admin email=<your-email>
+#
+# 5. CREATE ALERT RULES:
+#    See alert configurations below
+#
+# ====================
+# ALERT CONFIGURATIONS
+# ====================
+#
+# Alert 1: Job Failure
+# --------------------
+# Triggers when CronJob fails
+#
+# KQL Query:
+# ContainerInstanceLog_CL
+# | where Name_s == "news-processor"
+# | where Message contains "ERROR" or Message contains "FAILED"
+# | summarize FailureCount = count() by bin(TimeGenerated, 5m)
+# | where FailureCount > 0
+#
+# Create via CLI:
+# az monitor metrics alert create \
+#   --name news-processor-job-failure \
+#   --resource-group <your-resource-group> \
+#   --scopes <log-analytics-workspace-resource-id> \
+#   --condition "count > 0" \
+#   --window-size 5m \
+#   --evaluation-frequency 5m \
+#   --action news-processor-alerts \
+#   --description "News processor job failed"
+#
+# Alert 2: Long Running Job
+# -------------------------
+# Triggers when job runs longer than 4 hours
+#
+# KQL Query:
+# ContainerInstanceLog_CL
+# | where Name_s == "news-processor"
+# | where Message contains "Processing started"
+# | extend StartTime = TimeGenerated
+# | join kind=leftouter (
+#     ContainerInstanceLog_CL
+#     | where Name_s == "news-processor"
+#     | where Message contains "Processing completed"
+#     | extend EndTime = TimeGenerated
+# ) on $left.Name_s == $right.Name_s
+# | extend Duration = datetime_diff('minute', EndTime, StartTime)
+# | where Duration > 240 or isnull(Duration)
+#
+# Alert 3: Low Article Count
+# --------------------------
+# Triggers when fewer than 10 articles are processed
+#
+# KQL Query:
+# ContainerInstanceLog_CL
+# | where Name_s == "news-processor"
+# | where Message contains "Articles processed:"
+# | parse Message with * "Articles processed: " ArticleCount:int
+# | where ArticleCount < 10
+#
+# Alert 4: High Error Rate
+# ------------------------
+# Triggers when error rate exceeds 10%
+#
+# KQL Query:
+# ContainerInstanceLog_CL
+# | where Name_s == "news-processor"
+# | where Message contains "Article processing"
+# | summarize Total = count(),
+#             Errors = countif(Message contains "ERROR")
+# | extend ErrorRate = todouble(Errors) / todouble(Total)
+# | where ErrorRate > 0.1
+#
+# Alert 5: Job Not Running (Missed Schedule)
+# -------------------------------------------
+# Triggers when job hasn't run in the last 3 days
+#
+# KQL Query:
+# ContainerInstanceLog_CL
+# | where Name_s == "news-processor"
+# | where Message contains "Processing started"
+# | summarize LastRun = max(TimeGenerated)
+# | where LastRun < ago(3d)
+#
+# ====================
+# MONITORING DASHBOARD
+# ====================
+#
+# Create a custom dashboard in Azure Portal:
+#
+# 1. Navigate to Azure Portal > Dashboards > New Dashboard
+# 2. Add tiles with the following KQL queries:
+#
+# Tile 1: Job Execution History (Last 30 days)
+# ContainerInstanceLog_CL
+# | where Name_s == "news-processor"
+# | where Message contains "Processing completed"
+# | summarize Count = count() by bin(TimeGenerated, 1d)
+# | render timechart
+#
+# Tile 2: Articles Processed per Run
+# ContainerInstanceLog_CL
+# | where Name_s == "news-processor"
+# | where Message contains "Articles processed:"
+# | parse Message with * "Articles processed: " ArticleCount:int
+# | summarize Articles = sum(ArticleCount) by bin(TimeGenerated, 1d)
+# | render barchart
+#
+# Tile 3: Average Execution Time
+# ContainerInstanceLog_CL
+# | where Name_s == "news-processor"
+# | where Message contains "Execution time:"
+# | parse Message with * "Execution time: " Duration:int " minutes"
+# | summarize AvgDuration = avg(Duration) by bin(TimeGenerated, 1d)
+# | render linechart
+#
+# Tile 4: Error Distribution
+# ContainerInstanceLog_CL
+# | where Name_s == "news-processor"
+# | where Message contains "ERROR"
+# | summarize ErrorCount = count() by ErrorType = extract("ERROR: (.*?):", 1, Message)
+# | render piechart
+#
+# ====================
+# COST MONITORING
+# ====================
+#
+# Monitor ACI costs:
+# az monitor metrics list \
+#   --resource <aci-resource-id> \
+#   --metric "CPUUsage,MemoryUsage" \
+#   --start-time 2025-10-01 \
+#   --end-time 2025-10-31 \
+#   --interval PT1H \
+#   --aggregation Average
+#
+# Calculate estimated monthly cost:
+# - Spot instances: ~$0.0000012/GB/sec
+# - Memory: 5GB × 2 hours × 2 runs/week × 4 weeks = 80 GB-hours
+# - CPU: 2 vCPU × 2 hours × 2 runs/week × 4 weeks = 32 vCPU-hours
+# - Estimated: $5-10/month (vs $30-50 for regular instances)
+#
+# ====================
+# GRAFANA INTEGRATION (Advanced)
+# ====================
+#
+# If using Prometheus + Grafana:
+#
+# 1. Install Prometheus Operator in AKS:
+#    kubectl create namespace monitoring
+#    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#    helm install prometheus prometheus-community/kube-prometheus-stack -n monitoring
+#
+# 2. Apply ServiceMonitor (above) to collect metrics
+#
+# 3. Import Grafana dashboard template (create custom JSON):
+#    - Panel 1: Job success rate (last 30 days)
+#    - Panel 2: Execution duration trend
+#    - Panel 3: Articles processed per run
+#    - Panel 4: Error rate over time
+#
+# ====================
+# QUICK START GUIDE
+# ====================
+#
+# 1. Set up Log Analytics:
+#    ./scripts/setup-monitoring.sh
+#
+# 2. View logs in real-time:
+#    kubectl logs -f -n sentifinance job/news-processor-manual
+#
+# 3. Check job status:
+#    kubectl get cronjobs -n sentifinance
+#    kubectl get jobs -n sentifinance
+#
+# 4. View Azure Monitor logs:
+#    Azure Portal > Monitor > Logs > Run KQL queries
+#
+# 5. Test alerts:
+#    kubectl create job --from=cronjob/news-processor test-job -n sentifinance
+#

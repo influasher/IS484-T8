@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "news-processor"
+version = "1.0.0"
+requires-python = ">=3.11"
+description = "Microservice for batch processing news articles with ML models"
+dependencies = [
+    # Core Framework
+    "flask>=3.0.0,<4.0.0",
+    "sqlalchemy>=2.0.0,<3.0.0",
+    "psycopg2-binary>=2.9.9,<3.0.0",
+
+    # Web Scraping (Heavy - ~500MB each)
+    "crawl4ai>=0.3.0,<1.0.0",
+    "playwright>=1.40.0,<2.0.0",
+
+    # NLP and Entity Extraction (Heavy - ~500-800MB)
+    "spacy>=3.7.0,<4.0.0",
+    # spaCy model installed separately in Dockerfile
+
+    # Sentiment Analysis - FinBERT (Heavy - ~400MB)
+    "transformers>=4.35.0,<5.0.0",
+    "torch>=2.1.0,<3.0.0",
+    "sentencepiece>=0.1.99,<1.0.0",
+
+    # API-based Sentiment Analysis
+    "google-generativeai>=0.3.0",
+    "openai>=1.0.0,<2.0.0",
+
+    # News Data Source
+    "gnews>=0.3.7,<1.0.0",
+
+    # Utilities
+    "python-dotenv>=1.0.0,<2.0.0",
+    "requests>=2.31.0,<3.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0,<9.0.0",
+    "pytest-asyncio>=0.21.0,<1.0.0",
+    "black>=22.0.0",
+    "flake8>=5.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["*"]
