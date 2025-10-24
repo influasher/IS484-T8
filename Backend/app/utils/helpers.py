@@ -9,7 +9,8 @@ import google.generativeai as genai
 import re
 import pandas as pd
 from rapidfuzz import process, fuzz
-import spacy
+# spacy moved to news-processor microservice - not needed in backend API
+# import spacy
 from .helpers_constants import (
     sp500_plus2_dict,
     SECTOR_KEYWORDS,
@@ -27,8 +28,8 @@ sp500_plus2 = pd.DataFrame.from_dict(sp500_plus2_dict)
 for region in regions:
     country_to_region[region] = region
 
-# Load the spaCy model
-nlp = spacy.load("en_core_web_trf")
+# spaCy model moved to news-processor microservice
+# nlp = spacy.load("en_core_web_trf")
 
 # Get S&P 500 tickers from Wikipedia
 # url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
@@ -301,63 +302,63 @@ def combine_columns_single(val1, val2):
     return combined if combined else None
 
 
-# Extract company using spaCy NER and fuzzy match
-
-
-def extract_company(text, confidence_score_arg):
-    # print("Next article...")
-    doc = nlp(str(text))
-    orgs = list(set(ent.text for ent in doc.ents if ent.label_ == "ORG"))
-    # print("Orgs:" + ", ".join(orgs))
-
-    match_list = []
-
-    for org in orgs:
-        # print("Current org:" + org)
-        match, score, _ = process.extractOne(org, known_companies)
-        # print("Current match:" + match)
-        # print("Current score:" + str(score))
-        if score >= confidence_score_arg:
-            match_list.append(match)
-            # print("Current match list:" + ", ".join(match_list))
-
-    if match_list == []:
-        # print("Returned None")
-        return None
-
-    else:
-        unique_list = list(set(match_list))
-        # print("Final match list:" + ", ".join(unique_list))
-        return unique_list
-
-
-def extract_region(text, confidence_score_arg=85):
-    # cleaned_text = preprocess_text(str(text))
-    # print("cleaned text:" + cleaned_text)
-    doc = nlp(str(text))
-    # print("text:" + text)
-    regions = list(set(ent.text for ent in doc.ents if ent.label_ == "GPE"))
-    # print("regions:"+", ".join(regions))
-
-    match_list = []
-    article = 1
-
-    for region in regions:
-        # print("article" + str(article))
-        article += 1
-        # print("current region:" + region)
-        match, score, _ = process.extractOne(region, country_to_region.keys())
-        # print("match + score:" + match + str(score))
-        if score >= confidence_score_arg:
-            mapped_region = country_to_region[match]
-            match_list.append(mapped_region)
-            # print("current match_list:" + ", ".join(match_list))
-
-    if not match_list:
-        return None
-    else:
-        # print("returned match_list:" + ", ".join(match_list))
-        return list(set(match_list))  # Return unique mapped regions
+# DEPRECATED: These functions moved to news-processor microservice
+# Extract company using spaCy NER and fuzzy match - now in jobs/news_processing_job.py
+#
+# def extract_company(text, confidence_score_arg):
+#     # print("Next article...")
+#     doc = nlp(str(text))
+#     orgs = list(set(ent.text for ent in doc.ents if ent.label_ == "ORG"))
+#     # print("Orgs:" + ", ".join(orgs))
+#
+#     match_list = []
+#
+#     for org in orgs:
+#         # print("Current org:" + org)
+#         match, score, _ = process.extractOne(org, known_companies)
+#         # print("Current match:" + match)
+#         # print("Current score:" + str(score))
+#         if score >= confidence_score_arg:
+#             match_list.append(match)
+#             # print("Current match list:" + ", ".join(match_list))
+#
+#     if match_list == []:
+#         # print("Returned None")
+#         return None
+#
+#     else:
+#         unique_list = list(set(match_list))
+#         # print("Final match list:" + ", ".join(unique_list))
+#         return unique_list
+#
+#
+# def extract_region(text, confidence_score_arg=85):
+#     # cleaned_text = preprocess_text(str(text))
+#     # print("cleaned text:" + cleaned_text)
+#     doc = nlp(str(text))
+#     # print("text:" + text)
+#     regions = list(set(ent.text for ent in doc.ents if ent.label_ == "GPE"))
+#     # print("regions:"+", ".join(regions))
+#
+#     match_list = []
+#     article = 1
+#
+#     for region in regions:
+#         # print("article" + str(article))
+#         article += 1
+#         # print("current region:" + region)
+#         match, score, _ = process.extractOne(region, country_to_region.keys())
+#         # print("match + score:" + match + str(score))
+#         if score >= confidence_score_arg:
+#             mapped_region = country_to_region[match]
+#             match_list.append(mapped_region)
+#             # print("current match_list:" + ", ".join(match_list))
+#
+#     if not match_list:
+#         return None
+#     else:
+#         # print("returned match_list:" + ", ".join(match_list))
+#         return list(set(match_list))  # Return unique mapped regions
 
 
 def classify_sector(text, threshold=80):

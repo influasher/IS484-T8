@@ -14,8 +14,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*  # Clean up to reduce image size
 
 # Install UV for fast package management
+# The install script adds UV to ~/.cargo/bin, ensure PATH is set correctly
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:$PATH"
+ENV PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
 
 # Copy project files
 COPY pyproject.toml uv.lock ./
@@ -23,8 +24,9 @@ COPY app/ ./app/
 COPY migrations/ ./migrations/
 COPY run.py ./
 
-# Install dependencies with UV (use full path to ensure it's found)
-RUN /root/.cargo/bin/uv sync --frozen
+# Install dependencies with UV
+# Find and use UV wherever it was installed
+RUN which uv && uv sync --frozen
 
 # Note: Heavy ML dependencies (spacy, crawl4ai, torch, transformers) have been
 # removed from the backend. They are now only in the news-processor microservice.
