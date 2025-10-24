@@ -66,14 +66,25 @@ jobs:
       run: |
         echo "🔍 Analyzing what needs to be built..."
 
-        # Manual workflow_dispatch can skip build
-        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ "${{ inputs.skip_build }}" == "true" ]]; then
-          echo "skip_build=true" >> $GITHUB_OUTPUT
-          echo "skip_news_processor_build=true" >> $GITHUB_OUTPUT
-          echo "skip_frontend=true" >> $GITHUB_OUTPUT
-          echo "image_tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
-          echo "⏭️  Manual run: Skipping build, using image tag: ${{ inputs.image_tag }}"
-          exit 0
+        # Manual workflow_dispatch can control build behavior
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ inputs.skip_build }}" == "true" ]]; then
+            echo "skip_build=true" >> $GITHUB_OUTPUT
+            echo "skip_news_processor_build=true" >> $GITHUB_OUTPUT
+            echo "skip_frontend=true" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+            echo "⏭️  Manual run: Skipping build, using image tag: ${{ inputs.image_tag }}"
+            exit 0
+          else
+            # Force build when skip_build=false
+            echo "skip_build=false" >> $GITHUB_OUTPUT
+            echo "skip_news_processor_build=false" >> $GITHUB_OUTPUT
+            echo "skip_frontend=false" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "k8s_changed=0" >> $GITHUB_OUTPUT
+            echo "🔨 Manual run: Force building all components"
+            exit 0
+          fi
         fi
 
         # Auto-detect changes for push events
