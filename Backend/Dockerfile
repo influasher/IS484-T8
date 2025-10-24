@@ -23,8 +23,8 @@ COPY app/ ./app/
 COPY migrations/ ./migrations/
 COPY run.py ./
 
-# Install dependencies with UV
-RUN uv sync --frozen
+# Install dependencies with UV (use full path to ensure it's found)
+RUN /root/.cargo/bin/uv sync --frozen
 
 # Note: Heavy ML dependencies (spacy, crawl4ai, torch, transformers) have been
 # removed from the backend. They are now only in the news-processor microservice.
