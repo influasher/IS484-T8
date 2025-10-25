@@ -23,6 +23,7 @@ COPY pyproject.toml uv.lock ./
 COPY app/ ./app/
 COPY migrations/ ./migrations/
 COPY run.py ./
+COPY entrypoint.sh ./
 
 # Copy the built React frontend (copied by CD workflow before Docker build)
 COPY frontend-build/ ./frontend-build/
@@ -35,15 +36,11 @@ RUN which uv && uv sync --frozen
 # removed from the backend. They are now only in the news-processor microservice.
 # This reduces the backend image from ~5.8GB to ~500MB for faster deployment.
 
+# Make entrypoint script executable
+RUN chmod +x entrypoint.sh
+
 # Expose port
 EXPOSE 5001
 
-# Use production WSGI server (gunicorn) instead of Flask development server
-# --bind 0.0.0.0:5001 - Listen on all interfaces
-# --workers 4 - Multiple worker processes for concurrency
-# --timeout 120 - Allow 2 minutes for slow requests (news scraping can take time)
-# --access-logfile - - Log to stdout
-# --error-logfile - - Log errors to stderr
-# --preload - Load app before forking workers (faster startup, lower memory)
-# "app:create_app()" - Call the app factory to get WSGI app instance
-CMD [".venv/bin/gunicorn", "--bind", "0.0.0.0:5001", "--workers", "4", "--timeout", "120", "--preload", "--access-logfile", "-", "--error-logfile", "-", "app:create_app()"]
+# Use entrypoint script to run migrations before starting gunicorn
+CMD ["./entrypoint.sh"]
