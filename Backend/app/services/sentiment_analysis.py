@@ -68,7 +68,8 @@ class SentimentAnalyzer:
             # Direct API key for testing purposes
             load_dotenv()
 
-            api_key = os.getenv("SW_GEMINI_API_KEY")  # REPLACE WITH YOUR ACTUAL API KEY
+            # Try GEMINI_API_KEY_SW first (secondary key), fallback to GEMINI_API_KEY
+            api_key = os.getenv("GEMINI_API_KEY_SW") or os.getenv("GEMINI_API_KEY")
 
             # Configure the Gemini API client
             genai.configure(api_key=api_key)

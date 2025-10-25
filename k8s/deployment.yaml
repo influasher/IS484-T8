@@ -64,11 +64,11 @@ spec:
             secretKeyRef:
               name: sentifinance-secrets
               key: gemini-api-key-sw
-        - name: OPEN_AI_KEY
+        - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:
               name: sentifinance-secrets
-              key: openai-key
+              key: openai-api-key
         - name: MAIL_USERNAME
           valueFrom:
             secretKeyRef:

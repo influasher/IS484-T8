@@ -239,8 +239,7 @@ jobs:
           --from-literal=jwt-secret-key="${{ secrets.JWT_SECRET_KEY }}" \
           --from-literal=gemini-api-key="${{ secrets.GEMINI_API_KEY }}" \
           --from-literal=gemini-api-key-sw="${{ secrets.GEMINI_API_KEY_SW }}" \
-          --from-literal=openai-key="${{ secrets.OPEN_AI_KEY }}" \
-          --from-literal=openai-api-key="${{ secrets.OPEN_AI_KEY }}" \
+          --from-literal=openai-api-key="${{ secrets.OPENAI_API_KEY }}" \
           --from-literal=mail-username="${{ secrets.MAIL_USERNAME }}" \
           --from-literal=mail-password="${{ secrets.MAIL_PASSWORD }}" \
           --from-literal=azure-communication-connection-string="${{ secrets.AZURE_COMMUNICATION_CONNECTION_STRING }}" \
