@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models.client_portfolio import ClientPortfolio
 from app.models.client_performance import ClientPerformance
+from app.services.portfolio_service import calculate_client_portfolio
 from app.models.entity import Entity
 from app.models.user import User
 from sqlalchemy.exc import IntegrityError
@@ -15,6 +16,8 @@ portfolio_bp = Blueprint('portfolio', __name__)
 def get_client_portfolio(client_id):
     """Get portfolio allocation for a specific client"""
     try:
+        calculate_client_portfolio(client_id)
+        
         # Verify client exists
         client = User.query.get(client_id)
         if not client:
@@ -31,8 +34,12 @@ def get_client_portfolio(client_id):
                 allocation.append({
                     'name': entity.ticker,
                     'value': portfolio.qty or 0,
+                    'average_cost_basis': portfolio.average_cost_basis,
+                    'total_invested': portfolio.total_invested,
                     'color': f'#{hash(entity.ticker) % 0xFFFFFF:06x}',  # Generate color from ticker
                     'market_value': portfolio.current_market_value,
+                    'unrealized_pnl': portfolio.unrealized_pnl,
+                    'unrealized_pnl_percent': portfolio.unrealized_pnl_percent,
                     'allocation_percent': portfolio.portfolio_allocation_percent
                 })
 

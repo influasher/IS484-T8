@@ -239,3 +239,20 @@ def get_entity_fundamental(ticker):
         "Stock fundamentals fetched successfully",
         200,
     )
+
+@entities_bp.route("/ticker/<string:ticker>/price", methods=["GET"])
+def get_stock_price_by_ticker(ticker):
+    """Get current stock price by ticker symbol"""
+    try:
+        stock_price = get_stock_price(ticker)
+        return format_response(
+            {"ticker": ticker, "price": stock_price},
+            "Stock price fetched successfully",
+            200,
+        )
+    except Exception as e:
+        return format_response(
+            None,
+            f"Error fetching stock price: {str(e)}",
+            500,
+        )

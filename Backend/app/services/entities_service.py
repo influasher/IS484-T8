@@ -11,9 +11,15 @@ def get_ticker_by_entity(entity_name):
     return None
 
 
-def get_id_by_entity(entity_name):
-    """Get ticker by entity name"""
-    entity = Entity.query.filter(Entity.name == entity_name).first()
+def get_id_by_entity(ticker_or_name):
+    """Get entity ID by ticker or name"""
+    # First try to find by ticker
+    entity = Entity.query.filter(Entity.ticker == ticker_or_name).first()
+
+    # If not found, try to find by name
+    if not entity:
+        entity = Entity.query.filter(Entity.name == ticker_or_name).first()
+
     if entity:
         return entity.id
     return None
