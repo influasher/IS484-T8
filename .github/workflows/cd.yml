@@ -65,52 +65,80 @@ jobs:
       id: check_build
       run: |
         echo "🔍 Analyzing what needs to be built..."
-        
-        # Manual workflow_dispatch can skip build
-        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ "${{ inputs.skip_build }}" == "true" ]]; then
-          echo "skip_build=true" >> $GITHUB_OUTPUT
-          echo "skip_frontend=true" >> $GITHUB_OUTPUT
-          echo "image_tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
-          echo "⏭️  Manual run: Skipping build, using image tag: ${{ inputs.image_tag }}"
-          exit 0
+
+        # Manual workflow_dispatch can control build behavior
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ inputs.skip_build }}" == "true" ]]; then
+            echo "skip_build=true" >> $GITHUB_OUTPUT
+            echo "skip_news_processor_build=true" >> $GITHUB_OUTPUT
+            echo "skip_frontend=true" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+            echo "⏭️  Manual run: Skipping build, using image tag: ${{ inputs.image_tag }}"
+            exit 0
+          else
+            # Force build when skip_build=false
+            echo "skip_build=false" >> $GITHUB_OUTPUT
+            echo "skip_news_processor_build=false" >> $GITHUB_OUTPUT
+            echo "skip_frontend=false" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "k8s_changed=0" >> $GITHUB_OUTPUT
+            echo "🔨 Manual run: Force building all components"
+            exit 0
+          fi
         fi
-        
+
         # Auto-detect changes for push events
         CHANGED_FILES=$(git diff HEAD~1 --name-only || echo "")
-        
+
         # Count changes (use grep -c which always returns a number, then trim whitespace)
-        BACKEND_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^Backend/" | wc -l | tr -d ' ')
+        # Separate backend API changes from news-processor changes
+        BACKEND_API_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^Backend/(app|run\.py|Dockerfile|pyproject\.toml|uv\.lock)" | wc -l | tr -d ' ')
+        NEWS_PROCESSOR_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^Backend/(jobs|Dockerfile\.news-processor)" | wc -l | tr -d ' ')
         FRONTEND_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^(src/|public/|package\.json|package-lock\.json)" | wc -l | tr -d ' ')
         K8S_CHANGED=$(echo "$CHANGED_FILES" | grep "^k8s/" | wc -l | tr -d ' ')
-        
+
         # Ensure variables are integers (default to 0 if empty)
-        BACKEND_CHANGED=${BACKEND_CHANGED:-0}
+        BACKEND_API_CHANGED=${BACKEND_API_CHANGED:-0}
+        NEWS_PROCESSOR_CHANGED=${NEWS_PROCESSOR_CHANGED:-0}
         FRONTEND_CHANGED=${FRONTEND_CHANGED:-0}
         K8S_CHANGED=${K8S_CHANGED:-0}
-        
+
         echo "📊 Change Detection:"
-        echo "  Backend changed: $BACKEND_CHANGED files"
+        echo "  Backend API changed: $BACKEND_API_CHANGED files"
+        echo "  News Processor changed: $NEWS_PROCESSOR_CHANGED files"
         echo "  Frontend changed: $FRONTEND_CHANGED files"
         echo "  K8s manifests changed: $K8S_CHANGED files"
-        
-        if [[ "$BACKEND_CHANGED" -gt 0 ]]; then
+
+        # Determine if backend API needs rebuild
+        if [[ "$BACKEND_API_CHANGED" -gt 0 ]]; then
           echo "skip_build=false" >> $GITHUB_OUTPUT
           echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
-          echo "🔨 Backend changed - will build new Docker image"
+          echo "🔨 Backend API changed - will build new Docker image"
         else
           echo "skip_build=true" >> $GITHUB_OUTPUT
           echo "image_tag=latest" >> $GITHUB_OUTPUT
-          echo "⏭️  No Backend changes - reusing existing :latest image (saves ~5-8 min)"
+          echo "⏭️  No Backend API changes - reusing existing :latest image (saves ~3-4 min)"
         fi
-        
-        if [[ "$FRONTEND_CHANGED" -gt 0 ]]; then
+
+        # Determine if news-processor needs rebuild (independent from backend API)
+        if [[ "$NEWS_PROCESSOR_CHANGED" -gt 0 ]]; then
+          echo "skip_news_processor_build=false" >> $GITHUB_OUTPUT
+          echo "🔨 News Processor changed - will build new Docker image (saves ~8-10 min if skipped)"
+        else
+          echo "skip_news_processor_build=true" >> $GITHUB_OUTPUT
+          echo "⏭️  No News Processor changes - reusing existing :latest image (saves ~8-10 min)"
+        fi
+
+        # Determine if frontend needs rebuild
+        # Note: Frontend must be built whenever backend is built (since it's bundled in the Docker image)
+        if [[ "$FRONTEND_CHANGED" -gt 0 ]] || [[ "$BACKEND_API_CHANGED" -gt 0 ]]; then
           echo "skip_frontend=false" >> $GITHUB_OUTPUT
-          echo "🔨 Frontend changed - will build frontend"
+          echo "🔨 Frontend will be built (changed or needed for backend Docker image)"
         else
           echo "skip_frontend=true" >> $GITHUB_OUTPUT
-          echo "⏭️  No Frontend changes - skipping frontend build (saves ~2-3 min)"
+          echo "⏭️  No Frontend or Backend changes - skipping frontend build (saves ~2-3 min)"
         fi
-        
+
         echo "k8s_changed=$K8S_CHANGED" >> $GITHUB_OUTPUT
     
     - name: Set up Node.js for frontend build
@@ -130,10 +158,18 @@ jobs:
         npm ci
         npm run build
     
-    - name: Build and push Docker image
+    - name: Build and push Docker image (Backend)
       if: steps.check_build.outputs.skip_build == 'false'
       run: |
         echo "🔨 Building Docker image for Backend..."
+        # Copy frontend build into Backend directory for Docker context
+        if [ -d "build" ]; then
+          echo "📦 Copying frontend build to Backend/frontend-build..."
+          cp -r build Backend/frontend-build
+        else
+          echo "⚠️  Frontend build not found - backend will serve error page"
+          mkdir -p Backend/frontend-build
+        fi
         cd Backend
         docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }} .
         docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest .
@@ -141,6 +177,31 @@ jobs:
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }}
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
         echo "✅ Docker build and push complete"
+    
+    # News Processor build temporarily disabled due to disk space constraints on GitHub Actions
+    # The News Processor image is ~1.5GB (Playwright + Chromium + spaCy models)
+    # Build separately on a machine with more resources when needed
+
+    # - name: Free up disk space before News Processor build
+    #   if: steps.check_build.outputs.skip_news_processor_build == 'false'
+    #   run: |
+    #     echo "🧹 Cleaning up disk space before large News Processor build..."
+    #     docker system prune -af --volumes
+    #     df -h
+
+    # - name: Build and push Docker image (News Processor)
+    #   if: steps.check_build.outputs.skip_news_processor_build == 'false'
+    #   continue-on-error: true
+    #   run: |
+    #     echo "🔨 Building Docker image for News Processor..."
+    #     cd Backend
+    #     # Build once and tag twice to save space
+    #     docker build -f Dockerfile.news-processor -t ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:${{ github.sha }} .
+    #     docker tag ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:latest
+    #     echo "📤 Pushing images to ACR..."
+    #     docker push ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:${{ github.sha }}
+    #     docker push ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:latest
+    #     echo "✅ News Processor Docker build and push complete"
     
     - name: Verify existing image in ACR
       if: steps.check_build.outputs.skip_build == 'true'
@@ -169,10 +230,16 @@ jobs:
         kubectl create secret generic sentifinance-secrets \
           --from-literal=secret-key="${{ secrets.SECRET_KEY }}" \
           --from-literal=database-uri="${{ secrets.DATABASE_URI }}" \
+          --from-literal=database-url="${{ secrets.DATABASE_URL }}" \
+          --from-literal=db-host="${{ secrets.DB_HOST }}" \
+          --from-literal=db-port="${{ secrets.DB_PORT }}" \
+          --from-literal=db-name="${{ secrets.DB_NAME }}" \
+          --from-literal=db-user="${{ secrets.DB_USER }}" \
+          --from-literal=db-password="${{ secrets.DB_PASSWORD }}" \
           --from-literal=jwt-secret-key="${{ secrets.JWT_SECRET_KEY }}" \
           --from-literal=gemini-api-key="${{ secrets.GEMINI_API_KEY }}" \
           --from-literal=gemini-api-key-sw="${{ secrets.GEMINI_API_KEY_SW }}" \
-          --from-literal=openai-key="${{ secrets.OPEN_AI_KEY }}" \
+          --from-literal=openai-api-key="${{ secrets.OPENAI_API_KEY }}" \
           --from-literal=mail-username="${{ secrets.MAIL_USERNAME }}" \
           --from-literal=mail-password="${{ secrets.MAIL_PASSWORD }}" \
           --from-literal=azure-communication-connection-string="${{ secrets.AZURE_COMMUNICATION_CONNECTION_STRING }}" \
@@ -204,6 +271,13 @@ jobs:
             sentifinance-backend=${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:$IMAGE_TAG \
             --namespace=sentifinance \
             || echo "Deployment not found, falling back to full apply..."
+          
+          # Update News Processor CronJob image
+          echo "⚡ Updating News Processor CronJob image..."
+          kubectl set image cronjob/news-processor \
+            news-processor=${{ secrets.ACR_LOGIN_SERVER }}/news-processor:$IMAGE_TAG \
+            --namespace=sentifinance \
+            || echo "CronJob not found, will be created with full apply"
           
           # Fallback: If deployment doesn't exist, apply manifests
           if ! kubectl get deployment sentifinance-backend --namespace=sentifinance > /dev/null 2>&1; then

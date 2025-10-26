@@ -1,11 +1,14 @@
-from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
+# NOTE: Heavy ML dependencies (transformers, shap) are now primarily in news-processor
+# These are imported lazily only when actually needed to avoid startup overhead
+
 from dotenv import load_dotenv
 import os
 import re
 import logging
 import json
 import google.generativeai as genai
-import shap
+
+from app.utils.helpers import upload_shap_to_blob
 
 # Configure logging
 logging.basicConfig(
@@ -40,6 +43,16 @@ class SentimentAnalyzer:
 
     def _load_finbert(self):
         """Initialize and load the FinBERT model"""
+        # Lazy import transformers only when actually loading the model
+        try:
+            from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
+        except ImportError as e:
+            logger.error("transformers library not installed - this is expected in lightweight backend")
+            raise ImportError(
+                "transformers is not installed. "
+                "This functionality is only available in the news-processor microservice."
+            ) from e
+
         model_name = "yiyanghkust/finbert-tone"
         try:
             tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -55,7 +68,8 @@ class SentimentAnalyzer:
             # Direct API key for testing purposes
             load_dotenv()
 
-            api_key = os.getenv("SW_GEMINI_API_KEY")  # REPLACE WITH YOUR ACTUAL API KEY
+            # Try GEMINI_API_KEY_SW first (secondary key), fallback to GEMINI_API_KEY
+            api_key = os.getenv("GEMINI_API_KEY_SW") or os.getenv("GEMINI_API_KEY")
 
             # Configure the Gemini API client
             genai.configure(api_key=api_key)
@@ -520,6 +534,12 @@ class SentimentAnalyzer:
         # Calculate shap values for FinBert scores
         shap_explanation = self.get_shap_explanation(preprocessed_text)
         shap_json = self.shap_explanation_to_json(shap_explanation)
+        shap_html = self.generate_shap_html(shap_explanation)
+
+        # Upload SHAP HTML to blob storage
+        import hashlib
+        analysis_id = hashlib.md5(text.encode()).hexdigest()[:12]
+        # shap_blob_url = upload_shap_to_blob(shap_html, analysis_id)
 
         return {
             "numerical_score": final_score,
@@ -530,18 +550,30 @@ class SentimentAnalyzer:
             "agreement_rate": agreement_rate,
             "segment_count": len(text_segments),
             "segment_results": integrated_results,
-            "shap": shap_json
+            "shap": shap_json,
+            "shap_html": shap_html
+
         }
 
-    def get_shap_explanation(self, text: str) -> shap.Explanation:
+    def get_shap_explanation(self, text: str):
         """
         Get SHAP explanation for the sentiment analysis of the text using FinBERT model
         """
+        # Lazy import shap only when actually needed
+        try:
+            import shap
+        except ImportError as e:
+            logger.error("shap library not installed - this is expected in lightweight backend")
+            raise ImportError(
+                "shap is not installed. "
+                "This functionality is only available in the news-processor microservice."
+            ) from e
+
         explainer = shap.Explainer(self.finbert_pipeline)
         explanation = explainer([text])
         return explanation
 
-    def shap_explanation_to_json(self, explanation: shap.Explanation) -> str:
+    def shap_explanation_to_json(self, explanation):
         """
         Convert SHAP explanation to JSON serializable format
         """
@@ -555,6 +587,23 @@ class SentimentAnalyzer:
             "base_values": base_values
         }
         return json.dumps(result)
+
+    def generate_shap_html(self, explanation) -> str:
+        """
+        Generate HTML representation of SHAP explanation
+        """
+        # Lazy import shap only when actually needed
+        try:
+            import shap
+        except ImportError as e:
+            logger.error("shap library not installed - this is expected in lightweight backend")
+            raise ImportError(
+                "shap is not installed. "
+                "This functionality is only available in the news-processor microservice."
+            ) from e
+
+        html = shap.plots.text(explanation[0], display=False)
+        return html
 
 
 # Expose a simple interface for external use
@@ -583,6 +632,8 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
             "third_model_score": 0,
             "confidence": 0,
             "agreement_rate": 0,
+            "shap": {},
+            "shap_html": ""
         }
 
         # Combine results
@@ -610,6 +661,12 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
         else:
             result["classification"] = "neutral"
 
+        # get shap values
+        result["shap"] = result_with_open_ai["shap"]
+
+        # get shap url
+        result["shap_html"] = result_with_open_ai["shap_html"]
+
         return {
             "numerical_score": result["numerical_score"],
             "finbert_score": result["finbert_score"],
@@ -618,7 +675,8 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
             "classification": result["classification"],
             "confidence": result["confidence"],
             "agreement_rate": result["agreement_rate"],
-            "shap": result["shap"]
+            "shap": result["shap"],
+            "shap_html": result["shap_html"]
         }
 
     elif use_gemini:
@@ -634,7 +692,8 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
             "classification": result["classification"],
             "confidence": result["confidence"],
             "agreement_rate": result["agreement_rate"],
-            "shap": result["shap"]
+            "shap": result["shap"],
+            "shap_html": result["shap_html"]
         }
 
 
@@ -651,15 +710,15 @@ if __name__ == "__main__":
     # Test with just FinBERT for simplicity
     finbert_only = analyzer.analyze_with_finbert(sample_text)
 
-    # explainer = shap.Explainer(analyzer.finbert_pipeline)
-    # explanation = explainer([sample_text])
-    # json_data = shap_explanation_to_json(explanation)
-    # print(json_data)
-    # print(explanation[:2])
-    # shap.plots.text(shap_values[0], display=False)  # Get HTML object
-    # html = shap.plots.text(shap_values[0], display=False)
-    # with open("shap_text_explanation.html", "w") as f:
-    #     f.write(html)  # No .data needed
+    explainer = shap.Explainer(analyzer.finbert_pipeline)
+    explanation = explainer([sample_text])
+    json_data = shap_explanation_to_json(explanation)
+    print(json_data)
+    print(explanation[:2])
+    shap.plots.text(shap_values[0], display=False)  # Get HTML object
+    html = shap.plots.text(shap_values[0], display=False)
+    with open("shap_text_explanation.html", "w") as f:
+        f.write(html)  # No .data needed
 
     # shap.save_html(str(out_path), html)
     print("=== FinBERT Analysis Only ===")

@@ -1,77 +1,83 @@
 import asyncio
 import logging
 
+# NOTE: Heavy dependencies (crawl4ai, playwright) are now primarily in news-processor
+# These are imported lazily only when actually needed to avoid startup overhead
+# and to allow CI tests to run without these dependencies installed
+
 # Configure logging
 logger = logging.getLogger("crawler")
 logging.basicConfig(level=logging.INFO)
 
-# LAZY LOADING: Heavy imports moved inside functions to avoid loading at app startup
-# These imports (crawl4ai, playwright) can consume 500MB-1GB memory
-_crawler_config_initialized = False
-_browser_config = None
-_run_config = None
-_default_user_agent = None
+# Lazy import globals - will be initialized on first use
+_BROWSER_CONFIG = None
+_RUN_CONFIG = None
+_DEFAULT_USER_AGENT = None
 
 
-def _initialize_crawler_config():
-    """Lazy initialization of crawler configuration - only loads heavy libraries when first needed."""
-    global _crawler_config_initialized, _browser_config, _run_config, _default_user_agent
-    
-    if _crawler_config_initialized:
-        return
-    
-    logger.info("Initializing crawler configuration (first scrape request)...")
-    
-    # Import heavy libraries only when needed
-    from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig, CacheMode
-    from fake_useragent import UserAgent
-    
-    # Create a reusable user agent
-    ua = UserAgent()
-    _default_user_agent = ua.random
-    
-    # Shared browser config (static across scrapes for efficiency)
-    _browser_config = BrowserConfig(
-        browser_type="chromium",
-        headless=True,
-        viewport_width=1280,
-        viewport_height=720,
-        user_agent=_default_user_agent,
-        verbose=False,
-        use_persistent_context=True,
-    )
-    
-    # Reusable crawler run config
-    _run_config = CrawlerRunConfig(
-        user_agent=_default_user_agent,
-        word_count_threshold=100,
-        excluded_tags=["form", "header", "footer", "aside"],
-        exclude_external_links=True,
-        exclude_social_media_links=True,
-        process_iframes=False,
-        remove_overlay_elements=True,
-        simulate_user=True,
-        magic=True,
-        cache_mode=CacheMode.ENABLED,
-    )
-    
-    _crawler_config_initialized = True
-    logger.info("Crawler configuration initialized successfully")
+def _ensure_deps_loaded():
+    """Lazy load heavy dependencies only when actually needed"""
+    global _BROWSER_CONFIG, _RUN_CONFIG, _DEFAULT_USER_AGENT
+
+    if _BROWSER_CONFIG is not None:
+        return  # Already loaded
+
+    try:
+        from crawl4ai import AsyncWebCrawler
+        from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig, CacheMode
+        from fake_useragent import UserAgent
+
+        # Create user agent
+        ua = UserAgent()
+        _DEFAULT_USER_AGENT = ua.random
+
+        # Shared browser config (static across scrapes for efficiency)
+        _BROWSER_CONFIG = BrowserConfig(
+            browser_type="chromium",
+            headless=True,
+            viewport_width=1280,
+            viewport_height=720,
+            user_agent=_DEFAULT_USER_AGENT,
+            verbose=False,
+            use_persistent_context=True,
+        )
+
+        # Reusable crawler run config
+        _RUN_CONFIG = CrawlerRunConfig(
+            user_agent=_DEFAULT_USER_AGENT,
+            word_count_threshold=100,
+            excluded_tags=["form", "header", "footer", "aside"],
+            exclude_external_links=True,
+            exclude_social_media_links=True,
+            process_iframes=False,
+            remove_overlay_elements=True,
+            simulate_user=True,
+            magic=True,
+            cache_mode=CacheMode.ENABLED,
+        )
+
+        logger.info("Article scraper dependencies loaded successfully")
+    except ImportError as e:
+        logger.warning(f"Article scraper dependencies not available: {e}")
+        logger.warning("This is expected if running without news-processor dependencies")
+        raise ImportError(
+            "crawl4ai and playwright are not installed. "
+            "These are only available in the news-processor microservice."
+        ) from e
 
 
 async def scrape_article_async(url, retries=2, delay=2):
     """Scrape article content asynchronously with retry mechanism."""
-    # Initialize crawler config on first use (lazy loading)
-    _initialize_crawler_config()
-    
-    # Import heavy libraries only when scraping
+    # Lazy load dependencies only when function is actually called
+    _ensure_deps_loaded()
+
     from crawl4ai import AsyncWebCrawler
     from playwright._impl._errors import TargetClosedError, TimeoutError
-    
+
     for attempt in range(retries + 1):
         try:
-            async with AsyncWebCrawler(config=_browser_config) as crawler:
-                result = await crawler.arun(url=url, config=_run_config)
+            async with AsyncWebCrawler(config=_BROWSER_CONFIG) as crawler:
+                result = await crawler.arun(url=url, config=_RUN_CONFIG)
                 if result.success:
                     return result.cleaned_html
                 else:

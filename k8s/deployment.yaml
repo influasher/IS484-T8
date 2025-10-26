@@ -64,11 +64,11 @@ spec:
             secretKeyRef:
               name: sentifinance-secrets
               key: gemini-api-key-sw
-        - name: OPEN_AI_KEY
+        - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:
               name: sentifinance-secrets
-              key: openai-key
+              key: openai-api-key
         - name: MAIL_USERNAME
           valueFrom:
             secretKeyRef:
@@ -91,25 +91,25 @@ spec:
               key: azure-email-sender
         resources:
           requests:
-            memory: "256Mi"  # Reduced - lazy loading keeps startup memory low
+            memory: "256Mi"  # Lightweight - no ML models in backend
             cpu: "100m"
           limits:
-            memory: "1536Mi"  # Sufficient for model when it loads on first request
+            memory: "1536Mi"  # Sufficient for API operations and data processing
             cpu: "500m"
         readinessProbe:
           httpGet:
-            path: /
+            path: /api
             port: 5001
-          initialDelaySeconds: 30  # Reduced - app starts quickly with lazy loading
+          initialDelaySeconds: 30  # App starts quickly without ML models
           periodSeconds: 10
           timeoutSeconds: 5
           successThreshold: 1
           failureThreshold: 6
         livenessProbe:
           httpGet:
-            path: /
+            path: /api
             port: 5001
-          initialDelaySeconds: 60  # Reduced - app is healthy much faster
+          initialDelaySeconds: 60  # Reduced - lightweight backend starts fast
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3

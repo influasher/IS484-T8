@@ -13,7 +13,7 @@ migrate = Migrate()
 
 
 def create_app():
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder="../frontend-build", static_url_path="/")
     CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
     app.config.from_object("app.config.Config")
 
@@ -26,10 +26,23 @@ def create_app():
         from app.routes import register_routes
 
         register_routes(app)
-        
-        # Add a root route for health check
-        @app.route('/')
+
+        # API health check route
+        @app.route('/api')
         def health_check():
             return {"status": "SentiFinance API is running", "version": "1.0"}, 200
+
+        # Serve React frontend at root
+        @app.route('/', defaults={'path': ''})
+        @app.route('/<path:path>')
+        def serve(path):
+            if path and (path.startswith('api/') or path.startswith('static/')):
+                # Let Flask handle API routes and static files normally
+                from flask import abort
+                abort(404)
+            try:
+                return app.send_static_file('index.html')
+            except:
+                return {"error": "Frontend not built. Please build the React app first."}, 404
 
     return app

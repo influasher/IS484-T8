@@ -13,26 +13,34 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*  # Clean up to reduce image size
 
-# Install UV
+# Install UV for fast package management
+# The install script adds UV to ~/.cargo/bin, ensure PATH is set correctly
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
+ENV PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
 
 # Copy project files
 COPY pyproject.toml uv.lock ./
 COPY app/ ./app/
 COPY migrations/ ./migrations/
 COPY run.py ./
+COPY entrypoint.sh ./
+
+# Copy the built React frontend (copied by CD workflow before Docker build)
+COPY frontend-build/ ./frontend-build/
 
 # Install dependencies with UV
-RUN uv sync --frozen
+# Find and use UV wherever it was installed
+RUN which uv && uv sync --frozen
 
-# Download spacy model and setup crawl4ai
-RUN uv run python -m spacy download en_core_web_trf || echo "Spacy model download failed"
-RUN uv run crawl4ai-setup || echo "Crawl4AI setup failed"
+# Note: Heavy ML dependencies (spacy, crawl4ai, torch, transformers) have been
+# removed from the backend. They are now only in the news-processor microservice.
+# This reduces the backend image from ~5.8GB to ~500MB for faster deployment.
+
+# Make entrypoint script executable
+RUN chmod +x entrypoint.sh
 
 # Expose port
 EXPOSE 5001
 
-# Your Flask app runs from run.py
-# Use .venv/bin/python directly instead of 'uv run' to avoid rebuild on every start
-CMD [".venv/bin/python", "run.py"]
+# Use entrypoint script to run migrations before starting gunicorn
+CMD ["./entrypoint.sh"]

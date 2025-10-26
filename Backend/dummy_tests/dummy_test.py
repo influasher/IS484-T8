@@ -34,7 +34,8 @@ def test_flask_import():
 
 def test_essential_packages():
     """Test that essential packages can be imported"""
-    packages = ["pandas", "numpy", "requests", "sqlalchemy", "spacy"]
+    # Note: spacy removed - now only in news-processor microservice
+    packages = ["pandas", "numpy", "requests", "sqlalchemy"]
 
     for package in packages:
         try:

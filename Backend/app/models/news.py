@@ -38,6 +38,7 @@ class News(db.Model):
         ARRAY(db.String), nullable=True
     )  # e.g., ["Technology", "Finance"]
     shap = db.Column(JSON, nullable=True)
+    shapUrl = db.Column(db.Text, nullable=True)
 
     def __repr__(self):
         return f"<News {self.title[:30]}...>"

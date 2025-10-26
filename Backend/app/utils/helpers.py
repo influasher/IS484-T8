@@ -1,3 +1,5 @@
+import logging
+
 from flask import jsonify
 from newspaper import article
 from googlenewsdecoder import new_decoderv1
@@ -7,13 +9,16 @@ import google.generativeai as genai
 import re
 import pandas as pd
 from rapidfuzz import process, fuzz
-import spacy
+# spacy moved to news-processor microservice - not needed in backend API
+# import spacy
 from .helpers_constants import (
     sp500_plus2_dict,
     SECTOR_KEYWORDS,
     country_to_region,
     regions,
 )
+from azure.storage.blob import BlobServiceClient
+from azure.core.exceptions import AzureError
 
 load_dotenv()
 
@@ -23,8 +28,8 @@ sp500_plus2 = pd.DataFrame.from_dict(sp500_plus2_dict)
 for region in regions:
     country_to_region[region] = region
 
-# Load the spaCy model
-nlp = spacy.load("en_core_web_trf")
+# spaCy model moved to news-processor microservice
+# nlp = spacy.load("en_core_web_trf")
 
 # Get S&P 500 tickers from Wikipedia
 # url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
@@ -145,7 +150,8 @@ def get_article_details(url, article_html):
             "companies": companies,
             "regions": regions,
             "sectors": sectors,
-            "shap": sentiment["shap"]
+            "shap": sentiment["shap"],
+            "shap_html": sentiment["shap_html"]
         }
 
     except Exception as e:
@@ -296,63 +302,63 @@ def combine_columns_single(val1, val2):
     return combined if combined else None
 
 
-# Extract company using spaCy NER and fuzzy match
-
-
-def extract_company(text, confidence_score_arg):
-    # print("Next article...")
-    doc = nlp(str(text))
-    orgs = list(set(ent.text for ent in doc.ents if ent.label_ == "ORG"))
-    # print("Orgs:" + ", ".join(orgs))
-
-    match_list = []
-
-    for org in orgs:
-        # print("Current org:" + org)
-        match, score, _ = process.extractOne(org, known_companies)
-        # print("Current match:" + match)
-        # print("Current score:" + str(score))
-        if score >= confidence_score_arg:
-            match_list.append(match)
-            # print("Current match list:" + ", ".join(match_list))
-
-    if match_list == []:
-        # print("Returned None")
-        return None
-
-    else:
-        unique_list = list(set(match_list))
-        # print("Final match list:" + ", ".join(unique_list))
-        return unique_list
-
-
-def extract_region(text, confidence_score_arg=85):
-    # cleaned_text = preprocess_text(str(text))
-    # print("cleaned text:" + cleaned_text)
-    doc = nlp(str(text))
-    # print("text:" + text)
-    regions = list(set(ent.text for ent in doc.ents if ent.label_ == "GPE"))
-    # print("regions:"+", ".join(regions))
-
-    match_list = []
-    article = 1
-
-    for region in regions:
-        # print("article" + str(article))
-        article += 1
-        # print("current region:" + region)
-        match, score, _ = process.extractOne(region, country_to_region.keys())
-        # print("match + score:" + match + str(score))
-        if score >= confidence_score_arg:
-            mapped_region = country_to_region[match]
-            match_list.append(mapped_region)
-            # print("current match_list:" + ", ".join(match_list))
-
-    if not match_list:
-        return None
-    else:
-        # print("returned match_list:" + ", ".join(match_list))
-        return list(set(match_list))  # Return unique mapped regions
+# DEPRECATED: These functions moved to news-processor microservice
+# Extract company using spaCy NER and fuzzy match - now in jobs/news_processing_job.py
+#
+# def extract_company(text, confidence_score_arg):
+#     # print("Next article...")
+#     doc = nlp(str(text))
+#     orgs = list(set(ent.text for ent in doc.ents if ent.label_ == "ORG"))
+#     # print("Orgs:" + ", ".join(orgs))
+#
+#     match_list = []
+#
+#     for org in orgs:
+#         # print("Current org:" + org)
+#         match, score, _ = process.extractOne(org, known_companies)
+#         # print("Current match:" + match)
+#         # print("Current score:" + str(score))
+#         if score >= confidence_score_arg:
+#             match_list.append(match)
+#             # print("Current match list:" + ", ".join(match_list))
+#
+#     if match_list == []:
+#         # print("Returned None")
+#         return None
+#
+#     else:
+#         unique_list = list(set(match_list))
+#         # print("Final match list:" + ", ".join(unique_list))
+#         return unique_list
+#
+#
+# def extract_region(text, confidence_score_arg=85):
+#     # cleaned_text = preprocess_text(str(text))
+#     # print("cleaned text:" + cleaned_text)
+#     doc = nlp(str(text))
+#     # print("text:" + text)
+#     regions = list(set(ent.text for ent in doc.ents if ent.label_ == "GPE"))
+#     # print("regions:"+", ".join(regions))
+#
+#     match_list = []
+#     article = 1
+#
+#     for region in regions:
+#         # print("article" + str(article))
+#         article += 1
+#         # print("current region:" + region)
+#         match, score, _ = process.extractOne(region, country_to_region.keys())
+#         # print("match + score:" + match + str(score))
+#         if score >= confidence_score_arg:
+#             mapped_region = country_to_region[match]
+#             match_list.append(mapped_region)
+#             # print("current match_list:" + ", ".join(match_list))
+#
+#     if not match_list:
+#         return None
+#     else:
+#         # print("returned match_list:" + ", ".join(match_list))
+#         return list(set(match_list))  # Return unique mapped regions
 
 
 def classify_sector(text, threshold=80):
@@ -431,3 +437,54 @@ def news_interpreter(news_text, summary_length):
         "summary": summary,
         "metadata": {"companies": companies, "regions": regions, "sectors": sectors},
     }
+
+
+def upload_shap_to_blob(html_content, news_url):
+    """
+    Upload SHAP HTML explanation to Azure Blob Storage
+
+    Args:
+        html_content (str): The HTML content to upload
+        news_url (str): The news article URL
+
+    Returns:
+        str: The blob URL if successful, None if failed
+    """
+    try:
+        # Get connection string from environment
+        connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+        if not connection_string:
+            logging.error("Azure Storage connection string not found")
+            return None
+
+        # Initialize blob service client
+        blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+
+        # Container name (you can change this)
+        container_name = "shap"
+
+        # Generate blob name from URL hash for uniqueness
+        import hashlib
+        url_hash = hashlib.md5(news_url.encode()).hexdigest()[:12]
+        blob_name = f"shap_explanation_{url_hash}.html"
+
+        # Get blob client
+        blob_client = blob_service_client.get_blob_client(
+            container=container_name,
+            blob=blob_name
+        )
+
+        # Upload the HTML content
+        blob_client.upload_blob(html_content, overwrite=True, content_type='text/html')
+
+        # Return the blob URL
+        blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{container_name}/{blob_name}"
+        logging.info(f"SHAP HTML uploaded successfully: {blob_url}")
+        return blob_url
+
+    except AzureError as e:
+        logging.error(f"Azure error uploading SHAP HTML: {str(e)}")
+        return None
+    except Exception as e:
+        logging.error(f"Error uploading SHAP HTML: {str(e)}")
+        return None

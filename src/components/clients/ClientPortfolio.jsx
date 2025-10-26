@@ -108,7 +108,7 @@ const PortfolioDashboard = ({ clientId }) => {
   const fetchIRXData = async (timeRange) => {
     try {
       const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-      const irxUrl = `${API_BASE_URL}/entities/ticker=^IRX/chart?period=${timeRange}`;
+      const irxUrl = `${API_BASE_URL}/api/entities/ticker=^IRX/chart?period=${timeRange}`;
 
       console.log(`Fetching IRX data from: ${irxUrl}`);
       const response = await fetch(irxUrl);
@@ -225,12 +225,12 @@ const PortfolioDashboard = ({ clientId }) => {
       const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
 
       // Fetch portfolio allocation
-      const portfolioResponse = await fetch(`${API_BASE_URL}/portfolio/${clientId}`);
+      const portfolioResponse = await fetch(`${API_BASE_URL}/api/portfolio/${clientId}`);
       const portfolioResult = portfolioResponse.ok ? await portfolioResponse.json() : null;
 
       // Fetch performance history
-      console.log(`Fetching performance data from: ${API_BASE_URL}/performance/${clientId}`);
-      const performanceResponse = await fetch(`${API_BASE_URL}/portfolio/performance/${clientId}`);
+      console.log(`Fetching performance data from: ${API_BASE_URL}/api/performance/${clientId}`);
+      const performanceResponse = await fetch(`${API_BASE_URL}/api/portfolio/performance/${clientId}`);
       console.log('Performance response status:', performanceResponse.status);
       console.log('Performance response ok:', performanceResponse.ok);
 
@@ -311,7 +311,7 @@ const PortfolioDashboard = ({ clientId }) => {
     try {
       const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
       console.log(`Fetching transactions for client: ${clientId}`);
-      const response = await fetch(`${API_BASE_URL}/transactions/client/${clientId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/transactions/client/${clientId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
