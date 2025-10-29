@@ -29,7 +29,7 @@ class TestConfig(Config):
     """Configuration for testing environment"""
 
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"  # In-memory database for tests
+    SQLALCHEMY_DATABASE_URI = os.getenv("TEST_DATABASE_URI")  # Local Postgres database for tests
     SECRET_KEY = "test-secret-key"
     JWT_SECRET_KEY = "test-jwt-secret"
     WTF_CSRF_ENABLED = False  # Disable CSRF for testing
