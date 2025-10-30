@@ -8,12 +8,18 @@ import {
   Link as MuiLink,
   Stack,
   Box,
+  Fab,
+  Tooltip,
+  Snackbar,
+  Alert,
 } from "@mui/material";
+import { Refresh as RefreshIcon } from "@mui/icons-material";
 import { Link } from "react-router-dom";
 import SearchTable from '../ui/SearchTable';
 import SentimentScore from "../ui/Sentimentscore";
 import useFetch from "../../hooks/useFetch";
 import { ROUTES } from "../../routes";
+import entitySentimentService from "../../services/entitySentimentService";
 
 const Entities = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -21,6 +27,10 @@ const Entities = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [filterOperator, setFilterOperator] = useState("");
   const [filterValue, setFilterValue] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertSeverity, setAlertSeverity] = useState("success");
   const entitiesPerPage = 5;
 
   const url = `/entities/?page=${currentPage}&per_page=${entitiesPerPage}&sort_order=${sortOrder}&search=${encodeURIComponent(searchTerm)}&filter_operator=${encodeURIComponent(filterOperator)}&filter_value=${encodeURIComponent(filterValue)}`;
@@ -59,6 +69,26 @@ const Entities = () => {
     setFilterOperator(operator);
     setFilterValue(value);
     setCurrentPage(1);
+  };
+
+  // Handle refresh all entity sentiments
+  const handleRefreshSentiments = async () => {
+    setRefreshing(true);
+    try {
+      const result = await entitySentimentService.refreshAllSentiments(30);
+      setAlertMessage(`Successfully updated sentiment for ${result.updated_count} entities`);
+      setAlertSeverity('success');
+      setShowAlert(true);
+      // Refresh the page data after update
+      window.location.reload();
+    } catch (error) {
+      console.error('Error refreshing sentiments:', error);
+      setAlertMessage(error.response?.data?.message || 'Failed to refresh entity sentiments');
+      setAlertSeverity('error');
+      setShowAlert(true);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // Render entities table body
@@ -149,6 +179,39 @@ const Entities = () => {
         entityType="entities"
         enableAdvancedFilter={true}
       />
+
+      {/* Floating Action Button for Refresh */}
+      <Tooltip title="Refresh all entity sentiments">
+        <Fab
+          color="primary"
+          onClick={handleRefreshSentiments}
+          disabled={refreshing}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 1000,
+          }}
+        >
+          <RefreshIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Success/Error Alert */}
+      <Snackbar
+        open={showAlert}
+        autoHideDuration={6000}
+        onClose={() => setShowAlert(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert
+          onClose={() => setShowAlert(false)}
+          severity={alertSeverity}
+          sx={{ width: '100%' }}
+        >
+          {alertMessage}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
