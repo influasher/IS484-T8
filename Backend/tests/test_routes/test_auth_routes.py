@@ -3,7 +3,7 @@ from unittest.mock import patch
 from app import db
 from app.models.user import User
 from app.models.user_otp import UserOTP
-from tests.integration.setup_mock_db import test_db
+from tests.test_routes.setup_mock_db import test_db
 import uuid
 from flask_jwt_extended import decode_token
 from flask_jwt_extended import create_access_token
