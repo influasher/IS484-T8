@@ -9,6 +9,7 @@ import { Link, useLocation } from "react-router-dom";
 import { ROUTES } from "../routes";
 import useAuth from "../hooks/useAuth";
 import LogoutIcon from "@mui/icons-material/Logout";
+import Assessment from "@mui/icons-material/Assessment";
 
 function CustomIcon(props) {
   return <SvgIcon {...props} component={UBSLogo} inheritViewBox />;
@@ -23,7 +24,7 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
   const baseTabs = [
     { label: "Entities", path: ROUTES.ENTITIES },
     { label: "News", path: ROUTES.NEWS },
-    // { label: "Dashboard", path: ROUTES.DASHBOARD },
+    { label: "Analysis Dashboard", path: ROUTES.ANALYSIS, icon: <Assessment /> },
   ];
 
   const paths = baseTabs.map((t) => t.path);
@@ -98,7 +99,7 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
             }}
           >
             {baseTabs.map((tab, idx) => (
-              <Tab key={idx} label={tab.label} aria-label={tab.label}/>
+              <Tab key={idx} label={tab.label} aria-label={tab.label} />
             ))}
           </Tabs>
         </Stack>

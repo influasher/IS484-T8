@@ -25,6 +25,7 @@ def create_app():
     with app.app_context():
         from app.routes import register_routes
 
+        # Register all blueprints via the central register_routes function.
         register_routes(app)
 
         # API health check route

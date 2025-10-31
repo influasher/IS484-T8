@@ -9,7 +9,6 @@ import Chip from '@mui/material/Chip';
 const SentimentScore = ({ 
   score, 
   sentiment, 
-  confidence, 
   finbertScore,
   secondModelScore, 
   showDetails = false 
@@ -67,14 +66,6 @@ const SentimentScore = ({
 
   // Add additional chips if showDetails is true
   if (showDetails) {
-    if (confidence) {
-      chipData.push({
-        label: `Confidence: ${(confidence * 100).toFixed(0)}%`,
-        tooltip: "Higher confidence indicates more reliable sentiment analysis",
-        value: confidence * 100,
-      });
-    }
-    
     if (finbertScore) {
       chipData.push({
         label: `FinBERT: ${finbertScore.toFixed(1)}`,
