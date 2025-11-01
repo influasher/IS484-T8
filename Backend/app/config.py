@@ -33,3 +33,12 @@ class TestConfig(Config):
     SECRET_KEY = "test-secret-key"
     JWT_SECRET_KEY = "test-jwt-secret"
     WTF_CSRF_ENABLED = False  # Disable CSRF for testing
+
+
+# Configuration dictionary for environment-based config selection
+config = {
+    'development': Config,
+    'production': Config,
+    'testing': TestConfig,
+    'default': Config
+}

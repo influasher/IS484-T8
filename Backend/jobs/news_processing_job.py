@@ -1,9 +1,18 @@
 """
 News Processing Job - Unified Pipeline
-Fetches URLs → Scrapes → Extracts Entities → Analyzes Sentiment → Saves to DB
+Fetches URLs → Scrapes → Extracts Entities → Analyzes Sentiment → Generates SHAP → Saves to DB
 
 This job is designed to run as a Kubernetes CronJob every 1-2 days.
-All heavy dependencies (crawl4ai, playwright, spaCy, FinBERT) are isolated here.
+All heavy dependencies (crawl4ai, playwright, spaCy, FinBERT, SHAP) are isolated here.
+
+The job performs:
+1. URL fetching from GNews API for all active entities
+2. Article scraping using crawl4ai
+3. Entity extraction (companies, regions, sectors) using spaCy NER
+4. Sentiment analysis using ensemble of FinBERT, Gemini, and OpenAI
+5. SHAP explainability generation for sentiment predictions
+6. Upload SHAP visualizations to Azure Blob Storage
+7. Save all data to News table with complete field population
 """
 
 import os
@@ -21,7 +30,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import config
 from app.models import db, News, Entity, SentimentHistory
-from app.services.article_scraper import scrape_article
+from app.services.article_scraper import scrape_article_async
 from app.services.sentiment_analysis import SentimentAnalyzer
 from app.utils.helpers import extract_company, extract_region, extract_sector
 
@@ -213,14 +222,37 @@ class NewsProcessor:
         """
         try:
             logger.info(f"Scraping article: {url}")
-            result = await scrape_article(url)
-            
-            if result and result.get('content'):
+            raw_html = await scrape_article_async(url)
+
+            if raw_html:
+                # Parse the HTML to extract structured data
+                from newspaper import Article
+                from bs4 import BeautifulSoup
+
+                # Use newspaper4k to parse
+                article = Article(url)
+                article.html = raw_html  # Set HTML directly (not set_html method)
+                article.parse()
+
+                # Extract text content - use article.text or fallback to BeautifulSoup
+                content = article.text
+                if not content or len(content.strip()) < 50:
+                    # Fallback: Use BeautifulSoup to extract text
+                    soup = BeautifulSoup(raw_html, 'html.parser')
+                    # Remove script and style elements
+                    for script in soup(["script", "style"]):
+                        script.decompose()
+                    content = soup.get_text(separator='\n', strip=True)
+
+                if not content or len(content.strip()) < 50:
+                    logger.warning(f"Insufficient content extracted from {url} (length: {len(content.strip()) if content else 0})")
+                    return None
+
                 return {
-                    'content': result['content'],
-                    'title': result.get('title', ''),
-                    'published_date': result.get('published_date'),
-                    'raw_html': result.get('html', '')
+                    'content': content,
+                    'title': article.title or '',
+                    'published_date': article.publish_date,
+                    'raw_html': raw_html
                 }
             else:
                 logger.warning(f"No content scraped from {url}")
@@ -260,47 +292,60 @@ class NewsProcessor:
     def analyze_sentiment(self, content: str, title: str = "") -> Dict[str, Any]:
         """
         Analyze sentiment using ensemble of models (FinBERT, Gemini, OpenAI)
-        
+        with SHAP explainability
+
         Args:
             content: Article content
             title: Article title (optional)
-            
+
         Returns:
-            Dict with sentiment scores and metadata
+            Dict with sentiment scores, metadata, and SHAP values
         """
         try:
-            logger.debug("Analyzing sentiment with ensemble models")
-            
+            logger.debug("Analyzing sentiment with ensemble models and SHAP")
+
             # Combine title and content for analysis
             text_to_analyze = f"{title}\n\n{content}" if title else content
-            
-            # Get sentiment from all three models
-            finbert_result = self.sentiment_analyzer.analyze_with_finbert(text_to_analyze)
-            gemini_result = self.sentiment_analyzer.analyze_with_gemini(text_to_analyze)
-            openai_result = self.sentiment_analyzer.analyze_with_openai(text_to_analyze)
-            
-            # Weighted integration for ensemble score
-            ensemble_result = self.sentiment_analyzer.weighted_integration(
-                finbert_result,
-                gemini_result,
-                openai_result
+
+            # Use the full sentiment analyzer that includes SHAP calculations
+            # This calls analyze_with_finbert, analyze_with_gemini, and analyze_with_openai
+            # internally and also generates SHAP values
+            from app.services.sentiment_analysis import get_sentiment
+
+            result = get_sentiment(
+                text_to_analyze,
+                use_openai=True,
+                use_gemini=True
             )
-            
+
+            classification = result.get('classification', 'neutral')
+
+            logger.info(
+                f"Sentiment analysis complete: {classification} "
+                f"(score: {result.get('numerical_score', 0.0):.3f}, "
+                f"confidence: {result.get('confidence', 0.0):.3f}, "
+                f"agreement: {result.get('agreement_rate', 0.0):.3f})"
+            )
+
+            # Return in the format expected by save_to_database
+            # Note: classification is 'bullish'/'bearish'/'neutral' from get_sentiment
             return {
-                'finbert_score': finbert_result.get('score', 0.0),
-                'finbert_sentiment': finbert_result.get('sentiment', 'neutral'),
-                'second_model_score': gemini_result.get('score', 0.0),
-                'second_model_sentiment': gemini_result.get('sentiment', 'neutral'),
-                'third_model_score': openai_result.get('score', 0.0),
-                'third_model_sentiment': openai_result.get('sentiment', 'neutral'),
-                'score': ensemble_result.get('score', 0.0),  # Weighted ensemble
-                'sentiment': ensemble_result.get('sentiment', 'neutral'),
-                'confidence': ensemble_result.get('confidence', 0.0),
-                'agreement_rate': ensemble_result.get('agreement_rate', 0.0)
+                'finbert_score': result.get('finbert_score', 0.0),
+                'finbert_sentiment': classification,
+                'second_model_score': result.get('second_model_score', 0.0),
+                'second_model_sentiment': classification,
+                'third_model_score': result.get('third_model_score', 0.0),
+                'third_model_sentiment': classification,
+                'score': result.get('numerical_score', 0.0),
+                'sentiment': classification,
+                'confidence': result.get('confidence', 0.0),
+                'agreement_rate': result.get('agreement_rate', 0.0),
+                'shap': result.get('shap'),
+                'shap_html': result.get('shap_html')
             }
-            
+
         except Exception as e:
-            logger.error(f"Error analyzing sentiment: {str(e)}")
+            logger.error(f"Error analyzing sentiment: {str(e)}", exc_info=True)
             # Return neutral sentiment on error
             return {
                 'finbert_score': 0.0,
@@ -312,7 +357,9 @@ class NewsProcessor:
                 'score': 0.0,
                 'sentiment': 'neutral',
                 'confidence': 0.0,
-                'agreement_rate': 0.0
+                'agreement_rate': 0.0,
+                'shap': None,
+                'shap_html': None
             }
     
     def save_to_database(
@@ -323,11 +370,13 @@ class NewsProcessor:
         published_date: Optional[datetime],
         entities: Dict[str, Any],
         sentiment: Dict[str, Any],
+        publisher: Optional[str] = None,
+        description: Optional[str] = None,
         entity_id: Optional[int] = None
     ) -> Optional[News]:
         """
         Save processed article to database
-        
+
         Args:
             url: Article URL
             title: Article title
@@ -335,8 +384,10 @@ class NewsProcessor:
             published_date: When article was published
             entities: Extracted entities dict
             sentiment: Sentiment analysis results dict
+            publisher: Article publisher/source
+            description: Article description/summary from source
             entity_id: Associated entity ID (if any)
-            
+
         Returns:
             Created News object or None if failed
         """
@@ -347,24 +398,54 @@ class NewsProcessor:
                 if existing:
                     logger.info(f"Article already exists: {url}")
                     return existing
-                
+
                 # Create summary (first 200 chars as placeholder)
                 summary = content[:200] + "..." if len(content) > 200 else content
-                
+
+                # Populate entities field - combines companies, regions, and sectors
+                entities_list = []
+                if entities.get('companies'):
+                    entities_list.extend(entities.get('companies'))
+                if entities.get('regions'):
+                    entities_list.extend(entities.get('regions'))
+                if entities.get('sectors'):
+                    entities_list.extend(entities.get('sectors'))
+
+                # Populate tags field - use sectors as tags
+                tags_list = entities.get('sectors', [])
+
+                # Handle SHAP values and upload to blob storage if available
+                shap_data = sentiment.get('shap')
+                shap_html = sentiment.get('shap_html')
+                shap_url = None
+
+                if shap_html:
+                    try:
+                        from app.utils.helpers import upload_shap_to_blob
+                        shap_url = upload_shap_to_blob(shap_html, url)
+                        if shap_url:
+                            logger.info(f"SHAP HTML uploaded to: {shap_url}")
+                    except Exception as e:
+                        logger.warning(f"Failed to upload SHAP HTML to blob storage: {str(e)}")
+
                 # Create News entry
                 news = News(
                     url=url,
                     title=title,
+                    publisher=publisher,
+                    description=description,
                     content=content,
                     summary=summary,
                     published_date=published_date or datetime.utcnow(),
                     scraped_at=datetime.utcnow(),
-                    
+
                     # Entity information
+                    entities=entities_list if entities_list else None,
                     company_names=entities.get('companies', []),
                     regions=entities.get('regions', []),
                     sectors=entities.get('sectors', []),
-                    
+                    tags=tags_list if tags_list else None,
+
                     # Sentiment scores
                     finbert_score=sentiment.get('finbert_score', 0.0),
                     second_model_score=sentiment.get('second_model_score', 0.0),
@@ -373,18 +454,18 @@ class NewsProcessor:
                     sentiment=sentiment.get('sentiment', 'neutral'),
                     confidence=sentiment.get('confidence', 0.0),
                     agreement_rate=sentiment.get('agreement_rate', 0.0),
-                    
-                    # Optional fields (add SHAP analysis if you have it)
-                    shap=None,  # TODO: Add SHAP if needed
-                    shapUrl=None
+
+                    # SHAP explainability
+                    shap=shap_data,
+                    shapUrl=shap_url
                 )
-                
+
                 db.session.add(news)
                 db.session.commit()
-                
+
                 logger.info(f"Saved article to database: {title}")
                 return news
-                
+
             except SQLAlchemyError as e:
                 db.session.rollback()
                 logger.error(f"Database error saving article: {str(e)}")
@@ -457,33 +538,64 @@ class NewsProcessor:
     
     async def process_article(self, url_data: Dict[str, Any]) -> Optional[News]:
         """
-        Process a single article through the full pipeline
-        
+        Process a single article through the full pipeline with fallback mechanisms
+
         Args:
             url_data: Dict with 'url', 'entity_name', 'entity_id', etc.
-            
+
         Returns:
             Saved News object or None if failed
         """
         url = url_data['url']
         logger.info(f"Processing article: {url}")
-        
+
         try:
-            # Step 1: Scrape content
+            # Step 1: Scrape content (with fallback to description/title)
             scraped_data = await self.scrape_article_content(url)
+
+            content_source = "full_content"
+
             if not scraped_data:
-                logger.warning(f"Skipping article (no content): {url}")
-                return None
-            
+                # Fallback 1: Try using description from GNews
+                description = url_data.get('description', '')
+                title = url_data.get('title', 'Untitled')
+
+                if description and len(description.strip()) >= 30:
+                    logger.warning(f"Using description as fallback for {url}")
+                    scraped_data = {
+                        'content': description,
+                        'title': title,
+                        'published_date': url_data.get('published_date')
+                    }
+                    content_source = "description"
+
+                # Fallback 2: Use title only if no description
+                elif title and len(title.strip()) >= 10:
+                    logger.warning(f"Using title only as fallback for {url}")
+                    scraped_data = {
+                        'content': title,
+                        'title': title,
+                        'published_date': url_data.get('published_date')
+                    }
+                    content_source = "title_only"
+
+                else:
+                    logger.error(f"Skipping article (no usable content): {url}")
+                    return None
+
             # Step 2: Extract entities
             entities = self.extract_entities_from_content(scraped_data['content'])
-            
+
             # Step 3: Analyze sentiment
             sentiment = self.analyze_sentiment(
                 scraped_data['content'],
                 scraped_data.get('title', '')
             )
-            
+
+            # Log which content source was used
+            if content_source != "full_content":
+                logger.info(f"Article processed using {content_source}: {url}")
+
             # Step 4: Save to database
             news = self.save_to_database(
                 url=url,
@@ -492,11 +604,13 @@ class NewsProcessor:
                 published_date=scraped_data.get('published_date') or url_data.get('published_date'),
                 entities=entities,
                 sentiment=sentiment,
+                publisher=url_data.get('publisher'),
+                description=url_data.get('description'),
                 entity_id=url_data.get('entity_id')
             )
-            
+
             return news
-            
+
         except Exception as e:
             logger.error(f"Error processing article {url}: {str(e)}")
             return None

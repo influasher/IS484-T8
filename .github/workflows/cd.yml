@@ -244,6 +244,7 @@ jobs:
           --from-literal=mail-password="${{ secrets.MAIL_PASSWORD }}" \
           --from-literal=azure-communication-connection-string="${{ secrets.AZURE_COMMUNICATION_CONNECTION_STRING }}" \
           --from-literal=azure-email-sender="${{ secrets.AZURE_EMAIL_SENDER }}" \
+          --from-literal=azure-storage-connection-string="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
           --namespace=sentifinance --dry-run=client -o yaml | kubectl apply -f -
     
     - name: Deploy to AKS (Hybrid Approach)
