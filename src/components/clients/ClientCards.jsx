@@ -275,8 +275,6 @@ const ClientCards = () => {
     return (
         <Box
             sx={{
-                minHeight: "100vh",
-                bgcolor: (t) => t.palette.grey[100],
                 px: { xs: 3, sm: 5, md: 7 },
                 py: { xs: 1.5, sm: 2.5, md: 3 },
             }}
@@ -346,12 +344,20 @@ const ClientCards = () => {
             <Dialog
                 open={openAdd}
                 onClose={handleCloseAdd}
+                sx={{
+                    zIndex: (theme) => theme.zIndex.modal + 2,
+                    '& .MuiDialog-container': {
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    },
+                }}
                 PaperProps={{
                     sx: {
                         borderRadius: 3,
                         bgcolor: "white",
                         width: "100%",
                         maxWidth: 600,
+                        m: 2,
                     },
                 }}
             >
