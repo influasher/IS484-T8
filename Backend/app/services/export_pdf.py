@@ -33,6 +33,7 @@ def generate_pdf(
     output_filename="report.pdf",
 ):
     try:
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
         output_path = os.path.join(UPLOAD_FOLDER, output_filename)
         pdf = FPDF()
         pdf.set_auto_page_break(auto=True, margin=15)

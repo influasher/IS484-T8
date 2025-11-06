@@ -250,11 +250,10 @@ uv add --dev package-name
 ### Running Tests
 ```bash
 # Run all tests
-uv run pytest
+uv run python -m tests.run_tests
 
 # Run with coverage
-uv run coverage run -m pytest
-uv run coverage report
+uv run python -m tests.run_tests coverage
 ```
 
 ### Database Migrations

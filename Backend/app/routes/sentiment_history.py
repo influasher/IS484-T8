@@ -11,7 +11,7 @@ sentiment_history_bp = Blueprint("sentiment_history", __name__)
 # ** Get Sentiment History by Entity ID
 @sentiment_history_bp.route("/", methods=["GET"])
 def gethistory_by_entity_id():
-    entity_id = request.args.get("entity_id", default=None, type=int)
+    entity_id = request.args.get("entity_id", default=None)
     page = request.args.get("page", default=1, type=int)
     per_page = request.args.get("per_page", default=10, type=int)
     sort_order = request.args.get("sort_order", default="desc", type=str)
