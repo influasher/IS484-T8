@@ -157,7 +157,7 @@ class SentimentAnalysisUnitTests(unittest.TestCase):
         self.assertGreater(res["numerical_score"], 0)
 
     def test_analyze_with_finbert_error_returns_neutral(self):
-        self.analyzer.finbert_pipeline = DummyFinbertErr()
+        self.analyzer._finbert_pipeline = DummyFinbertErr()
         res = self.analyzer.analyze_with_finbert("Oops")
         self.assertEqual(res["classification"], "neutral")
         self.assertEqual(res["numerical_score"], 0)
@@ -321,7 +321,8 @@ class SentimentAnalysisWrapperTests(unittest.TestCase):
             "classification": "bullish",
             "confidence": 0.9,
             "agreement_rate": 1.0,
-            "shap": "S"
+            "shap": "S",
+            "shap_html": "<div>HTML</div>"
         }
         with patch.object(sa.SentimentAnalyzer, "analyze_sentiment", return_value=fake):
             out = sa.get_sentiment("text", use_openai=False, use_gemini=True)
