@@ -116,7 +116,7 @@ def create_client():
         "role": "CLIENT",
         "rm_id": current_user.id,  # Automatically assign the current RM as the client's RM
         "created_at": data.get("created_at"),
-        "updated_at": data.get("updated_at"),
+        # "updated_at": data.get("updated_at"),
     }
 
     # Create User

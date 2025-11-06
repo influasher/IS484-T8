@@ -307,7 +307,7 @@ class SentimentAnalyzer:
             }
 
             body = {
-                "model": "gpt-4-turbo-preview",
+                "model": "gpt-4o-mini",  # Updated model name (gpt-4-turbo-preview deprecated)
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -589,7 +589,7 @@ class SentimentAnalyzer:
         # Split the text into manageable segments
         text_segments = self.split_text(preprocessed_text)
 
-        # Process each segment with both models
+        # Process each segment with both models (with graceful error handling)
         finbert_results = []
         second_model_results = []
 
@@ -657,21 +657,23 @@ class SentimentAnalyzer:
         avg_confidence = sum(
             result["confidence"] for result in integrated_results
         ) / len(integrated_results)
-        
-        # Calculate overall model weights
-        avg_finbert_weight = sum(
-            result["model_weights"]["finbert"] for result in integrated_results
-        ) / len(integrated_results)
-        
-        # Calculate shap values for FinBert scores
-        shap_explanation = self.get_shap_explanation(preprocessed_text)
-        shap_json = self.shap_explanation_to_json(shap_explanation)
-        shap_html = self.generate_shap_html(shap_explanation)
 
-        # Upload SHAP HTML to blob storage
-        import hashlib
-        analysis_id = hashlib.md5(text.encode()).hexdigest()[:12]
-        # shap_blob_url = upload_shap_to_blob(shap_html, analysis_id)
+        # Calculate agreement rate
+        agreement_count = sum(
+            1 for result in integrated_results if result["models_agree"]
+        )
+        agreement_rate = agreement_count / len(integrated_results)
+
+        # Calculate shap values for FinBert scores (with error handling)
+        shap_json = None
+        shap_html = None
+        try:
+            shap_explanation = self.get_shap_explanation(preprocessed_text)
+            shap_json = self.shap_explanation_to_json(shap_explanation)
+            shap_html = self.generate_shap_html(shap_explanation)
+        except Exception as e:
+            logger.warning(f"SHAP generation failed (non-critical): {str(e)}")
+            # Continue without SHAP - it's not critical for sentiment analysis
 
         # Check if this analysis should trigger human feedback
         if integrated_results:
@@ -839,6 +841,7 @@ class SentimentAnalyzer:
 def get_sentiment(text, use_openai=True, use_gemini=False, news_id=None):
     """
     Analyze the sentiment of a financial text using the SentimentAnalyzer
+    with graceful degradation if models fail.
 
     Parameters:
     - text: The text to analyze
@@ -846,6 +849,9 @@ def get_sentiment(text, use_openai=True, use_gemini=False, news_id=None):
     - use_gemini: Whether to use Gemini as the second model (if False, uses OpenAI)
     - news_id: Optional news ID for auto-enqueueing disagreement cases
     Returns a dictionary with sentiment analysis results
+
+    Returns a dictionary with sentiment analysis results.
+    Will use at least 2 models if available, degrading gracefully if models fail.
     """
     analyzer = SentimentAnalyzer()
 

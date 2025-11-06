@@ -3,12 +3,14 @@
 ## Overview
 
 This microservice handles batch processing of news articles:
-1. **Fetches URLs** from data sources
+1. **Fetches URLs** from GNews API for all active entities
 2. **Scrapes content** using crawl4ai + playwright
 3. **Extracts entities** (companies, regions, sectors) using spaCy NER
 4. **Analyzes sentiment** with ensemble of 3 models (FinBERT, Gemini, OpenAI)
-5. **Saves to database** (News table with sentiment scores)
-6. **Updates SentimentHistory** with entity-level aggregated sentiment
+5. **Generates SHAP explainability** visualizations for sentiment predictions
+6. **Uploads SHAP HTML** to Azure Blob Storage (public access)
+7. **Saves to database** (News table with sentiment scores + SHAP URLs)
+8. **Updates SentimentHistory** with entity-level aggregated sentiment
 
 ## Architecture
 
@@ -16,6 +18,41 @@ This microservice handles batch processing of news articles:
 - **Memory**: 4-6Gi (all heavy models loaded)
 - **Runtime**: 2-4 hours for batch processing
 - **Cost**: ~50% savings vs. always-running microservice
+
+## Prerequisites
+
+### Azure Blob Storage Setup
+
+The job requires Azure Blob Storage for storing SHAP HTML visualizations:
+
+1. **Create storage account** (if not exists):
+   ```bash
+   az storage account create \
+     --name yourstorageaccount \
+     --resource-group your-resource-group \
+     --location eastus \
+     --sku Standard_LRS
+   ```
+
+2. **Create blob container** named `shap`:
+   ```bash
+   az storage container create \
+     --name shap \
+     --account-name yourstorageaccount \
+     --public-access blob
+   ```
+
+3. **Get connection string**:
+   ```bash
+   az storage account show-connection-string \
+     --name yourstorageaccount \
+     --resource-group your-resource-group \
+     --query connectionString -o tsv
+   ```
+
+4. **Add to environment variables** (see Configuration section below)
+
+**Important:** The `shap` container must have **public blob access** so that SHAP URLs are publicly accessible.
 
 ## Configuration
 
@@ -26,17 +63,19 @@ This microservice handles batch processing of news articles:
 | `LOOKBACK_DAYS` | Number of days to look back for news | `2` |
 | `MAX_ARTICLES` | Max articles to process (optional) | unlimited |
 | `FLASK_ENV` | Flask environment | `production` |
-| `DATABASE_URL` | PostgreSQL connection string | from secrets |
-| `OPENAI_API_KEY` | OpenAI API key for sentiment | from secrets |
-| `GEMINI_API_KEY` | Gemini API key for sentiment | from secrets |
+| `DATABASE_URI` | PostgreSQL connection string | from secrets |
+| `OPENAI_API_KEY` | OpenAI API key for sentiment analysis | from secrets |
+| `GEMINI_API_KEY` | Gemini API key for sentiment analysis | from secrets |
+| `AZURE_STORAGE_CONNECTION_STRING` | Azure Storage for SHAP HTML uploads | from secrets |
 
 ### Kubernetes Secrets Required
 
 The CronJob requires these secrets in `sentifinance-secrets`:
-- `database-url`
-- `db-host`, `db-port`, `db-name`, `db-user`, `db-password`
+- `database-url` or `database-uri`
+- `db-host`, `db-port`, `db-name`, `db-user`, `db-password` (if using separate components)
 - `openai-api-key`
 - `gemini-api-key`
+- `azure-storage-connection-string` (for SHAP HTML uploads to blob storage)
 
 ## Deployment
 
@@ -80,23 +119,36 @@ kubectl logs -f job/news-processor-manual --namespace=sentifinance
 ### Local Testing
 
 ```bash
-cd Backend
+# Navigate to jobs directory
+cd Backend/jobs
 
-# Set environment variables
+# Install dependencies using UV
+uv sync
+
+# Install playwright browsers
+uv run playwright install chromium
+
+# Download spaCy transformer model (required for entity extraction)
+uv run python -m spacy download en_core_web_trf
+
+# Set environment variables (or create a .env file)
 export FLASK_ENV=development
 export LOOKBACK_DAYS=2
-export MAX_ARTICLES=5
-export DATABASE_URL="postgresql://user:pass@localhost:5432/sentifinance"
-export OPENAI_API_KEY="your-key"
-export GEMINI_API_KEY="your-key"
-
-# Install dependencies
-pip install -r jobs/requirements.txt
-playwright install chromium
+export MAX_ARTICLES=5  # Limit articles for testing
+export DATABASE_URI="postgresql+psycopg2://user:pass@localhost:5432/sentifinance"
+export OPENAI_API_KEY="your-openai-key"
+export GEMINI_API_KEY="your-gemini-key"
+export AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;"
 
 # Run job
-python jobs/news_processing_job.py
+uv run python news_processing_job.py
 ```
+
+**Notes:**
+- The job requires ~4-6GB RAM due to heavy ML models (FinBERT, spaCy transformer, etc.)
+- First run will download models (~2-3GB) which can take 10-20 minutes
+- SHAP HTML files are uploaded to the `shap` container in Azure Blob Storage
+- Blob container must exist and have public read access for URLs to work
 
 ## Monitoring
 
@@ -220,7 +272,7 @@ kubectl edit cronjob news-processor --namespace=sentifinance
 
 ```
 ┌─────────────────┐
-│  Data Sources   │ (Your news APIs/feeds)
+│  GNews API      │ (Fetch URLs for active entities)
 └────────┬────────┘
          │
          ▼
@@ -231,26 +283,52 @@ kubectl edit cronjob news-processor --namespace=sentifinance
          ▼
 ┌─────────────────┐
 │ Scrape Content  │ (crawl4ai + playwright)
+│                 │ • Fallback: description
+│                 │ • Fallback: title only
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
 │ Extract Entities│ (spaCy NER)
+│                 │ • Companies
+│                 │ • Regions
+│                 │ • Sectors
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│ Analyze Sentiment│ (FinBERT + Gemini + OpenAI)
+│ Analyze Sentiment│ (Ensemble: FinBERT + Gemini + OpenAI)
+│                 │ • Numerical score
+│                 │ • Classification (bullish/bearish/neutral)
+│                 │ • Confidence & agreement rate
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Generate SHAP   │ (Explainability for FinBERT predictions)
+│                 │ • Token-level importance scores
+│                 │ • Interactive HTML visualization
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Upload to Blob  │ (Azure Blob Storage)
+│                 │ • Container: shap
+│                 │ • Public read access
+│                 │ • Returns: shapUrl
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
 │  Save to DB     │ (News table)
+│                 │ • Content + entities
+│                 │ • Sentiment scores
+│                 │ • SHAP JSON + URL
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│ Update History  │ (SentimentHistory aggregation)
+│ Update History  │ (SentimentHistory aggregation by entity)
 └─────────────────┘
 ```
 
@@ -261,31 +339,43 @@ The main backend deployment (`sentifinance-backend`) can now:
 - **Reduce memory**: From 1536Mi to 512Mi
 - **Serve pre-processed data**: Read from News table populated by this job
 
-## TODO: Integrate Data Sources
+## SHAP Explainability
 
-The `fetch_news_urls()` method is currently a placeholder. You need to integrate with your existing data sources:
+The job generates SHAP (SHapley Additive exPlanations) visualizations to explain sentiment predictions:
 
-```python
-# In news_processing_job.py, update fetch_news_urls():
-async def fetch_news_urls(self, lookback_days: int = 2) -> List[Dict[str, Any]]:
-    # TODO: Replace with your actual implementation
-    # Examples:
-    # - Call news aggregation APIs (NewsAPI, Financial Times, etc.)
-    # - Query RSS feeds
-    # - Connect to your existing data ingestion pipeline
-    
-    # Return format:
-    return [
-        {
-            'url': 'https://example.com/article-1',
-            'entity_name': 'Apple Inc.',
-            'entity_id': 123,
-            'title': 'Apple announces...',
-            'published_date': datetime(2024, 1, 15)
-        },
-        # ... more articles
-    ]
-```
+### What is SHAP?
+
+SHAP provides token-level importance scores showing which words contributed most to the sentiment classification. This helps users understand **why** a particular sentiment was assigned.
+
+### How it Works
+
+1. **Generate SHAP values** using the FinBERT model
+2. **Create HTML visualization** with interactive highlighting
+3. **Upload to Azure Blob Storage** (container: `shap`)
+4. **Save URL to database** in `News.shapUrl` field
+
+### Example Output
+
+- **SHAP JSON**: Stored in `News.shap` column (for programmatic access)
+  ```json
+  {
+    "tokens": ["Tesla", "reports", "strong", "earnings", "..."],
+    "shap_values": [[0.05, -0.02, ...], [0.12, 0.08, ...], ...],
+    "base_values": [0.0, 0.0, ...]
+  }
+  ```
+
+- **SHAP URL**: Stored in `News.shapUrl` column
+  ```
+  https://sentifinanceblob.blob.core.windows.net/shap/shap_explanation_a1b2c3d4e5f6.html
+  ```
+
+### Accessing SHAP Visualizations
+
+Frontend can display SHAP explanations by:
+1. Fetching `shapUrl` from News API endpoint
+2. Embedding in iframe: `<iframe src="{shapUrl}" />`
+3. Or opening in new tab for detailed analysis
 
 ## Support
 

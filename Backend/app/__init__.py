@@ -47,3 +47,26 @@ def create_app():
                 return {"error": "Frontend not built. Please build the React app first."}, 404
 
     return app
+
+def create_test_app():
+    app = Flask(__name__)
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+    app.config.from_object("app.config.TestConfig")
+
+    db.init_app(app)
+    jwt.init_app(app)
+
+    with app.app_context():
+        from app.routes import register_routes
+        register_routes(app)
+        
+        # Create tables in test DB
+        db.create_all()
+
+        # Health check route
+        @app.route('/')
+        def health_check():
+            return {"status": "SentiFinance API (Test) is running", "version": "1.0"}, 200
+
+    return app
+
