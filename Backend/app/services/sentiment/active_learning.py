@@ -48,8 +48,14 @@ class ActiveLearningSelector:
         Calculate disagreement score between models (0=agree, 1=maximum disagreement)
         """
         # Score difference component
-        score_diff = abs(finbert_result.get('numerical_score', 0) - 
-                        llm_result.get('numerical_score', 0))
+        finbert_score = finbert_result.get('numerical_score', 0)
+        llm_score = llm_result.get('numerical_score', 0)
+        
+        # Validate scores
+        finbert_score = 0.0 if np.isnan(finbert_score) or np.isinf(finbert_score) else finbert_score
+        llm_score = 0.0 if np.isnan(llm_score) or np.isinf(llm_score) else llm_score
+        
+        score_diff = abs(finbert_score - llm_score)
         score_disagreement = min(score_diff / 2.0, 1.0)  # Normalize to [0,1]
         
         # Classification disagreement
@@ -75,17 +81,34 @@ class ActiveLearningSelector:
         """
         Calculate overall uncertainty score (0=confident, 1=very uncertain)
         """
-        # FinBERT confidence
+        # FinBERT confidence with validation
         finbert_scores = finbert_result.get('detailed_scores', {})
-        finbert_max_prob = max(finbert_scores.values()) if finbert_scores else 0.33
+        if finbert_scores:
+            try:
+                valid_scores = [v for v in finbert_scores.values() 
+                              if isinstance(v, (int, float)) and not np.isnan(v)]
+                finbert_max_prob = max(valid_scores) if valid_scores else 0.33
+            except (ValueError, TypeError):
+                finbert_max_prob = 0.33
+        else:
+            finbert_max_prob = 0.33
+        
         finbert_uncertainty = 1.0 - finbert_max_prob
         
-        # LLM confidence  
+        # LLM confidence with validation
         llm_scores = llm_result.get('detailed_scores', {})
-        llm_probs = [llm_scores.get('positive', 0.33),
-                    llm_scores.get('negative', 0.33), 
-                    llm_scores.get('neutral', 0.33)]
-        llm_max_prob = max(llm_probs)
+        llm_probs = [
+            llm_scores.get('positive', 0.33),
+            llm_scores.get('negative', 0.33), 
+            llm_scores.get('neutral', 0.33)
+        ]
+        
+        try:
+            valid_llm_probs = [v for v in llm_probs if isinstance(v, (int, float)) and not np.isnan(v)]
+            llm_max_prob = max(valid_llm_probs) if valid_llm_probs else 0.33
+        except (ValueError, TypeError):
+            llm_max_prob = 0.33
+            
         llm_uncertainty = 1.0 - llm_max_prob
         
         # Average uncertainty
@@ -98,8 +121,15 @@ class ActiveLearningSelector:
         """
         Calculate how close predictions are to neutral boundary
         """
-        finbert_score = abs(finbert_result.get('numerical_score', 0))
-        llm_score = abs(llm_result.get('numerical_score', 0))
+        finbert_score = finbert_result.get('numerical_score', 0)
+        llm_score = llm_result.get('numerical_score', 0)
+        
+        # Validate scores
+        finbert_score = 0.0 if np.isnan(finbert_score) or np.isinf(finbert_score) else finbert_score
+        llm_score = 0.0 if np.isnan(llm_score) or np.isinf(llm_score) else llm_score
+        
+        finbert_score = abs(finbert_score)
+        llm_score = abs(llm_score)
         
         # Score how close to neutral (0) each model is
         finbert_neutrality = 1.0 - min(finbert_score, 1.0)  # Higher = more neutral
@@ -299,26 +329,42 @@ def should_request_human_feedback(finbert_result: Dict, llm_result: Dict,
                                 text: str, features_dict: Dict = None) -> bool:
     """
     Quick check if a single analysis should trigger human feedback request
+    Uses rich features from integration if available
     """
     selector = ActiveLearningSelector()
     
-    disagreement = selector.calculate_disagreement_score(finbert_result, llm_result)
-    uncertainty = selector.calculate_uncertainty_score(finbert_result, llm_result)
+    # Use pre-calculated features if available
+    if features_dict:
+        disagreement = features_dict.get('score_difference', 
+                                       selector.calculate_disagreement_score(finbert_result, llm_result))
+        
+        # Calculate uncertainty from confidence features
+        finbert_conf = features_dict.get('finbert_confidence', 0.33)
+        # Try to get LLM confidence (could be gemini_confidence or openai_confidence)
+        llm_conf = features_dict.get('gemini_confidence', 
+                                    features_dict.get('openai_confidence', 0.33))
+        
+        uncertainty = 1.0 - ((finbert_conf + llm_conf) / 2.0)
+    else:
+        disagreement = selector.calculate_disagreement_score(finbert_result, llm_result)
+        uncertainty = selector.calculate_uncertainty_score(finbert_result, llm_result)
     
     features_dict = features_dict or {}
+    
     # Log the inputs for diagnostics
     logger.info(
-        "should_request_human_feedback called: disagreement=%.4f uncertainty=%.4f finbert_num=%s llm_num=%s features_keys=%s",
+        "should_request_human_feedback: disagreement=%.4f uncertainty=%.4f finbert_num=%s llm_num=%s is_financial_heavy=%s",
         disagreement,
         uncertainty,
         finbert_result.get('numerical_score'),
         llm_result.get('numerical_score'),
-        list(features_dict.keys())[:20]
+        features_dict.get('is_financial_heavy', 'N/A')
     )
     
-    should_sample, _, _ = selector.should_sample_for_disagreement(
+    should_sample, reason, priority = selector.should_sample_for_disagreement(
         disagreement, uncertainty, features_dict
     )
     
-    logger.info("should_request_human_feedback decision: should_sample=%s", should_sample)
+    logger.info("should_request_human_feedback decision: should_sample=%s reason=%s priority=%s", 
+               should_sample, reason, priority)
     return should_sample

@@ -241,7 +241,8 @@ def submit_vote():
             queue_item_id=queue_item_id,
             user_id=current_user.id,
             vote=SentimentVote(vote_value.lower()),
-            session_info=session_info
+            session_info=session_info,
+            news_id=session_info.get('news_id')  # Extract and store
         )
         
         db.session.add(vote)
@@ -402,53 +403,6 @@ def get_user_stats(user_id):
     except Exception as e:
         return format_response(None, f"Failed to fetch user stats: {str(e)}", 500)
 
-# Below is for future sprints retraining purposes
-# @active_learning_bp.route("/export", methods=["GET"])
-# def export_labeled_data():
-#     """Export labeled data as CSV for training"""
-#     try:
-#         completed_count = LabelingQueue.query.filter(LabelingQueue.status == QueueStatus.COMPLETED).count()
-        
-#         result = {
-#             'total_samples': completed_count,
-#             'export_url': '/labeling/download/latest.csv',  # Implement actual file generation
-#             'created_at': datetime.now().isoformat()
-#         }
-        
-#         return format_response(result, "Export data prepared successfully", 200)
-        
-#     except Exception as e:
-#         return format_response(None, f"Failed to prepare export: {str(e)}", 500)
-
-# @active_learning_bp.route("/retrain-needed", methods=["POST"])
-# def check_retrain_needed():
-#     """Check if enough new labels exist to trigger retraining"""
-#     data = request.get_json() or {}
-#     threshold = data.get('threshold', 100)
-    
-#     try:        
-#         # Get count of completed items since last model run
-#         last_model_run = db.session.query(func.max(ModelRun.created_at)).scalar()
-        
-#         if last_model_run:
-#             new_labels = db.session.query(func.count(AggregatedLabel.id)).filter(
-#                 AggregatedLabel.finalized_at > last_model_run
-#             ).scalar()
-#         else:
-#             new_labels = AggregatedLabel.query.count()
-        
-#         result = {
-#             'retrain_needed': new_labels >= threshold,
-#             'new_labels_count': new_labels,
-#             'threshold': threshold,
-#             'last_model_run': last_model_run.isoformat() if last_model_run else None
-#         }
-        
-#         return format_response(result, "Retrain status checked successfully", 200)
-        
-#     except Exception as e:
-#         return format_response(None, f"Failed to check retrain status: {str(e)}", 500)
-
 @active_learning_bp.route("/users/statistics", methods=["GET"])
 @jwt_required()
 def get_all_user_statistics():
@@ -525,9 +479,7 @@ def get_votes_by_news_id(news_id):
     
     try:
         # Primary attempt: JSON ->> operator (Postgres) to read text value
-        votes_with_news_id = UserVote.query.filter(
-            UserVote.session_info.op('->>')('news_id') == str(news_id)
-        ).all()
+        votes_with_news_id = UserVote.query.filter(UserVote.news_id == str(news_id)).all()
                 
         # If no votes found via JSON operator, perform additional diagnostics / fallback scan
         if not votes_with_news_id:
@@ -643,3 +595,52 @@ def _try_finalize_item(queue_item_id, force=False):
         logger.error(f"Error in _try_finalize_item: {str(e)}")
         db.session.rollback()
         return None
+
+# TODO: Implement CSV export for retraining pipeline
+# Below is for future sprints retraining purposes
+# @active_learning_bp.route("/export", methods=["GET"])
+# def export_labeled_data():
+#     """Export labeled data as CSV for training"""
+#     try:
+#         completed_count = LabelingQueue.query.filter(LabelingQueue.status == QueueStatus.COMPLETED).count()
+        
+#         result = {
+#             'total_samples': completed_count,
+#             'export_url': '/labeling/download/latest.csv',  # Implement actual file generation
+#             'created_at': datetime.now().isoformat()
+#         }
+        
+#         return format_response(result, "Export data prepared successfully", 200)
+        
+#     except Exception as e:
+#         return format_response(None, f"Failed to prepare export: {str(e)}", 500)
+
+# TODO: Implement for retraining pipeline
+# @active_learning_bp.route("/retrain-needed", methods=["POST"])
+# def check_retrain_needed():
+#     """Check if enough new labels exist to trigger retraining"""
+#     data = request.get_json() or {}
+#     threshold = data.get('threshold', 100)
+    
+#     try:        
+#         # Get count of completed items since last model run
+#         last_model_run = db.session.query(func.max(ModelRun.created_at)).scalar()
+        
+#         if last_model_run:
+#             new_labels = db.session.query(func.count(AggregatedLabel.id)).filter(
+#                 AggregatedLabel.finalized_at > last_model_run
+#             ).scalar()
+#         else:
+#             new_labels = AggregatedLabel.query.count()
+        
+#         result = {
+#             'retrain_needed': new_labels >= threshold,
+#             'new_labels_count': new_labels,
+#             'threshold': threshold,
+#             'last_model_run': last_model_run.isoformat() if last_model_run else None
+#         }
+        
+#         return format_response(result, "Retrain status checked successfully", 200)
+        
+#     except Exception as e:
+#         return format_response(None, f"Failed to check retrain status: {str(e)}", 500)
