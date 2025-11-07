@@ -588,22 +588,192 @@ class SentimentAnalyzer:
         }
         return json.dumps(result)
 
-    def generate_shap_html(self, explanation) -> str:
-        """
-        Generate HTML representation of SHAP explanation
-        """
-        # Lazy import shap only when actually needed
-        try:
-            import shap
-        except ImportError as e:
-            logger.error("shap library not installed - this is expected in lightweight backend")
-            raise ImportError(
-                "shap is not installed. "
-                "This functionality is only available in the news-processor microservice."
-            ) from e
+    # def generate_shap_html(self, explanation) -> str:
+    #     """
+    #     Generate HTML representation of SHAP explanation
+    #     """
+    #     # Lazy import shap only when actually needed
+    #     try:
+    #         import shap
+    #     except ImportError as e:
+    #         logger.error("shap library not installed - this is expected in lightweight backend")
+    #         raise ImportError(
+    #             "shap is not installed. "
+    #             "This functionality is only available in the news-processor microservice."
+    #         ) from e
+    #
+    #     html = shap.plots.text(explanation[0], display=False)
+    #     return html
 
-        html = shap.plots.text(explanation[0], display=False)
-        return html
+
+def generate_shap_html(self, explanation) -> str:
+    """
+    Generate improved HTML representation of SHAP explanation with better styling
+    """
+    # Lazy import shap only when actually needed
+    try:
+        import shap
+    except ImportError as e:
+        logger.error("shap library not installed - this is expected in lightweight backend")
+        raise ImportError(
+            "shap is not installed. "
+            "This functionality is only available in the news-processor microservice."
+        ) from e
+
+    # Get the basic SHAP HTML
+    basic_html = shap.plots.text(explanation[0], display=False)
+
+    # Enhanced HTML with custom CSS styling
+    enhanced_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>SHAP Sentiment Analysis Explanation</title>
+        <style>
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                line-height: 1.6;
+                margin: 20px;
+                background-color: #f8f9fa;
+                color: #333;
+            }}
+            .shap-container {{
+                background: white;
+                padding: 30px;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                max-width: 1200px;
+                margin: 0 auto;
+            }}
+            .shap-title {{
+                font-size: 24px;
+                font-weight: bold;
+                margin-bottom: 20px;
+                color: #2c3e50;
+                text-align: center;
+                border-bottom: 2px solid #3498db;
+                padding-bottom: 10px;
+            }}
+            .shap-explanation {{
+                font-size: 16px;
+                line-height: 1.8;
+                margin: 20px 0;
+            }}
+            .shap-legend {{
+                margin: 20px 0;
+                padding: 15px;
+                background-color: #f1f3f4;
+                border-radius: 5px;
+                font-size: 14px;
+            }}
+            .shap-legend-item {{
+                display: inline-block;
+                margin-right: 20px;
+                margin-bottom: 5px;
+            }}
+            .shap-positive {{
+                background-color: #ff6b6b !important;
+                color: white !important;
+                padding: 2px 4px !important;
+                border-radius: 3px !important;
+                font-weight: 500 !important;
+            }}
+            .shap-negative {{
+                background-color: #4ecdc4 !important;
+                color: white !important;
+                padding: 2px 4px !important;
+                border-radius: 3px !important;
+                font-weight: 500 !important;
+            }}
+            .shap-neutral {{
+                background-color: #f8f9fa !important;
+                color: #333 !important;
+                padding: 2px 4px !important;
+                border-radius: 3px !important;
+            }}
+            /* Override SHAP default styles */
+            .shap-text {{
+                font-size: 16px !important;
+                line-height: 2 !important;
+                word-spacing: 2px !important;
+                letter-spacing: 0.5px !important;
+            }}
+            .shap-text span {{
+                display: inline-block !important;
+                margin: 2px 1px !important;
+                padding: 3px 5px !important;
+                border-radius: 4px !important;
+                font-weight: 500 !important;
+                min-height: 20px !important;
+            }}
+            .info-section {{
+                margin-top: 30px;
+                padding: 20px;
+                background-color: #e8f4f8;
+                border-left: 4px solid #3498db;
+                border-radius: 5px;
+            }}
+            .info-title {{
+                font-weight: bold;
+                color: #2c3e50;
+                margin-bottom: 10px;
+            }}
+            @media (max-width: 768px) {{
+                body {{
+                    margin: 10px;
+                }}
+                .shap-container {{
+                    padding: 15px;
+                }}
+                .shap-title {{
+                    font-size: 20px;
+                }}
+                .shap-explanation {{
+                    font-size: 14px;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="shap-container">
+            <div class="shap-title">
+                Sentiment Analysis Explanation
+            </div>
+
+            <div class="shap-legend">
+                <div class="info-title">How to read this visualization:</div>
+                <div class="shap-legend-item">
+                    <span class="shap-positive">Red highlighting</span> = Words that push sentiment towards POSITIVE
+                </div>
+                <div class="shap-legend-item">
+                    <span class="shap-negative">Blue highlighting</span> = Words that push sentiment towards NEGATIVE
+                </div>
+                <div class="shap-legend-item">
+                    <span class="shap-neutral">No highlighting</span> = Neutral words with minimal impact
+                </div>
+                <div style="margin-top: 10px; font-style: italic;">
+                    The intensity of the color indicates the strength of the word's influence on the sentiment prediction.
+                </div>
+            </div>
+
+            <div class="shap-explanation shap-text">
+                {basic_html}
+            </div>
+
+            <div class="info-section">
+                <div class="info-title">About SHAP Values:</div>
+                <p>SHAP (SHapley Additive exPlanations) values show how much each word contributes to the final sentiment prediction. 
+                This visualization helps understand which specific words and phrases the FinBERT model considers most important 
+                when determining whether the text expresses positive, negative, or neutral sentiment about financial topics.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    return enhanced_html
 
 
 # Expose a simple interface for external use
