@@ -7,7 +7,6 @@ import os
 from dotenv import load_dotenv
 import google.generativeai as genai
 import re
-import pandas as pd
 from rapidfuzz import process, fuzz
 # spacy moved to news-processor microservice - not needed in backend API
 # import spacy
@@ -22,7 +21,31 @@ from azure.core.exceptions import AzureError
 
 load_dotenv()
 
-sp500_plus2 = pd.DataFrame.from_dict(sp500_plus2_dict)
+# LAZY LOADING: Defer heavy imports and initialization
+_nlp = None
+_sp500_plus2 = None
+
+
+def _get_nlp():
+    """Lazy load spaCy model (500MB+) only when needed."""
+    global _nlp
+    if _nlp is None:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("Loading spaCy en_core_web_trf model (first use)...")
+        import spacy
+        _nlp = spacy.load("en_core_web_trf")
+        logger.info("spaCy model loaded successfully")
+    return _nlp
+
+
+def _get_sp500_dataframe():
+    """Lazy load pandas DataFrame only when needed."""
+    global _sp500_plus2
+    if _sp500_plus2 is None:
+        import pandas as pd
+        _sp500_plus2 = pd.DataFrame.from_dict(sp500_plus2_dict)
+    return _sp500_plus2
 
 # Add to the dictionary
 for region in regions:
@@ -46,11 +69,17 @@ for region in regions:
 # Concatenate the new rows
 # sp500_plus2 = pd.concat([sp500_plus2, new_row_1, new_row_2], ignore_index=True)
 
-# Create list of known companies
-known_companies = sp500_plus2["Security"].tolist()
+# Create list of known companies (lazy loaded)
+def get_known_companies():
+    return _get_sp500_dataframe()["Security"].tolist()
 
-# Create list of unique GICS sectors
-sectors = sp500_plus2["GICS Sector"].unique().tolist()
+known_companies = None  # Will be populated lazily
+
+# Create list of unique GICS sectors (lazy loaded)
+def get_sectors():
+    return _get_sp500_dataframe()["GICS Sector"].unique().tolist()
+
+sectors = None  # Will be populated lazily
 
 
 # ** General-purpose helper functions for common tasks like formatting responses or handling dates.
@@ -302,63 +331,99 @@ def combine_columns_single(val1, val2):
     return combined if combined else None
 
 
-# DEPRECATED: These functions moved to news-processor microservice
-# Extract company using spaCy NER and fuzzy match - now in jobs/news_processing_job.py
-#
-# def extract_company(text, confidence_score_arg):
-#     # print("Next article...")
-#     doc = nlp(str(text))
-#     orgs = list(set(ent.text for ent in doc.ents if ent.label_ == "ORG"))
-#     # print("Orgs:" + ", ".join(orgs))
-#
-#     match_list = []
-#
-#     for org in orgs:
-#         # print("Current org:" + org)
-#         match, score, _ = process.extractOne(org, known_companies)
-#         # print("Current match:" + match)
-#         # print("Current score:" + str(score))
-#         if score >= confidence_score_arg:
-#             match_list.append(match)
-#             # print("Current match list:" + ", ".join(match_list))
-#
-#     if match_list == []:
-#         # print("Returned None")
-#         return None
-#
-#     else:
-#         unique_list = list(set(match_list))
-#         # print("Final match list:" + ", ".join(unique_list))
-#         return unique_list
-#
-#
-# def extract_region(text, confidence_score_arg=85):
-#     # cleaned_text = preprocess_text(str(text))
-#     # print("cleaned text:" + cleaned_text)
-#     doc = nlp(str(text))
-#     # print("text:" + text)
-#     regions = list(set(ent.text for ent in doc.ents if ent.label_ == "GPE"))
-#     # print("regions:"+", ".join(regions))
-#
-#     match_list = []
-#     article = 1
-#
-#     for region in regions:
-#         # print("article" + str(article))
-#         article += 1
-#         # print("current region:" + region)
-#         match, score, _ = process.extractOne(region, country_to_region.keys())
-#         # print("match + score:" + match + str(score))
-#         if score >= confidence_score_arg:
-#             mapped_region = country_to_region[match]
-#             match_list.append(mapped_region)
-#             # print("current match_list:" + ", ".join(match_list))
-#
-#     if not match_list:
-#         return None
-#     else:
-#         # print("returned match_list:" + ", ".join(match_list))
-#         return list(set(match_list))  # Return unique mapped regions
+# NOTE: These functions are used by both backend (/resync endpoint) and news-processor
+# They require spaCy which is only installed in news-processor, so they will fail in backend
+# if called without spaCy being available. The backend should use the news-processor for
+# entity extraction instead of calling these directly.
+
+def extract_company(text, confidence_score_arg=90):
+    """
+    Extract company names from text using spaCy NER and fuzzy matching
+
+    Args:
+        text: Text to extract companies from
+        confidence_score_arg: Minimum fuzzy match score (0-100)
+
+    Returns:
+        List of matched company names or None
+    """
+    try:
+        import spacy
+        nlp = spacy.load("en_core_web_trf")
+    except ImportError:
+        logging.warning("spaCy not available - cannot extract companies")
+        return None
+    except OSError:
+        logging.warning("spaCy model 'en_core_web_trf' not found - cannot extract companies")
+        return None
+
+    doc = nlp(str(text))
+    orgs = list(set(ent.text for ent in doc.ents if ent.label_ == "ORG"))
+
+    match_list = []
+
+    for org in orgs:
+        match, score, _ = process.extractOne(org, known_companies)
+        if score >= confidence_score_arg:
+            match_list.append(match)
+
+    if match_list == []:
+        return None
+    else:
+        unique_list = list(set(match_list))
+        return unique_list
+
+
+def extract_region(text, confidence_score_arg=85):
+    """
+    Extract regions from text using spaCy NER and fuzzy matching
+
+    Args:
+        text: Text to extract regions from
+        confidence_score_arg: Minimum fuzzy match score (0-100)
+
+    Returns:
+        List of matched regions or None
+    """
+    try:
+        import spacy
+        nlp = spacy.load("en_core_web_trf")
+    except ImportError:
+        logging.warning("spaCy not available - cannot extract regions")
+        return None
+    except OSError:
+        logging.warning("spaCy model 'en_core_web_trf' not found - cannot extract regions")
+        return None
+
+    doc = nlp(str(text))
+    regions = list(set(ent.text for ent in doc.ents if ent.label_ == "GPE"))
+
+    match_list = []
+
+    for region in regions:
+        match, score, _ = process.extractOne(region, country_to_region.keys())
+        if score >= confidence_score_arg:
+            mapped_region = country_to_region[match]
+            match_list.append(mapped_region)
+
+    if not match_list:
+        return None
+    else:
+        return list(set(match_list))  # Return unique mapped regions
+
+
+def extract_sector(text, threshold=80):
+    """
+    Extract sectors from text using keyword matching
+
+    Args:
+        text: Text to extract sectors from
+        threshold: Minimum fuzzy match score (0-100)
+
+    Returns:
+        List of matched sectors or None
+    """
+    return classify_sector(text, threshold)
 
 
 def classify_sector(text, threshold=80):
@@ -380,6 +445,7 @@ def lookup_sectors_from_companies(company_list):
     # print("Running lookup_sectors_from_companies function")
     if not company_list:
         return None
+    sp500_plus2 = _get_sp500_dataframe()  # Lazy load dataframe
     sectors = set()
     for company in company_list:
         # print("Current ner company:" + company)

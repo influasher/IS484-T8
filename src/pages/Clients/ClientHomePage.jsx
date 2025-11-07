@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Typography, Box, Card, CardContent, Stack, Grid, Divider, useTheme, useMediaQuery } from '@mui/material';
 import { AccountBalanceWallet, TrendingUp } from '@mui/icons-material';
 import Watchlist from '../../components/ui/Watchlist';
+import ClientRecc from '../../components/clients/ClientRecc';
 import ClientPortfolio from '../../components/clients/ClientPortfolio';
 import useAuth from '../../hooks/useAuth';
 
@@ -92,6 +93,7 @@ function ClientHomePage() {
         Hello, {getUserFullName()}
       </Typography>
 
+
       {/* Mobile Wallet Balance Cards */}
       {isMobile && (
         <Stack direction="column" spacing={2} sx={{ mb: 4 }}>
@@ -130,7 +132,10 @@ function ClientHomePage() {
       {/* Desktop/Tablet Layout */}
       {!isMobile ? (
         <Stack direction="row" sx={{ width: "100%" }}>
+          <div>
+          <ClientRecc clientId={clientId} />
           <ClientPortfolio clientId={clientId} />
+          </div>
 
           {/* Divider between Left & Right */}
           <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
@@ -175,6 +180,7 @@ function ClientHomePage() {
       ) : (
         /* Mobile Layout - Only Portfolio */
         <Box sx={{ width: "100%" }}>
+          <ClientRecc clientId={clientId} />
           <ClientPortfolio clientId={clientId} />
         </Box>
       )}

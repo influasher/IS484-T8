@@ -329,7 +329,7 @@ class SentimentAnalyzer:
             }
 
             body = {
-                "model": "gpt-4-turbo-preview",  # or gpt-3.5-turbo for faster, cheaper analysis
+                "model": "gpt-4o-mini",  # Updated model name (gpt-4-turbo-preview deprecated)
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -453,18 +453,38 @@ class SentimentAnalyzer:
         # Split the text into manageable segments
         text_segments = self.split_text(preprocessed_text)
 
-        # Process each segment with both models
+        # Process each segment with both models (with graceful error handling)
         finbert_results = []
         second_model_results = []
 
         for segment in text_segments:
-            finbert_results.append(self.analyze_with_finbert(segment))
+            # FinBERT analysis (always try this first)
+            try:
+                finbert_result = self.analyze_with_finbert(segment)
+                finbert_results.append(finbert_result)
+            except Exception as e:
+                logger.error(f"FinBERT analysis failed: {str(e)}")
+                finbert_results.append({
+                    "numerical_score": 0,
+                    "classification": "neutral",
+                    "detailed_scores": {}
+                })
 
-            # Use either OpenAI or Gemini as the second model
-            if use_openai:
-                second_model_results.append(self.analyze_with_openai(segment))
-            else:
-                second_model_results.append(self.analyze_with_gemini(segment))
+            # Second model analysis (OpenAI or Gemini)
+            try:
+                if use_openai:
+                    second_result = self.analyze_with_openai(segment)
+                else:
+                    second_result = self.analyze_with_gemini(segment)
+                second_model_results.append(second_result)
+            except Exception as e:
+                model_name = "OpenAI" if use_openai else "Gemini"
+                logger.error(f"{model_name} analysis failed: {str(e)}")
+                second_model_results.append({
+                    "numerical_score": 0,
+                    "classification": "neutral",
+                    "detailed_scores": {}
+                })
 
         # Integrate scores for each segment
         integrated_results = []
@@ -531,15 +551,16 @@ class SentimentAnalyzer:
         )
         agreement_rate = agreement_count / len(integrated_results)
 
-        # Calculate shap values for FinBert scores
-        shap_explanation = self.get_shap_explanation(preprocessed_text)
-        shap_json = self.shap_explanation_to_json(shap_explanation)
-        shap_html = self.generate_shap_html(shap_explanation)
-
-        # Upload SHAP HTML to blob storage
-        import hashlib
-        analysis_id = hashlib.md5(text.encode()).hexdigest()[:12]
-        # shap_blob_url = upload_shap_to_blob(shap_html, analysis_id)
+        # Calculate shap values for FinBert scores (with error handling)
+        shap_json = None
+        shap_html = None
+        try:
+            shap_explanation = self.get_shap_explanation(preprocessed_text)
+            shap_json = self.shap_explanation_to_json(shap_explanation)
+            shap_html = self.generate_shap_html(shap_explanation)
+        except Exception as e:
+            logger.warning(f"SHAP generation failed (non-critical): {str(e)}")
+            # Continue without SHAP - it's not critical for sentiment analysis
 
         return {
             "numerical_score": final_score,
@@ -780,12 +801,15 @@ def generate_shap_html(self, explanation) -> str:
 def get_sentiment(text, use_openai=True, use_gemini=False):
     """
     Analyze the sentiment of a financial text using the SentimentAnalyzer
+    with graceful degradation if models fail.
 
     Parameters:
     - text: The text to analyze
     - use_openai: Whether to use OpenAI as the second model (if False, uses Gemini)
     - use_gemini: Whether to use Gemini as the second model (if False, uses OpenAI)
-    Returns a dictionary with sentiment analysis results
+
+    Returns a dictionary with sentiment analysis results.
+    Will use at least 2 models if available, degrading gracefully if models fail.
     """
     analyzer = SentimentAnalyzer()
 

@@ -1,8 +1,9 @@
 import React from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import ClientRecc from "../../components/clients/ClientRecc";
 import ClientPortfolio from "../../components/clients/ClientPortfolio";
 import { postData, getData } from '../../services/api';
+import { ROUTES } from '../../routes';
 import { Box,
   Paper,
   Dialog,
@@ -18,10 +19,13 @@ import { Box,
   Typography,
   CircularProgress,
   Alert,
+  IconButton,
 } from "@mui/material";
+import { ArrowBack } from "@mui/icons-material";
 
 const RMIndvClientView = () => {
   const { id: clientId } = useParams();
+  const navigate = useNavigate();
 
   console.log('RMIndvClientView - clientId from params:', clientId);
 
@@ -117,11 +121,30 @@ const RMIndvClientView = () => {
 
   return (
     <div>
+      <Box sx={{ p: 2 }}>
+        <Button
+          startIcon={<ArrowBack />}
+          onClick={() => navigate(ROUTES.RM_HOME)}
+          variant="outlined"
+          sx={{
+            borderRadius: 2,
+            textTransform: 'none',
+            fontWeight: 600,
+            color: 'grey.600',
+            borderColor: 'grey.400',
+            '&:hover': {
+              borderColor: 'grey.600',
+              backgroundColor: 'grey.50',
+            },
+          }}
+        >
+          Back to Clients
+        </Button>
+      </Box>
       <ClientRecc />
       <Box
         sx={{
           minHeight: "100vh",
-          bgcolor: (t) => t.palette.grey[100],
           p: { xs: 1.5, sm: 2.5, md: 3 },
         }}
       >
@@ -137,6 +160,15 @@ const RMIndvClientView = () => {
         <Dialog
           open={openAdd}
           onClose={handleCloseAdd}
+          elevation={1}
+          sx={{
+              position: "relative",
+              zIndex: (t) => t.zIndex.drawer + 1,
+              mx: "auto",
+              px: { xs: 3, sm: 5, md: 7 },
+              py: { xs: 2, sm: 3 },
+              borderRadius: 3,
+          }}
           PaperProps={{
               sx: {
                   borderRadius: 3,

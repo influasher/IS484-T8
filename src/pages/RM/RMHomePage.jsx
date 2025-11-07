@@ -28,7 +28,6 @@ const RMHomePage = () => {
         <Box
           sx={{
             flex: 1,
-            backgroundColor: "#f5f5f5",
             p: 2,
           }}
         >
@@ -41,7 +40,6 @@ const RMHomePage = () => {
         <Box
           sx={{
             flex: 1,
-            backgroundColor: "#f5f5f5",
             p: 2,
           }}
         >

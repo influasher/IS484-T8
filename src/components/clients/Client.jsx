@@ -135,6 +135,7 @@ const Client = ({ client }) => {
           color="black"
           sx={{
             mt: 1.5,
+            bgcolor: "white",
             "&:hover": {
               bgcolor: "#6b6b6bff",
               boxShadow: "none",

@@ -32,7 +32,7 @@ cleanup_old_pdfs()
 
 
 def check_client_access(client_id):
-    """Helper function to check if current RM can access the client"""
+    """Helper function to check if current user can access the client data"""
     try:
         # Get current user from JWT token
         current_user_id = get_jwt_identity()
@@ -41,18 +41,23 @@ def check_client_access(client_id):
         if not current_user:
             return None, "User not found"
 
-        # Only RMs can access client data
-        if not current_user.is_rm():
-            return None, "Access denied. Only Relationship Managers can access client data."
-
         # Get the client
         client = User.query.filter(User.id == uuid.UUID(client_id)).first()
         if not client:
             return None, "Client not found"
 
-        # Check if the current RM is the client's RM
-        if client.rm_id != current_user.id:
-            return None, "Access denied. You can only access data for your own clients."
+        # Allow access if:
+        # 1. User is an RM and the client is assigned to them
+        # 2. User is the client themselves (accessing their own data)
+        if current_user.is_rm():
+            # Check if the current RM is the client's RM
+            if client.rm_id != current_user.id:
+                return None, "Access denied. You can only access data for your own clients."
+        elif current_user.id == client.id:
+            # Client accessing their own data - allowed
+            pass
+        else:
+            return None, "Access denied. You can only access your own data."
 
         return client, None
     except ValueError:

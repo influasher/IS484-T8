@@ -15,7 +15,7 @@ feedback_bp = Blueprint("feedback", __name__)
 @feedback_bp.route("/user/<uuid:userID>", methods=["GET"])
 def get_feedback_by_user(userID):
     feedback = get_feedback_by_userID(userID)
-    if feedback is None:
+    if not feedback:
         return format_response(None, "Feedback not found", 404)
     return format_response(feedback, "Feedback fetched successfully", 200)
 
@@ -24,7 +24,7 @@ def get_feedback_by_user(userID):
 @feedback_bp.route("/news/<uuid:newsID>", methods=["GET"])
 def get_feedback_by_news(newsID):
     feedback = get_feedback_by_newsID(newsID)
-    if feedback is None:
+    if not feedback:
         return format_response(None, "Feedback not found", 404)
     return format_response(feedback, "Feedback fetched successfully", 200)
 
@@ -33,7 +33,7 @@ def get_feedback_by_news(newsID):
 @feedback_bp.route("/user/<uuid:userID>/news/<uuid:newsID>", methods=["GET"])
 def get_feedback_by_user_and_news(userID, newsID):
     feedback = get_feedback_by_userID_and_newsID(userID, newsID)
-    if feedback is None:
+    if not feedback:
         return format_response(None, "Feedback not found", 404)
     return format_response(feedback, "Feedback fetched successfully", 200)
 

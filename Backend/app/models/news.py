@@ -5,11 +5,13 @@ from app import db
 
 class News(db.Model):
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    publisher = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=False)
+    publisher = db.Column(db.String(100), nullable=True)  # Made nullable for scraper job
+    description = db.Column(db.Text, nullable=True)  # Made nullable for scraper job
     published_date = db.Column(db.DateTime, nullable=False)
     title = db.Column(db.String(255), nullable=False)
     url = db.Column(db.Text, nullable=False, unique=True)
+    content = db.Column(db.Text, nullable=True)  # Full article text content
+    scraped_at = db.Column(db.DateTime, nullable=True)  # When article was scraped
     entities = db.Column(
         ARRAY(db.String), nullable=True
     )  # e.g., ["TSLA", "AAPL", "Technology", "Business"]

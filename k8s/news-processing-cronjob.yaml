@@ -161,13 +161,20 @@ spec:
                 secretKeyRef:
                   name: sentifinance-secrets
                   key: openai-api-key
-            
+
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: sentifinance-secrets
                   key: gemini-api-key
-            
+
+            # Azure Storage for SHAP HTML uploads
+            - name: AZURE_STORAGE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: azure-storage-connection-string
+
             # Additional configuration from ConfigMap
             envFrom:
             - configMapRef:
@@ -288,7 +295,14 @@ spec:
             secretKeyRef:
               name: sentifinance-secrets
               key: gemini-api-key
-        
+
+        # Azure Storage for SHAP HTML uploads
+        - name: AZURE_STORAGE_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: azure-storage-connection-string
+
         envFrom:
         - configMapRef:
             name: sentifinance-config
