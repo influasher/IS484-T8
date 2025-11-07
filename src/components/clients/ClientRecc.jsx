@@ -1,6 +1,6 @@
 import React from "react";
 import { useParams } from "react-router-dom";
-import { apiClient } from "../../services/api";
+import useAuth from "../../hooks/useAuth";
 import { Box, Paper, Typography, Chip, IconButton, Button, CircularProgress, Alert, Grid, Dialog, DialogTitle, 
 DialogContent, DialogActions, TextField, FormControl, InputLabel, Select, MenuItem, Slider } from "@mui/material";
 import { DownloadOutlined as DownloadOutlinedIcon, EditRounded as EditRoundedIcon, TrendingUp as TrendingUpIcon, 
@@ -84,6 +84,7 @@ const getHealthScoreColor = (score) => {
 
 // Bubble Chart Component
 const RecommendationBubbleChart = ({ recommendations, onBubbleClick, selectedRecommendation }) => {
+
     // Transform recommendations into bubble chart data
     const chartData = recommendations.map((rec) => ({
         x: rec.sentiment_score || 0,
@@ -261,8 +262,10 @@ const RecommendationCard = ({ recommendation, isHighlighted }) => {
     );
 };
 
-const ClientRecc = () => {
-    const { id: clientId } = useParams();
+const ClientRecc = ({ clientId: propClientId }) => {
+    const { id: paramClientId } = useParams();
+    const clientId = propClientId || paramClientId; // Use prop if provided, otherwise URL param
+    const { userRole } = useAuth();
 
     // Fetch client data and preferences
     const { data: clientData, loading: clientLoading } = useFetch(`/user/${clientId}`);
@@ -412,7 +415,6 @@ const ClientRecc = () => {
         <Box
             sx={{
                 minHeight: "100vh",
-                bgcolor: (t) => t.palette.grey[100],
                 p: { xs: 1.5, sm: 2.5, md: 3 },
             }}
         >
@@ -433,10 +435,13 @@ const ClientRecc = () => {
                 }}
             >
                 {/* Left: Client name */}
-                <Typography variant="h4" sx={{ fontWeight: 800, mr: 1, color: "black" }}>
-                    {clientName}
-                </Typography>
-
+                {userRole === "relationship_manager" && (
+                    <Typography variant="h4" sx={{ fontWeight: 800, mr: 1, color: "black" }}>
+                        {clientName}
+                    </Typography>
+    
+                )}
+                
                 {/* Right: info boxes aligned right */}
                 <Box sx={{ ml: "auto", display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>
                     {/* Portfolio Health Score */}
@@ -504,19 +509,21 @@ const ClientRecc = () => {
                     )}
 
                     {/* Edit button */}
-                    <IconButton
-                        aria-label="Edit client"
-                        onClick={handleOpenEdit}
-                        size="small"
-                        sx={{
-                            bgcolor: "#f3f4f6",
-                            border: "1px solid",
-                            borderColor: (t) => t.palette.grey[300],
-                            "&:hover": { bgcolor: "#e5e7eb" },
-                        }}
-                    >
-                        <EditRoundedIcon fontSize="small" />
-                    </IconButton>
+                    {userRole === "relationship_manager" && (
+                        <IconButton
+                            aria-label="Edit client"
+                            onClick={handleOpenEdit}
+                            size="small"
+                            sx={{
+                                bgcolor: "#f3f4f6",
+                                border: "1px solid",
+                                borderColor: (t) => t.palette.grey[300],
+                                "&:hover": { bgcolor: "#e5e7eb" },
+                            }}
+                        >
+                            <EditRoundedIcon fontSize="small" />
+                        </IconButton>
+                    )}
                 </Box>
             </Box>
 
@@ -638,10 +645,18 @@ const ClientRecc = () => {
                 onClose={handleCloseEdit}
                 maxWidth="md"
                 fullWidth
+                sx={{
+                    zIndex: (theme) => theme.zIndex.modal + 2,
+                    '& .MuiDialog-container': {
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    },
+                }}
                 PaperProps={{
                     sx: {
                         borderRadius: 3,
                         bgcolor: "white",
+                        m: 2,
                     },
                 }}
             >
