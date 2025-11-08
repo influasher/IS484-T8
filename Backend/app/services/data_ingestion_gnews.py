@@ -132,7 +132,9 @@ EXCLUDED_SOURCES = {
 PAYWALL_KEY_HINTS = ["subscribe", "paywall", "premium", "metered"]  # crude heuristic
 
 
-def looks_paywalled(html: str) -> bool:
+def looks_paywalled(html: str | None) -> bool:
+    if not html:
+        return False
     low = html.lower()
     return any(k in low for k in PAYWALL_KEY_HINTS) and len(low) < 5000  # simple heuristic
 
