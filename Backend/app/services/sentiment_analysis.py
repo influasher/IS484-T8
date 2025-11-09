@@ -1,3 +1,7 @@
+# NOTE: Heavy ML dependencies (transformers, shap) are now primarily in news-processor
+# These are imported lazily only when actually needed to avoid startup overhead
+import shap
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import os
 import re
@@ -721,9 +725,26 @@ class SentimentAnalyzer:
         }
         return json.dumps(result)
 
+    # def generate_shap_html(self, explanation) -> str:
+    #     """
+    #     Generate HTML representation of SHAP explanation
+    #     """
+    #     # Lazy import shap only when actually needed
+    #     try:
+    #         import shap
+    #     except ImportError as e:
+    #         logger.error("shap library not installed - this is expected in lightweight backend")
+    #         raise ImportError(
+    #             "shap is not installed. "
+    #             "This functionality is only available in the news-processor microservice."
+    #         ) from e
+    #
+    #     html = shap.plots.text(explanation[0], display=False)
+    #     return html
+
     def generate_shap_html(self, explanation) -> str:
         """
-        Generate HTML representation of SHAP explanation
+        Generate improved HTML representation of SHAP explanation with better styling
         """
         # Lazy import shap only when actually needed
         try:
@@ -735,8 +756,217 @@ class SentimentAnalyzer:
                 "This functionality is only available in the news-processor microservice."
             ) from e
 
-        html = shap.plots.text(explanation[0], display=False)
-        return html
+        text_plot = shap.plots.text(explanation, display=False)
+        basic_html = f"<head>{shap.getjs()}</head><body>{text_plot}</body>"
+
+        basic_html = self.keep_red_highlighted_tab(basic_html)
+
+        # Enhanced HTML with improved CSS to prevent overlaps
+        enhanced_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>SHAP Sentiment Analysis Explanation</title>
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    margin: 20px;
+                    background-color: #f8f9fa;
+                    color: #333;
+                }}
+                .shap-container {{
+                    background: white;
+                    padding: 30px;
+                    border-radius: 10px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    max-width: 1200px;
+                    margin: 0 auto;
+                }}
+                .shap-title {{
+                    font-size: 24px;
+                    font-weight: bold;
+                    margin-bottom: 20px;
+                    color: #2c3e50;
+                    text-align: center;
+                    border-bottom: 2px solid #3498db;
+                    padding-bottom: 10px;
+                }}
+                .shap-visualization {{
+                    margin: 30px 0;
+                    padding: 20px;
+                    background-color: #fafafa;
+                    border-radius: 8px;
+                    border: 1px solid #e0e0e0;
+                    overflow-x: auto;
+                    overflow-y: visible;
+                }}
+
+                /* Fix SHAP text plot overlaps */
+                .shap-visualization span {{
+                    display: inline-block !important;
+                    margin: 2px 1px !important;
+                    padding: 2px 4px !important;
+                    white-space: nowrap !important;
+                    line-height: 1.8 !important;
+                }}
+
+                .shap-visualization .negative {{
+                    background-color: rgba(0, 136, 255, 0.3) !important;
+                    border-radius: 3px;
+                }}
+
+                .shap-visualization .positive {{
+                    background-color: rgba(255, 13, 87, 0.3) !important;
+                    border-radius: 3px;
+                }}
+
+                /* Ensure text wraps properly */
+                .shap-visualization div {{
+                    word-wrap: break-word !important;
+                    overflow-wrap: break-word !important;
+                    line-height: 2 !important;
+                }}
+
+                .shap-legend {{
+                    margin: 20px 0;
+                    padding: 15px;
+                    background-color: #f1f3f4;
+                    border-radius: 5px;
+                    font-size: 14px;
+                }}
+                .shap-legend-item {{
+                    display: block;
+                    margin-bottom: 10px;
+                }}
+                .color-box {{
+                    display: inline-block;
+                    width: 20px;
+                    height: 20px;
+                    margin-right: 10px;
+                    border-radius: 3px;
+                    vertical-align: middle;
+                }}
+                .positive-box {{
+                    background: rgba(255, 13, 87, 0.5);
+                }}
+                .negative-box {{
+                    background: rgba(0, 136, 255, 0.5);
+                }}
+                .info-section {{
+                    margin-top: 30px;
+                    padding: 20px;
+                    background-color: #e8f4f8;
+                    border-left: 4px solid #3498db;
+                    border-radius: 5px;
+                }}
+                .info-title {{
+                    font-weight: bold;
+                    color: #2c3e50;
+                    margin-bottom: 10px;
+                    font-size: 18px;
+                }}
+                @media (max-width: 768px) {{
+                    body {{
+                        margin: 10px;
+                    }}
+                    .shap-container {{
+                        padding: 15px;
+                    }}
+                    .shap-title {{
+                        font-size: 20px;
+                    }}
+                    .shap-visualization {{
+                        padding: 10px;
+                    }}
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="shap-container">
+                <div class="shap-title">
+                    SHAP Explanation: Word Contributions to Sentiment
+                </div>
+
+                <div class="shap-legend">
+                    <div class="info-title">How to interpret:</div>
+                    <div class="shap-legend-item">
+                        <span class="color-box positive-box"></span>
+                        <strong>Red highlights</strong> = words that push toward the displayed sentiment category
+                    </div>
+                    <div class="shap-legend-item">
+                        <span class="color-box negative-box"></span>
+                        <strong>Blue highlights</strong> = words that push away from the displayed sentiment category
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <strong>Intensity:</strong> Darker colors = stronger influence
+                    </div>
+                </div>
+
+                <div class="shap-visualization">
+                    {basic_html}
+                </div>
+
+                <div class="info-section">
+                    <div class="info-title">About SHAP Values</div>
+                    <p><strong>SHAP (SHapley Additive exPlanations)</strong> measures each word's contribution to the model's prediction.</p>
+                    <p><strong>Red words</strong> increase confidence in the displayed sentiment class, while <strong>blue words</strong> decrease it.</p>
+                    <p>This helps you understand <em>why</em> the model classified the text as positive, negative, or neutral based on specific words and phrases.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        return enhanced_html
+
+    def keep_red_highlighted_tab(self, html: str) -> str:
+        RED_BG = "rgba(255.0, 13.0, 87.0, 1.0)"  # the highlight color in your HTML
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        # tabs look like: <div id="..._output_1_name" ...>Positive</div>
+        tab_headers = soup.find_all("div", id=lambda x: x and "_output_" in x and x.endswith("_name"))
+
+        if not tab_headers:
+            return html
+
+        # 1. find the tab with the red background
+        active_tab = None
+        for tab in tab_headers:
+            style = tab.get("style", "")
+            # make it a bit tolerant to spaces
+            if "background:" in style and RED_BG in style:
+                active_tab = tab
+                break
+
+        # fallback: if none has the red background, just keep the first one
+        if active_tab is None:
+            active_tab = tab_headers[0]
+
+        active_id = active_tab.get("id")
+        content_id = active_id[:-5]  # strip "_name" → ..._output_1
+
+        # 2. remove other tabs
+        for tab in tab_headers:
+            if tab is not active_tab:
+                tab.decompose()
+
+        # 3. keep only the matching panel
+        panels = soup.find_all("div", id=lambda x: x and "_output_" in x and not x.endswith("_name"))
+        for panel in panels:
+            if panel.get("id") != content_id:
+                panel.decompose()
+            else:
+                # ensure visible
+                style = panel.get("style", "")
+                if "display: block" not in style:
+                    style = (style + ";display: block").lstrip(";")
+                    panel["style"] = style
+
+        return str(soup)
 
     def analyze_sentiment(self, text, use_openai=True, news_id=None):
         """
@@ -1115,47 +1345,73 @@ def get_sentiment(text, use_openai=True, use_gemini=False, news_id=None):
     }
 
 # Example usage
+# Testing code for SHAP HTML generation
 if __name__ == "__main__":
     analyzer = SentimentAnalyzer()
 
     sample_text = """
-    Tesla reported strong Q4 earnings, beating analyst expectations with revenue growth of 12% year-over-year. 
-    The company's automotive gross margins improved to 21.6%, and the company expects to increase production significantly in 2025.
-    However, some analysts remain concerned about increasing competition in the electric vehicle market.
+The Wall Street Journal article discusses the potential of quantum computing to revolutionize industries, but cautions investors about the risks and uncertainties involved. While quantum technology is advancing rapidly, it's still in its early stages and widespread adoption is years away. Current quantum computing companies face challenges in proving their value and achieving profitability. The article suggests a long-term investment horizon and careful evaluation of companies, emphasizing the need for investors to focus on established tech companies with quantum initiatives rather than pure-play quantum startups.
+
     """
 
-    # Test with just FinBERT for simplicity
-    finbert_only = analyzer.analyze_with_finbert(sample_text)
+    print("=== Testing SHAP HTML Generation ===")
 
-    explainer = shap.Explainer(analyzer.finbert_pipeline)
-    explanation = explainer([sample_text])
-    json_data = shap_explanation_to_json(explanation)
-    print(json_data)
-    print(explanation[:2])
-    shap.plots.text(shap_values[0], display=False)  # Get HTML object
-    html = shap.plots.text(shap_values[0], display=False)
-    with open("shap_text_explanation.html", "w") as f:
-        f.write(html)  # No .data needed
+    try:
+        # Get SHAP explanation
+        print("1. Getting SHAP explanation...")
+        explanation = analyzer.get_shap_explanation(sample_text)
+        print("   ✓ SHAP explanation generated successfully")
 
-    # shap.save_html(str(out_path), html)
-    print("=== FinBERT Analysis Only ===")
-    print(f"Sentiment: {finbert_only['classification']}")
-    print(f"Score: {finbert_only['numerical_score']:.2f}")
-    print(f"Details: {finbert_only['detailed_scores']}")
+        # Convert to JSON
+        print("2. Converting SHAP explanation to JSON...")
+        shap_json = analyzer.shap_explanation_to_json(explanation)
+        print("   ✓ JSON conversion successful")
+        print(f"   JSON preview: {shap_json[:200]}...")
 
-    # Uncomment to test with Gemini (replace YOUR_GEMINI_API_KEY_HERE with your actual key)
-    """
-    # Compare FinBERT + Gemini results
-    gemini_result = analyzer.analyze_sentiment(sample_text, use_openai=False)
-    
-    print("\n=== FinBERT + Gemini Analysis ===")
-    print(f"Sentiment: {gemini_result['classification']}")
-    print(f"Score: {gemini_result['numerical_score']:.2f}")
-    print(f"Confidence: {gemini_result['confidence']:.2f}")
-    print(f"Agreement rate: {gemini_result['agreement_rate']:.2f}")
-    print(f"Segments analyzed: {gemini_result['segment_count']}")
-    """
-    
+        # Generate HTML
+        print("3. Generating enhanced SHAP HTML...")
+        shap_html = analyzer.generate_shap_html(explanation)
+        print("   ✓ HTML generation successful")
+
+        # Save HTML to file for viewing
+        output_file = "shap_sentiment_explanation.html"
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(shap_html)
+        print(f"   ✓ HTML saved to {output_file}")
+
+        # Print some basic info about the explanation
+        print("\n=== SHAP Analysis Summary ===")
+        print(f"Number of tokens: {len(explanation.data[0])}")
+        print(f"Base values shape: {explanation.base_values[0].shape}")
+        print(f"SHAP values shape: {explanation.values[0].shape}")
+
+        # Show first few tokens with their SHAP values
+        tokens = explanation.data[0]
+        values = explanation.values[0]
+        print("\nFirst 10 tokens with SHAP values:")
+        for i in range(min(10, len(tokens))):
+            print(f"  '{tokens[i]}': {values[i]}")
+
+        print(f"\n✓ Complete! Open {output_file} in your browser to view the visualization.")
+
+    except ImportError as e:
+        print(f"❌ Import error (expected in lightweight backend): {e}")
+    except Exception as e:
+        print(f"❌ Error during SHAP testing: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    # Test basic FinBERT functionality (should work even without SHAP)
+    print("\n=== Testing Basic FinBERT Analysis ===")
+    try:
+        finbert_result = analyzer.analyze_with_finbert(sample_text)
+        print(f"✓ FinBERT Sentiment: {finbert_result['classification']}")
+        print(f"✓ FinBERT Score: {finbert_result['numerical_score']:.2f}")
+        print(f"✓ FinBERT Details: {finbert_result['detailed_scores']}")
+    except Exception as e:
+        print(f"❌ FinBERT analysis failed: {e}")
+
     # Test comparison between FinBERT and both models
     # try:
     #     finbert_result = analyzer.analyze_with_finbert(sample_text)
