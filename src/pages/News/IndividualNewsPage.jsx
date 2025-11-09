@@ -181,16 +181,20 @@ function IndividualNewsPage() {
                             border: '1px solid #ddd',
                             borderRadius: '8px',
                             overflow: 'hidden',
-                            backgroundColor: '#f9f9f9'
+                            backgroundColor: '#f9f9f9',
+                            minHeight: '400px', // Set a fixed height or use minHeight
+                            display: 'flex',
+                            flexDirection: 'column'
                         }}>
                             <iframe
                                 src={newsData.shapUrl}
                                 width="100%"
-                                height="200px"
+                                height="100%"
                                 title="SHAP Text Explanation"
                                 style={{
                                     border: 'none',
-                                    display: 'block'
+                                    display: 'block',
+                                    flex: 1
                                 }}
                             />
                         </Box>
