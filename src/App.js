@@ -22,6 +22,7 @@ import useAuth from "./hooks/useAuth";
 import "./styles/App.css";
 import { useParams } from "react-router-dom";
 import { ROUTES } from "./routes";
+import AnalysisPage from "./pages/AnalysisPage";
 
 function App() {
   const { id } = useParams(); // Get entity ID from URL
@@ -123,6 +124,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <SearchTable />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path={ROUTES.ANALYSIS}
+            element={
+              <ProtectedRoute allowedRoles={["relationship_manager"]}> 
+                <AnalysisPage />
               </ProtectedRoute>
             }
           />

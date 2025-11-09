@@ -8,11 +8,11 @@ from .user_otp import UserOTP
 from .client_preferences import ClientPreferences
 from .entity import Entity
 from .news import News
-from .feedback import Feedback
 from .sentiment_history import SentimentHistory
 from .transactions import Transactions, TransactionType
 from .client_portfolio import ClientPortfolio
 from .client_performance import ClientPerformance
+from .active_learning import LabelingQueue, UserVote, AggregatedLabel, UserStats, ModelRun
 
 # Explicitly export all models and db
 __all__ = [
@@ -28,4 +28,5 @@ __all__ = [
     'TransactionType',
     'ClientPortfolio',
     'ClientPerformance'
+    # do new sentiment analysis models 
 ]

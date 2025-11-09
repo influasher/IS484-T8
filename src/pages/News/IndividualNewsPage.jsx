@@ -18,6 +18,7 @@ import SentimentFeedbackForm from '../../components/ui/sentimentFeedback';
 import PieChart from '../../components/ui/feedbackChart';
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import {ROUTES} from "../../routes";
+import { InfoOutlined } from '@mui/icons-material';
 
 
 function IndividualNewsPage() {
@@ -76,6 +77,31 @@ function IndividualNewsPage() {
             </Box>
         );
     }
+
+    // helper function for formatting integration reason
+    const formatIntegrationReason = (reason) => {
+        if (!reason) return "Standard weighted analysis";
+
+        const reasonMap = {
+            'financial_heavy_finbert_priority': 'Financial-heavy content (FinBERT priority)',
+            'confident_consensus': 'High confidence consensus',
+            'high_disagreement_confident': 'Models disagree - flagged for review',
+            'classification_disagreement_confident': 'Classification conflict - under review',
+            'low_confidence_both': 'Low confidence - needs verification',
+            'extreme_disagreement': 'Extreme disagreement - manual review needed',
+            'feature_based': 'Feature-based weighted integration',
+            'standard': 'Standard weighted analysis'
+        };
+
+        return reasonMap[reason] || reason;
+    };
+
+    // color coding for confidence
+    const getConfidenceColor = (confidence) => {
+        if (confidence >= 0.7) return 'success';
+        if (confidence >= 0.5) return 'warning';
+        return 'error';
+    };
 
     return (
         <Box sx={{display: "flex", px: 4}}>
@@ -172,6 +198,70 @@ function IndividualNewsPage() {
 
                         <SentimentScore score={newsData.score} sentiment={newsData.sentiment}/>
                     </Grid>
+
+                    {/* NEW: Analysis Insights Section */}
+                    {newsData.confidence !== undefined && (
+                        <Box sx={{ mb: 4, p: 2, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid #e0e0e0' }}>
+                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                                <InfoOutlined sx={{ color: 'primary.main', fontSize: 20 }} />
+                                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem' }}>
+                                    Analysis Insights
+                                </Typography>
+                            </Stack>
+
+                            <Grid container spacing={2}>
+                                {/* Model Confidence */}
+                                <Grid item xs={12} sm={6} md={3}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                                        Overall Confidence
+                                    </Typography>
+                                    <Chip
+                                        label={`${(newsData.confidence * 100).toFixed(0)}%`}
+                                        color={getConfidenceColor(newsData.confidence)}
+                                        size="small"
+                                        sx={{ fontWeight: 600 }}
+                                    />
+                                </Grid>
+
+                                {/* Agreement Rate */}
+                                {newsData.agreement_rate !== undefined && (
+                                    <Grid item xs={12} sm={6} md={3}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                                            Model Agreement
+                                        </Typography>
+                                        <Chip
+                                            label={`${(newsData.agreement_rate * 100).toFixed(0)}%`}
+                                            color={newsData.agreement_rate > 0.7 ? 'success' : newsData.agreement_rate > 0.4 ? 'warning' : 'error'}
+                                            size="small"
+                                            sx={{ fontWeight: 600 }}
+                                        />
+                                    </Grid>
+                                )}
+
+                                {/* Analysis Method - Only show if interesting */}
+                                {newsData.integration_reason && newsData.integration_reason !== 'standard' && (
+                                    <Grid item xs={12} md={6}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                                            Analysis Method
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                            {formatIntegrationReason(newsData.integration_reason)}
+                                        </Typography>
+                                    </Grid>
+                                )}
+                            </Grid>
+
+                            {/* Show note if flagged for review (low confidence or high disagreement) */}
+                            {(newsData.confidence < 0.6 || newsData.agreement_rate < 0.5) && (
+                                <Box sx={{ mt: 2, p: 1.5, bgcolor: '#fff3cd', borderRadius: 1, border: '1px solid #ffc107' }}>
+                                    <Typography variant="caption" sx={{ color: '#856404', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <InfoOutlined sx={{ fontSize: 16 }} />
+                                        This analysis shows uncertainty or model disagreement. Your feedback helps improve accuracy!
+                                    </Typography>
+                                </Box>
+                            )}
+                        </Box>
+                    )}
 
                     <Box sx={{mb: 4}}>
                         <Typography variant="h6" sx={{mb: 2, fontWeight: 600}}>

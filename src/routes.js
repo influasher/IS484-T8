@@ -9,4 +9,5 @@ export const ROUTES = {
   LOGIN: "/Login",
   CLIENT_HOME: "/Client",
   TEST: "/Test",
+  ANALYSIS: "/Analysis",
 };

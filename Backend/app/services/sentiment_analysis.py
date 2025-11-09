@@ -8,13 +8,13 @@ import re
 import logging
 import json
 import google.generativeai as genai
+import numpy as np
+from app.services.sentiment.active_learning import should_request_human_feedback, ActiveLearningSelector
 
 from app.utils.helpers import upload_shap_to_blob
+from app.services.sentiment.features import SentimentFeatureBuilder
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 # Constants
@@ -30,8 +30,7 @@ class SentimentAnalyzer:
     def __init__(self):
         self._finbert_pipeline = None  # Lazy loading - don't load model at startup
         self.gemini_client = None
-        self.openai_client = None
-        logger.info("Sentiment Analyzer initialized (FinBERT model will be loaded on first use)")
+        self.feature_builder = SentimentFeatureBuilder()
 
     @property
     def finbert_pipeline(self):
@@ -145,52 +144,96 @@ class SentimentAnalyzer:
         logger.info(f"Split text into {len(segments)} segments")
         return segments
 
+    def _validate_numeric(self, value: float, default: float = 0.0) -> float:
+        """Validate and return safe numeric value"""
+        if value is None or np.isnan(value) or np.isinf(value):
+            return default
+        return float(value)
+
     def analyze_with_finbert(self, text):
         """
-        Analyze sentiment using FinBERT model
-        Returns a dictionary with sentiment scores
+        Analyze sentiment using FinBERT model with improved error handling
         """
         try:
             results = self.finbert_pipeline(text)
-
-            # Extract scores and convert to proper format
-            scores_dict = {item["label"].lower(): item["score"] for item in results}
-
-            # Calculate numerical score (-1.0 to +1.0)
-            numerical_score = scores_dict.get("positive", 0) - scores_dict.get(
-                "negative", 0
-            )
-
-            classification = (
-                "positive"
-                if numerical_score > SENTIMENT_THRESHOLD
-                else "negative" if numerical_score < -SENTIMENT_THRESHOLD else "neutral"
-            )
-
+            
+            # Validate results structure
+            if not results or not isinstance(results, list):
+                return self._get_default_sentiment_result()
+            
+            # Extract scores and validate
+            scores_dict = {}
+            for item in results:
+                if isinstance(item, dict) and 'label' in item and 'score' in item:
+                    label = item['label'].lower()
+                    score = item['score']
+                    # Validate score is a valid number
+                    if isinstance(score, (int, float)) and not np.isnan(score) and not np.isinf(score):
+                        scores_dict[label] = float(score)
+            
+            # Ensure we have the required labels with valid defaults
+            positive_score = scores_dict.get('positive', 0.33)
+            negative_score = scores_dict.get('negative', 0.33)
+            neutral_score = scores_dict.get('neutral', 0.34) 
+            
+            # Normalize scores to ensure they sum to 1.0 and are valid
+            total = positive_score + negative_score + neutral_score
+            if total <= 0 or np.isnan(total) or np.isinf(total):
+                # Fallback to uniform distribution
+                positive_score = negative_score = neutral_score = 1/3
+                total = 1.0
+            else:
+                positive_score /= total
+                negative_score /= total
+                neutral_score /= total
+            
+            # Calculate numerical score with validation
+            numerical_score = positive_score - negative_score
+            numerical_score = self._validate_numeric(numerical_score)
+            
+            # Determine classification
+            if numerical_score > SENTIMENT_THRESHOLD:
+                classification = "positive"
+            elif numerical_score < -SENTIMENT_THRESHOLD:
+                classification = "negative"
+            else:
+                classification = "neutral"
+            
             return {
                 "numerical_score": numerical_score,
                 "classification": classification,
-                "detailed_scores": scores_dict,
+                "detailed_scores": {
+                    'positive': positive_score,
+                    'negative': negative_score,
+                    'neutral': neutral_score
+                },
             }
+            
         except Exception as e:
             logger.error(f"Error analyzing with FinBERT: {e}")
-            return {
-                "numerical_score": 0,
-                "classification": "neutral",
-                "detailed_scores": {},
-            }
+            return self._get_default_sentiment_result()
+    
+    def _get_default_sentiment_result(self):
+        """Return a safe default sentiment result when models fail"""
+        return {
+            "numerical_score": 0.0,
+            "classification": "neutral",
+            "detailed_scores": {
+                'positive': 0.33,
+                'negative': 0.33,
+                'neutral': 0.34,
+                'overall': 0.5  
+            },
+        }
 
     def analyze_with_gemini(self, text):
         """
-        Analyze sentiment using Gemini AI
-        Returns a dictionary with sentiment scores
+        Analyze sentiment using Gemini AI with improved validation
         """
         try:
-            # Ensure Gemini client is initialized
             if not self.gemini_client:
                 self._load_gemini()
 
-            # Create prompt for sentiment analysis
             prompt = f"""
             Analyze the sentiment of the following financial news text. 
             Rate the sentiment on a scale from 0.0 to 1.0, where:
@@ -208,79 +251,17 @@ class SentimentAnalyzer:
             Text to analyze: {text}
             """
 
-            # Call Gemini API
             response = self.gemini_client.generate_content(prompt)
             response_text = response.text
 
-            logger.info(response_text)
-
-            # Parse the response - handling the possibility that it might not be valid JSON
-            try:
-                # Extract JSON from response if it's enclosed in code blocks
-                if "```json" in response_text:
-                    json_content = (
-                        response_text.split("```json")[1].split("```")[0].strip()
-                    )
-                    result = json.loads(json_content)
-                elif "```" in response_text:
-                    json_content = response_text.split("```")[1].split("```")[0].strip()
-                    result = json.loads(json_content)
-                else:
-                    result = json.loads(response_text)
-
-                # Ensure we have the expected keys
-                positive_score = result.get("positive_score", 0.0)
-                negative_score = result.get("negative_score", 0.0)
-                neutral_score = result.get("neutral_score", 0.0)
-                overall_score = result.get("overall_score", 0.5)
-                classification = result.get("classification", "neutral")
-
-                # Convert overall_score to numerical_score (-1.0 to 1.0 scale)
-                numerical_score = (overall_score - 0.5) * 2
-
-            except (json.JSONDecodeError, KeyError) as e:
-                logger.warning(
-                    f"Could not parse Gemini response as JSON: {e}. Using fallback parsing."
-                )
-
-                # Fallback parsing - extract scores using regex
-                positive_match = re.search(
-                    r'positive_score["\s:]+([0-9.]+)', response_text
-                )
-                positive_score = (
-                    float(positive_match.group(1)) if positive_match else 0.0
-                )
-
-                negative_match = re.search(
-                    r'negative_score["\s:]+([0-9.]+)', response_text
-                )
-                negative_score = (
-                    float(negative_match.group(1)) if negative_match else 0.0
-                )
-
-                # Add missing neutral_score extraction
-                neutral_match = re.search(
-                    r'neutral_score["\s:]+([0-9.]+)', response_text
-                )
-                neutral_score = (
-                    float(neutral_match.group(1)) if neutral_match else 0.0
-                )
-
-                overall_match = re.search(
-                    r'overall_score["\s:]+([0-9.]+)', response_text
-                )
-                overall_score = float(overall_match.group(1)) if overall_match else 0.5
-
-                # Calculate numerical_score (-1.0 to 1.0 scale)
-                numerical_score = (overall_score - 0.5) * 2
-
-                # Determine classification
-                if "positive" in response_text.lower():
-                    classification = "positive"
-                elif "negative" in response_text.lower():
-                    classification = "negative"
-                else:
-                    classification = "neutral"
+            # Parse and validate response
+            positive_score, negative_score, neutral_score, overall_score, classification = self._parse_llm_response(
+                response_text, "gemini"
+            )
+            
+            # Calculate numerical score with validation
+            numerical_score = (overall_score - 0.5) * 2
+            numerical_score = self._validate_numeric(numerical_score)
 
             return {
                 "numerical_score": numerical_score,
@@ -294,26 +275,19 @@ class SentimentAnalyzer:
             }
         except Exception as e:
             logger.error(f"Error analyzing with Gemini: {e}")
-            return {
-                "numerical_score": 0,
-                "classification": "neutral",
-                "detailed_scores": {},
-            }
+            return self._get_default_sentiment_result()
 
     def analyze_with_openai(self, text):
         """
-        Analyze sentiment using OpenAI API directly
-        Returns a dictionary with sentiment scores
+        Analyze sentiment using OpenAI API with improved validation
         """
         try:
-            # Ensure OpenAI API key is initialized
             if not hasattr(self, "openai_api_key"):
                 self._load_openai()
 
             # API endpoint for OpenAI
             API_URL = "https://api.openai.com/v1/chat/completions"
-
-            # Create prompt for sentiment analysis
+            
             system_prompt = """
             You are a financial sentiment analysis system. Analyze the sentiment of financial news text.
             Rate the sentiment on a scale from 0.0 to 1.0, where:
@@ -330,8 +304,6 @@ class SentimentAnalyzer:
             """
 
             user_prompt = f"Text to analyze: {text}"
-
-            # Prepare request
             import requests
 
             headers = {
@@ -347,35 +319,26 @@ class SentimentAnalyzer:
                 ],
                 "response_format": {"type": "json_object"},
                 "max_tokens": 150,
-                "temperature": 0.3,  # Low temperature for more consistent results
+                "temperature": 0.3,
             }
 
-            # Call OpenAI API
             response = requests.post(API_URL, headers=headers, json=body)
 
-            # Check for successful response
             if response.status_code != 200:
-                logger.error(
-                    f"OpenAI API error: {response.status_code} - {response.text}"
-                )
-                raise Exception(
-                    f"OpenAI API returned status code {response.status_code}"
-                )
+                logger.error(f"OpenAI API error: {response.status_code} - {response.text}")
+                return self._get_default_sentiment_result()
 
-            # Parse the response
             response_data = response.json()
             result_text = response_data["choices"][0]["message"]["content"]
-            result = json.loads(result_text)
-
-            # Extract the values
-            positive_score = result.get("positive_score", 0.0)
-            negative_score = result.get("negative_score", 0.0)
-            neutral_score = result.get("neutral_score", 0.0)
-            overall_score = result.get("overall_score", 0.5)
-            classification = result.get("classification", "neutral")
-
-            # Convert overall_score to numerical_score (-1.0 to 1.0 scale)
+            
+            # Parse and validate response  
+            positive_score, negative_score, neutral_score, overall_score, classification = self._parse_llm_response(
+                result_text, "openai"
+            )
+            
+            # Calculate numerical score with validation
             numerical_score = (overall_score - 0.5) * 2
+            numerical_score = self._validate_numeric(numerical_score)
 
             return {
                 "numerical_score": numerical_score,
@@ -389,202 +352,344 @@ class SentimentAnalyzer:
             }
         except Exception as e:
             logger.error(f"Error analyzing with OpenAI: {e}")
-            return {
-                "numerical_score": 0,
-                "classification": "neutral",
-                "detailed_scores": {},
-            }
-
-    def weighted_integration(self, finbert_result, second_model_result):
+            return self._get_default_sentiment_result()
+    
+    def _parse_llm_response(self, response_text: str, model_name: str):
         """
-        Implement the Weighted Integration Algorithm (WIP)
-        - Model consensus evaluation (70% agreement required)
-        - Confidence score calculation based on model agreement
-        - Normalization to scale of -100 (bearish) to +100 (bullish)
+        Parse and validate LLM response with robust fallbacks
+        Returns: (positive_score, negative_score, neutral_score, overall_score, classification)
         """
-        # Check model agreement
-        models_agree = (
-                finbert_result["classification"] == second_model_result["classification"]
+        try:
+            # Try JSON parsing first
+            if "```json" in response_text:
+                json_content = response_text.split("```json")[1].split("```")[0].strip()
+                result = json.loads(json_content)
+            elif "```" in response_text:
+                json_content = response_text.split("```")[1].split("```")[0].strip()
+                result = json.loads(json_content)
+            else:
+                result = json.loads(response_text)
+
+            # Extract and validate scores
+            positive_score = self._validate_score(result.get("positive_score", 0.33))
+            negative_score = self._validate_score(result.get("negative_score", 0.33))
+            neutral_score = self._validate_score(result.get("neutral_score", 0.34))
+            overall_score = self._validate_score(result.get("overall_score", 0.5), min_val=0.0, max_val=1.0)
+            classification = result.get("classification", "neutral")
+            
+        except (json.JSONDecodeError, KeyError) as e:
+            
+            # Regex fallback with validation
+            positive_score = self._extract_score_regex(response_text, 'positive_score', 0.33)
+            negative_score = self._extract_score_regex(response_text, 'negative_score', 0.33) 
+            neutral_score = self._extract_score_regex(response_text, 'neutral_score', 0.34)
+            overall_score = self._extract_score_regex(response_text, 'overall_score', 0.5)
+            
+            # Determine classification from text
+            if "positive" in response_text.lower():
+                classification = "positive"
+            elif "negative" in response_text.lower():
+                classification = "negative"
+            else:
+                classification = "neutral"
+        
+        # Normalize probability scores
+        total = positive_score + negative_score + neutral_score
+        if total <= 0:
+            positive_score = negative_score = neutral_score = 1/3
+        else:
+            positive_score /= total
+            negative_score /= total  
+            neutral_score /= total
+            
+        return positive_score, negative_score, neutral_score, overall_score, classification
+    
+    def _validate_score(self, value, min_val=0.0, max_val=1.0, default=0.33):
+        """Validate and clamp score values"""
+        try:
+            score = float(value)
+            if np.isnan(score) or np.isinf(score):
+                return default
+            return max(min_val, min(max_val, score))
+        except (TypeError, ValueError):
+            return default
+    
+    def _extract_score_regex(self, text: str, score_name: str, default: float):
+        """Extract score using regex with validation"""
+        try:
+            match = re.search(rf'{score_name}["\s:]+([0-9.]+)', text)
+            if match:
+                return self._validate_score(match.group(1), default=default)
+            return default
+        except Exception:
+            return default
+
+    # def weighted_integration(self, finbert_result, second_model_result):
+    #     """
+    #     Implement the Weighted Integration Algorithm (WIP)
+    #     - Model consensus evaluation (70% agreement required)
+    #     - Confidence score calculation based on model agreement
+    #     - Normalization to scale of -100 (bearish) to +100 (bullish)
+    #     """
+    #     # Check model agreement
+    #     models_agree = (
+    #             finbert_result["classification"] == second_model_result["classification"]
+    #     )
+
+    #     # Calculate base score (average of the two models)
+    #     # FinBERT range: -1.0 to +1.0, Second model range is similar for our purposes
+    #     base_score = (
+    #                          finbert_result["numerical_score"] + second_model_result["numerical_score"]
+    #                  ) / 2
+
+    #     # Calculate confidence score based on model agreement and score differences
+    #     score_difference = abs(
+    #         finbert_result["numerical_score"] - second_model_result["numerical_score"]
+    #     )
+    #     confidence = 1.0 if models_agree else max(0.0, 1.0 - score_difference)
+
+    #     # Apply confidence to score
+    #     adjusted_score = base_score * confidence
+
+    #     # Normalize to -100 to +100 scale
+    #     normalized_score = adjusted_score * 100
+
+    #     # Final classification with financial terminology
+    #     if normalized_score > 10:
+    #         classification = "bullish"
+    #     elif normalized_score < -10:
+    #         classification = "bearish"
+    #     else:
+    #         classification = "neutral"
+
+    #     return {
+    #         "numerical_score": normalized_score,
+    #         "classification": classification,
+    #         "models_agree": models_agree,
+    #         "confidence": confidence,
+    #         "model_scores": {
+    #             "finbert": finbert_result["numerical_score"],
+    #             "second_model": second_model_result["numerical_score"],
+    #         },
+    #     }
+    
+    def _build_features_dict(self, features, feature_names):
+        """Safely build feature dictionary with validation"""
+        if not feature_names or not features:
+            logger.warning("Empty features or feature_names provided")
+            return {}
+        
+        features_flat = features[0] if hasattr(features, 'ndim') and features.ndim > 1 else features
+        
+        if len(feature_names) != len(features_flat):
+            logger.error(
+                f"Feature mismatch: {len(feature_names)} names vs {len(features_flat)} values. "
+                f"Names: {feature_names[:5]}... Values shape: {features_flat.shape if hasattr(features_flat, 'shape') else len(features_flat)}"
+            )
+            # Return partial dict rather than empty
+            min_len = min(len(feature_names), len(features_flat))
+            return dict(zip(feature_names[:min_len], features_flat[:min_len]))
+        
+        return dict(zip(feature_names, features_flat))
+
+    def enhanced_weighted_integration(self, finbert_result, second_model_result, text, model_type='gemini'):
+        """
+        Enhanced integration using feature-based weighting with rule-based integration
+        """
+        # Build features for this sample
+        features, feature_names = self.feature_builder.build_single_sample_features(
+            finbert_result, second_model_result, text, model_type
         )
-
-        # Calculate base score (average of the two models)
-        # FinBERT range: -1.0 to +1.0, Second model range is similar for our purposes
-        base_score = (
-                             finbert_result["numerical_score"] + second_model_result["numerical_score"]
-                     ) / 2
-
-        # Calculate confidence score based on model agreement and score differences
-        score_difference = abs(
-            finbert_result["numerical_score"] - second_model_result["numerical_score"]
-        )
-        confidence = 1.0 if models_agree else max(0.0, 1.0 - score_difference)
-
-        # Apply confidence to score
-        adjusted_score = base_score * confidence
-
-        # Normalize to -100 to +100 scale
-        normalized_score = adjusted_score * 100
-
-        # Final classification with financial terminology
-        if normalized_score > 10:
+        
+        # Convert to dict for easier access
+        features_dict = self._build_features_dict(features, feature_names)
+        
+        # Extract key metrics (is classification agreeable?)
+        classifications_agree = (finbert_result.get('classification') == 
+                               second_model_result.get('classification'))
+        
+        # Calculate confidence scores properly - use features if available
+        finbert_confidence = features_dict.get('finbert_confidence', 0.33)
+        llm_confidence = features_dict.get(f'{model_type}_confidence', 0.33)
+        
+        # Fallback to manual calculation if features missing
+        if finbert_confidence == 0.33:
+            finbert_detailed = finbert_result.get('detailed_scores', {})
+            finbert_confidence = max(
+                finbert_detailed.get('positive', 0.33),
+                finbert_detailed.get('negative', 0.33),
+                finbert_detailed.get('neutral', 0.33)
+            )
+        
+        if llm_confidence == 0.33:
+            llm_detailed = second_model_result.get('detailed_scores', {})
+            llm_confidence = max(
+                llm_detailed.get('positive', 0.33),
+                llm_detailed.get('negative', 0.33),
+                llm_detailed.get('neutral', 0.33)
+            )
+        
+        # Ensure valid confidence values
+        finbert_confidence = max(0.0, min(1.0, finbert_confidence))
+        llm_confidence = max(0.0, min(1.0, llm_confidence))
+        
+        both_confident = int(finbert_confidence > 0.5 and llm_confidence > 0.5)
+        neither_confident = int(finbert_confidence <= 0.5 and llm_confidence <= 0.5)
+        
+        # Calculate score difference and magnitude - use features if available
+        finbert_score = features_dict.get('finbert_raw_score', finbert_result.get('numerical_score', 0))
+        llm_score = features_dict.get(f'{model_type}_raw_score', second_model_result.get('numerical_score', 0))
+        
+        # Ensure valid scores
+        finbert_score = self._validate_numeric(finbert_score)
+        llm_score = self._validate_numeric(llm_score)
+        
+        score_diff = features_dict.get('score_difference', abs(finbert_score - llm_score))
+        
+        # Magnitude (how far from neutral)
+        finbert_magnitude = features_dict.get('finbert_magnitude', abs(finbert_score))
+        llm_magnitude = features_dict.get(f'{model_type}_magnitude', abs(llm_score))
+        
+        # --- RULE-BASED INTEGRATION (stepping stone to meta-classifier) ---
+        is_financial_heavy = features_dict.get('is_financial_heavy', 0)
+        needs_human_labeling = False
+        integration_reason = "standard"
+                
+        # Rule 1: Financial-heavy content - prioritize FinBERT
+        if is_financial_heavy == 1:
+            finbert_weight = 0.75
+            llm_weight = 0.25
+            integration_reason = "financial_heavy_finbert_priority"
+        
+        # Rule 2: Models agree AND both confident - accept consensus
+        elif classifications_agree and both_confident == 1:
+            finbert_weight = 0.5 
+            llm_weight = 0.5
+            integration_reason = "confident_consensus"
+        
+        # Rule 3: High disagreement with confidence - mark for human labeling
+        elif score_diff > 0.4 and both_confident == 1:
+            finbert_weight = 0.5
+            llm_weight = 0.5
+            needs_human_labeling = True
+            integration_reason = "high_disagreement_confident"
+        
+        # Rule 4: Classifications disagree AND both confident - active learning priority
+        elif not classifications_agree and both_confident == 1:
+            finbert_weight = 0.5
+            llm_weight = 0.5
+            needs_human_labeling = True
+            integration_reason = "classification_disagreement_confident"
+        
+        # Rule 5: Neither model confident - mark for human review
+        elif neither_confident == 1:
+            finbert_weight = 0.5
+            llm_weight = 0.5
+            needs_human_labeling = True
+            integration_reason = "low_confidence_both"
+        
+        # Rule 6: High score difference regardless of confidence
+        elif score_diff > 0.6:
+            finbert_weight = 0.5
+            llm_weight = 0.5
+            needs_human_labeling = True
+            integration_reason = "extreme_disagreement"
+        
+        # Default: Use feature-based weighting
+        else:
+            finbert_weight = 0.5
+            
+            if is_financial_heavy:
+                finbert_weight += 0.3
+            
+            financial_density = features_dict.get('financial_keyword_density', 0)
+            finbert_weight += financial_density * 0.2
+            
+            if features_dict.get('finbert_confident', 0):
+                finbert_weight += 0.15
+            
+            # Clamp to valid range
+            finbert_weight = max(0.1, min(0.9, finbert_weight))
+            llm_weight = 1.0 - finbert_weight
+            integration_reason = "feature_based"
+        
+        # --- CONFIDENCE-BASED WEIGHTING ---
+        # Apply confidence as additional weight when combining scores
+        finbert_conf_weight = finbert_confidence * finbert_weight
+        llm_conf_weight = llm_confidence * llm_weight
+        
+        total_conf_weight = finbert_conf_weight + llm_conf_weight
+        if total_conf_weight > 0:
+            finbert_conf_weight /= total_conf_weight
+            llm_conf_weight /= total_conf_weight
+        else:
+            finbert_conf_weight = llm_conf_weight = 0.5
+        
+        # Weighted combination using confidence-weighted scores
+        weighted_score = (finbert_score * finbert_conf_weight + 
+                         llm_score * llm_conf_weight)
+        
+        # Ensure valid weighted score
+        weighted_score = self._validate_numeric(weighted_score)
+        
+        # Scale to -100 to +100 for backward compatibility
+        scaled_score = weighted_score * 100
+        
+        # Enhanced confidence metric
+        # Agreement bonus for classification agreement
+        agreement_bonus = 0.2 if classifications_agree else -0.15
+        
+        # Base confidence from weighted model confidences
+        base_confidence = (finbert_confidence * finbert_weight + 
+                          llm_confidence * llm_weight)
+        
+        # Penalize for disagreement
+        disagreement_penalty = min(score_diff * 0.3, 0.5)  # Cap penalty at 0.5
+        
+        final_confidence = base_confidence + agreement_bonus - disagreement_penalty
+        final_confidence = max(0.0, min(1.0, final_confidence))
+        
+        # Final classification
+        if scaled_score > 10:
             classification = "bullish"
-        elif normalized_score < -10:
+        elif scaled_score < -10:
             classification = "bearish"
         else:
             classification = "neutral"
-
+        
         return {
-            "numerical_score": normalized_score,
+            "numerical_score": scaled_score,
             "classification": classification,
-            "models_agree": models_agree,
-            "confidence": confidence,
+            "models_agree": classifications_agree,
+            "confidence": final_confidence,
+            "agreement_rate": 1.0 if classifications_agree else 0.0,
             "model_scores": {
                 "finbert": finbert_result["numerical_score"],
                 "second_model": second_model_result["numerical_score"],
             },
-        }
-
-    def analyze_sentiment(self, text, use_openai=True):
-        """
-        Main function to analyze sentiment of financial text
-        - Preprocessing
-        - Text splitting
-        - Model processing
-        - Score integration
-
-        Parameters:
-        - text: The text to analyze
-        - use_openai: Whether to use OpenAI as the second model (if False, uses Gemini)
-
-        Returns a dictionary with integrated sentiment analysis
-        """
-        # Preprocess the text
-        preprocessed_text = self.preprocess_text(text)
-
-        # Split the text into manageable segments
-        text_segments = self.split_text(preprocessed_text)
-
-        # Process each segment with both models (with graceful error handling)
-        finbert_results = []
-        second_model_results = []
-
-        for segment in text_segments:
-            # FinBERT analysis (always try this first)
-            try:
-                finbert_result = self.analyze_with_finbert(segment)
-                finbert_results.append(finbert_result)
-            except Exception as e:
-                logger.error(f"FinBERT analysis failed: {str(e)}")
-                finbert_results.append({
-                    "numerical_score": 0,
-                    "classification": "neutral",
-                    "detailed_scores": {}
-                })
-
-            # Second model analysis (OpenAI or Gemini)
-            try:
-                if use_openai:
-                    second_result = self.analyze_with_openai(segment)
-                else:
-                    second_result = self.analyze_with_gemini(segment)
-                second_model_results.append(second_result)
-            except Exception as e:
-                model_name = "OpenAI" if use_openai else "Gemini"
-                logger.error(f"{model_name} analysis failed: {str(e)}")
-                second_model_results.append({
-                    "numerical_score": 0,
-                    "classification": "neutral",
-                    "detailed_scores": {}
-                })
-
-        # Integrate scores for each segment
-        integrated_results = []
-        for i in range(len(text_segments)):
-            integrated_results.append(
-                self.weighted_integration(finbert_results[i], second_model_results[i])
-            )
-
-        # Aggregate results from all segments
-        if not integrated_results:
-            return {
-                "numerical_score": 0,
-                "classification": "neutral",
-                "confidence": 0,
-                "segment_count": 0,
-            }
-
-        # Calculate weighted average based on confidence
-        total_weight = sum(result["confidence"] for result in integrated_results)
-        if total_weight == 0:
-            total_weight = 1  # Avoid division by zero
-
-        print(integrated_results)
-
-        # Calculate final scores
-        final_score = (
-                sum(
-                    result["numerical_score"] * result["confidence"]
-                    for result in integrated_results
-                )
-                / total_weight
-        )
-        final_finbert_score = (
-                                      sum(
-                                          result["model_scores"]["finbert"] * result["confidence"]
-                                          for result in integrated_results
-                                      )
-                                      / total_weight
-                              ) * 100
-        final_second_model_score = (
-                                           sum(
-                                               result["model_scores"]["second_model"] * result["confidence"]
-                                               for result in integrated_results
-                                           )
-                                           / total_weight
-                                   ) * 100
-
-        # Final classification
-        if final_score > 10:
-            final_classification = "bullish"
-        elif final_score < -10:
-            final_classification = "bearish"
-        else:
-            final_classification = "neutral"
-
-        # Calculate average confidence
-        avg_confidence = sum(
-            result["confidence"] for result in integrated_results
-        ) / len(integrated_results)
-
-        # Calculate agreement rate
-        agreement_count = sum(
-            1 for result in integrated_results if result["models_agree"]
-        )
-        agreement_rate = agreement_count / len(integrated_results)
-
-        # Calculate shap values for FinBert scores (with error handling)
-        shap_json = None
-        shap_html = None
-        try:
-            shap_explanation = self.get_shap_explanation(preprocessed_text)
-            shap_json = self.shap_explanation_to_json(shap_explanation)
-            shap_html = self.generate_shap_html(shap_explanation)
-        except Exception as e:
-            logger.warning(f"SHAP generation failed (non-critical): {str(e)}")
-            # Continue without SHAP - it's not critical for sentiment analysis
-
-        return {
-            "numerical_score": final_score,
-            "finbert_score": final_finbert_score,
-            "second_model_score": final_second_model_score,
-            "classification": final_classification,
-            "confidence": avg_confidence,
-            "agreement_rate": agreement_rate,
-            "segment_count": len(text_segments),
-            "segment_results": integrated_results,
-            "shap": shap_json,
-            "shap_html": shap_html
-
+            "model_weights": {
+                "finbert": finbert_weight,
+                "second_model": llm_weight,
+            },
+            "confidence_weights": {
+                "finbert": finbert_conf_weight,
+                "second_model": llm_conf_weight,
+            },
+            "model_confidences": {
+                "finbert": finbert_confidence,
+                "second_model": llm_confidence,
+            },
+            "features": features.tolist(),
+            "feature_names": feature_names,
+            "score_difference": score_diff,
+            "magnitude": {
+                "finbert": finbert_magnitude,
+                "second_model": llm_magnitude,
+            },
+            "both_confident": both_confident,
+            "neither_confident": neither_confident,
+            "needs_human_labeling": needs_human_labeling,
+            "integration_reason": integration_reason,
         }
 
     def get_shap_explanation(self, text: str):
@@ -863,18 +968,330 @@ class SentimentAnalyzer:
 
         return str(soup)
 
+    def analyze_sentiment(self, text, use_openai=True, news_id=None):
+        """
+        Enhanced sentiment analysis with feature-based integration and active learning
+        """
+        # Preprocess the text
+        preprocessed_text = self.preprocess_text(text)
 
-# Expose a simple interface for external use
-def get_sentiment(text, use_openai=True, use_gemini=False):
+        # Split the text into manageable segments
+        text_segments = self.split_text(preprocessed_text)
+
+        # Process each segment with both models (with graceful error handling)
+        finbert_results = []
+        second_model_results = []
+
+        model_type = 'openai' if use_openai else 'gemini'
+        
+        for segment in text_segments:
+            finbert_results.append(self.analyze_with_finbert(segment))
+            
+            if use_openai:
+                second_model_results.append(self.analyze_with_openai(segment))
+            else:
+                second_model_results.append(self.analyze_with_gemini(segment))
+        
+        # Enhanced integration with features
+        integrated_results = []
+        for i in range(len(text_segments)):
+            integrated_results.append(
+                self.enhanced_weighted_integration(
+                    finbert_results[i], 
+                    second_model_results[i], 
+                    text_segments[i],
+                    model_type
+                )
+            )
+
+        # Aggregate results from all segments
+        if not integrated_results:
+            return {
+                "numerical_score": 0.0,
+                "classification": "neutral",
+                "confidence": 0.0,
+                "segment_count": 0,
+                #new
+                "finbert_score": 0.0,
+                "second_model_score": 0.0,
+                "agreement_rate": 0.0,
+                "model_weights": {"finbert": 0.5, "second_model": 0.5},
+                "enhanced_features": True,
+                "needs_human_feedback": False,
+                "disagreement_detected": False,
+                "rule_based_integration": True,
+                "any_segment_needs_labeling": False,
+                "shap": None,
+                "shap_html": None,
+            }
+
+        # Enhanced aggregation using confidence-weighted averaging
+        total_confidence = sum(result["confidence"] for result in integrated_results)
+        if total_confidence == 0:
+            total_confidence = 1
+        
+        final_score = sum(
+            result["numerical_score"] * result["confidence"]
+            for result in integrated_results
+        ) / total_confidence
+        
+        # Ensure valid final score for News model storage
+        final_score = self._validate_numeric(final_score)
+        
+        final_finbert_score = sum(
+            result["model_scores"]["finbert"] * result["confidence"] * 100
+            for result in integrated_results
+        ) / total_confidence
+        
+        # Ensure valid finbert score for News model
+        final_finbert_score = self._validate_numeric(final_finbert_score)
+        
+        final_second_model_score = sum(
+            result["model_scores"]["second_model"] * result["confidence"] * 100
+            for result in integrated_results
+        ) / total_confidence
+        
+        # Ensure valid second model score for News model
+        final_second_model_score = self._validate_numeric(final_second_model_score)
+        
+        # Calculate average weights for reporting
+        avg_finbert_weight = sum(
+            result["model_weights"]["finbert"] for result in integrated_results
+        ) / len(integrated_results)
+        
+        # Enhanced classification
+        final_classification = ("bullish" if final_score > 10 
+                              else "bearish" if final_score < -10 
+                              else "neutral")
+        
+        # Enhanced agreement calculation
+        avg_agreement_rate = sum(
+            result["agreement_rate"] for result in integrated_results
+        ) / len(integrated_results)
+        
+        # Ensure valid agreement rate for News model
+        avg_agreement_rate = self._validate_numeric(avg_agreement_rate)
+        
+        avg_confidence = sum(
+            result["confidence"] for result in integrated_results
+        ) / len(integrated_results)
+        
+        # Ensure valid confidence for News model
+        avg_confidence = self._validate_numeric(avg_confidence)
+        
+        # Aggregate human labeling flags
+        any_needs_human_labeling = any(
+            result.get("needs_human_labeling", False) for result in integrated_results
+        )
+
+        shap_json = None
+        shap_html = None
+        try:
+            shap_explanation = self.get_shap_explanation(preprocessed_text)
+            shap_json = self.shap_explanation_to_json(shap_explanation)
+            shap_html = self.generate_shap_html(shap_explanation)
+        except Exception as e:
+            logger.warning(f"SHAP generation failed (non-critical): {str(e)}")
+            # Continue without SHAP - it's not critical for sentiment analysis
+
+
+        # Check if this analysis should trigger human feedback
+        if integrated_results:
+            # Use first segment to check for disagreement
+            first_segment = integrated_results[0]
+            
+            # Check rule-based needs_human_labeling flag first
+            needs_human_feedback = first_segment.get("needs_human_labeling", False)
+            
+            # If not flagged by rules, check active learning criteria
+            if not needs_human_feedback:
+                finbert_score = first_segment.get('model_scores', {}).get('finbert', 0)
+                llm_score = first_segment.get('model_scores', {}).get('second_model', 0)
+                
+                finbert_result = {
+                    'numerical_score': finbert_score, 
+                    'classification': 'neutral', 
+                    'detailed_scores': {'positive': 0.33, 'negative': 0.33, 'neutral': 0.34}
+                }
+                llm_result = {
+                    'numerical_score': llm_score, 
+                    'classification': 'neutral', 
+                    'detailed_scores': {'positive': 0.33, 'negative': 0.33, 'neutral': 0.34}
+                }
+                
+                logger.info(
+                    "Auto-enqueue check (news_id=%s) first_segment model_scores: finbert=%s, llm=%s",
+                    news_id,
+                    finbert_score,
+                    llm_score,
+                )
+
+                features = first_segment.get('features', [])
+                feature_names = first_segment.get('feature_names', [])
+                features_dict = self._build_features_dict(features, feature_names)
+                
+                needs_human_feedback = should_request_human_feedback(
+                    finbert_result, llm_result, preprocessed_text, features_dict
+                )
+            
+            logger.info(
+                "Final needs_human_feedback for news_id=%s -> %s (reason: %s)",
+                news_id,
+                needs_human_feedback,
+                first_segment.get("integration_reason", "unknown")
+            )
+            
+            # AUTO-ENQUEUE: If disagreement detected, add to labeling queue
+            if needs_human_feedback and news_id:
+                try:
+                    finbert_score = first_segment.get('model_scores', {}).get('finbert', 0)
+                    llm_score = first_segment.get('model_scores', {}).get('second_model', 0)
+                    finbert_result = {
+                        'numerical_score': finbert_score, 
+                        'classification': 'neutral', 
+                        'detailed_scores': {}
+                    }
+                    llm_result = {
+                        'numerical_score': llm_score, 
+                        'classification': 'neutral', 
+                        'detailed_scores': {}
+                    }
+                    features = first_segment.get('features', [])
+                    feature_names = first_segment.get('feature_names', [])
+                    
+                    self._auto_enqueue_for_labeling(
+                        news_id=news_id,
+                        text=preprocessed_text,
+                        finbert_result=finbert_result,
+                        llm_result=llm_result,
+                        model_type=model_type,
+                        features=features,
+                        feature_names=feature_names,
+                        segment_result=first_segment,
+                    )
+                    logger.info(f"Auto-enqueued news {news_id} for human labeling (reason: {first_segment.get('integration_reason')})")
+                except Exception as e:
+                    logger.error(f"Failed to auto-enqueue disagreement case: {e}")
+        else:
+            needs_human_feedback = False
+            any_needs_human_labeling = False
+
+        return {
+            "numerical_score": float(final_score),  # Ensure Python float for News.score
+            "finbert_score": float(final_finbert_score),  # For News.finbert_score
+            "second_model_score": float(final_second_model_score),  # For News.second_model_score
+            "classification": final_classification,  # For News.sentiment
+            "confidence": float(avg_confidence),  # For News.confidence
+            "agreement_rate": float(avg_agreement_rate),  # For News.agreement_rate
+            "segment_count": len(text_segments),
+            "segment_results": integrated_results,
+            "shap": shap_json,  # For News.shap (JSON field)
+            "shap_html": shap_html,  # For News.shapUrl (Text field)
+            "model_type_used": model_type,
+            "model_weights": {
+                "finbert": avg_finbert_weight,
+                "second_model": 1.0 - avg_finbert_weight
+            },
+            "enhanced_features": True,
+            "needs_human_feedback": needs_human_feedback,
+            "disagreement_detected": avg_agreement_rate < 0.7,
+            "rule_based_integration": True,
+            "any_segment_needs_labeling": any_needs_human_labeling,
+        }
+
+    def _auto_enqueue_for_labeling(self, news_id, text, finbert_result, llm_result, 
+                                  model_type, features, feature_names, segment_result):
+        """
+        Automatically enqueue high-disagreement cases for human labeling
+        """
+        try:
+            # Create active learning selector to calculate metrics
+            selector = ActiveLearningSelector()
+            logger.info(
+                "Running selector for auto-enqueue (news_id=%s) with finbert=%s llm=%s",
+                news_id,
+                finbert_result.get("numerical_score"),
+                llm_result.get("numerical_score"),
+            )
+            disagreement_score = selector.calculate_disagreement_score(finbert_result, llm_result)
+            uncertainty_score = selector.calculate_uncertainty_score(finbert_result, llm_result)
+            
+            # Determine priority and reason
+            features_dict = self._build_features_dict(features, feature_names)
+            should_sample, reason, priority = selector.should_sample_for_disagreement(
+                disagreement_score, uncertainty_score, features_dict
+            )
+            
+            if not should_sample:
+                # Try uncertainty sampling as fallback
+                near_neutral = selector.calculate_near_neutral_score(finbert_result, llm_result)
+                should_sample, reason, priority = selector.should_sample_for_uncertainty(
+                    uncertainty_score, near_neutral, features_dict
+                )
+                
+            # Ensure features is JSON-serializable
+            features_json = []
+            if isinstance(features, np.ndarray):
+                features_json = features.tolist()
+            elif isinstance(features, (list, tuple)):
+                features_json = list(features)
+            
+            if should_sample:
+                # Convert news_id to string for LabelingQueue.news_id
+                news_id_str = str(news_id) if news_id else None
+
+                # Prepare queue item data with enhanced fields
+                queue_data = {
+                    'news_id': news_id_str,
+                    'text': text[:5000],
+                    'finbert_score': float(finbert_result['numerical_score']),
+                    'llm_score': float(llm_result['numerical_score']),
+                    'model_type': model_type,
+                    'disagreement_score': float(disagreement_score),
+                    'uncertainty_score': float(uncertainty_score),
+                    'sampling_reason': reason,
+                    'priority': int(priority),
+                    'features_json': list(feature_names) if feature_names else [],
+                    'feature_names_json': list(feature_names) if feature_names else [],
+                    
+                    # NEW: Enhanced metadata
+                    'model_weights': segment_result.get('model_weights'),
+                    'integration_reason': segment_result.get('integration_reason'),
+                    'finbert_confidence': float(segment_result.get('model_confidences', {}).get('finbert', 0.33)),
+                    'llm_confidence': float(segment_result.get('model_confidences', {}).get('second_model', 0.33)),
+                    'both_confident': segment_result.get('both_confident') == 1,
+                    'is_financial_heavy': features_dict.get('is_financial_heavy', 0) == 1,
+                    'final_combined_score': float(segment_result.get('numerical_score', 0.0)),
+                }
+                
+                # Make internal API call to enqueue
+                from flask import current_app
+                with current_app.test_client() as client:
+                    response = client.post('/api/labeling/enqueue', 
+                                         json=queue_data,
+                                         content_type='application/json')
+                    
+                    if response.status_code != 201:
+                        logger.error(f"Failed to enqueue item: {response.get_json()}")
+                    else:
+                        logger.info(f"Successfully enqueued disagreement case with priority {priority}")
+                        
+        except Exception as e:
+            logger.error(f"Error in auto-enqueue process: {e}")
+            # Don't raise - this is a background enhancement, shouldn't break main flow
+
+
+def get_sentiment(text, use_openai=True, use_gemini=False, news_id=None):
     """
     Analyze the sentiment of a financial text using the SentimentAnalyzer
     with graceful degradation if models fail.
 
     Parameters:
     - text: The text to analyze
-    - use_openai: Whether to use OpenAI as the second model (if False, uses Gemini)
-    - use_gemini: Whether to use Gemini as the second model (if False, uses OpenAI)
-
+    - use_openai: Whether to use OpenAI as the second model (default: True)
+    - use_gemini: Whether to use Gemini as the second model (default: False)
+    - news_id: Optional news ID for auto-enqueueing disagreement cases
+    
     Returns a dictionary with sentiment analysis results.
     Will use at least 2 models if available, degrading gracefully if models fail.
     """
@@ -882,39 +1299,22 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
 
     if use_openai and use_gemini:
         # Analyze with both models
-        result_with_open_ai = analyzer.analyze_sentiment(text, use_openai=True)
-        result_with_gemini = analyzer.analyze_sentiment(text, use_openai=False)
-
-        result = {
-            "numerical_score": 0,
-            "classification": "neutral",
-            "finbert_score": 0,
-            "second_model_score": 0,
-            "third_model_score": 0,
-            "confidence": 0,
-            "agreement_rate": 0,
-            "shap": {},
-            "shap_html": ""
-        }
+        result_with_open_ai = analyzer.analyze_sentiment(text, use_openai=True, news_id=news_id)
+        result_with_gemini = analyzer.analyze_sentiment(text, use_openai=False, news_id=news_id)
 
         # Combine results
-        result["numerical_score"] = (
-                                            result_with_open_ai["numerical_score"]
-                                            + result_with_gemini["numerical_score"]
-                                    ) / 2
-        result["finbert_score"] = (
-                                          result_with_open_ai["finbert_score"] + result_with_gemini["finbert_score"]
-                                  ) / 2
-        result["second_model_score"] = result_with_gemini["second_model_score"]
-        result["third_model_score"] = result_with_open_ai["numerical_score"]
-        result["confidence"] = (
-                                       result_with_open_ai["confidence"] + result_with_gemini["confidence"]
-                               ) / 2
-        result["agreement_rate"] = (
-                                           result_with_open_ai["agreement_rate"] + result_with_gemini["agreement_rate"]
-                                   ) / 2
+        result = {
+            "numerical_score": (result_with_open_ai["numerical_score"] + result_with_gemini["numerical_score"]) / 2,
+            "finbert_score": (result_with_open_ai["finbert_score"] + result_with_gemini["finbert_score"]) / 2,
+            "second_model_score": result_with_gemini["second_model_score"],
+            "third_model_score": result_with_open_ai["second_model_score"],
+            "confidence": (result_with_open_ai["confidence"] + result_with_gemini["confidence"]) / 2,
+            "agreement_rate": (result_with_open_ai["agreement_rate"] + result_with_gemini["agreement_rate"]) / 2,
+            "shap": result_with_open_ai.get("shap"),
+            "shap_html": result_with_open_ai.get("shap_html")
+        }
 
-        # get calculated classification
+        # Determine classification
         if result["numerical_score"] > 10:
             result["classification"] = "bullish"
         elif result["numerical_score"] < -10:
@@ -922,41 +1322,27 @@ def get_sentiment(text, use_openai=True, use_gemini=False):
         else:
             result["classification"] = "neutral"
 
-        # get shap values
-        result["shap"] = result_with_open_ai["shap"]
+        return result
 
-        # get shap url
-        result["shap_html"] = result_with_open_ai["shap_html"]
+    elif use_gemini or not use_openai:
+        # Analyze with Gemini (explicit request or fallback)
+        result = analyzer.analyze_sentiment(text, use_openai=False, news_id=news_id)
+    else:
+        # Default: Analyze with OpenAI
+        result = analyzer.analyze_sentiment(text, use_openai=True, news_id=news_id)
 
-        return {
-            "numerical_score": result["numerical_score"],
-            "finbert_score": result["finbert_score"],
-            "second_model_score": result["second_model_score"],
-            "third_model_score": result["third_model_score"],
-            "classification": result["classification"],
-            "confidence": result["confidence"],
-            "agreement_rate": result["agreement_rate"],
-            "shap": result["shap"],
-            "shap_html": result["shap_html"]
-        }
-
-    elif use_gemini:
-        # Analyze with Gemini only
-        result = analyzer.analyze_sentiment(text, use_openai=False)
-
-        # Return a simplified result object for external use
-        return {
-            "numerical_score": result["numerical_score"],
-            "finbert_score": result["finbert_score"],
-            "second_model_score": result["second_model_score"],
-            "third_model_score": 0,
-            "classification": result["classification"],
-            "confidence": result["confidence"],
-            "agreement_rate": result["agreement_rate"],
-            "shap": result["shap"],
-            "shap_html": result["shap_html"]
-        }
-
+    # Return a simplified result object for external use
+    return {
+        "numerical_score": result["numerical_score"],
+        "finbert_score": result["finbert_score"],
+        "second_model_score": result["second_model_score"],
+        "third_model_score": 0,
+        "classification": result["classification"],
+        "confidence": result["confidence"],
+        "agreement_rate": result["agreement_rate"],
+        "shap": result.get("shap"),
+        "shap_html": result.get("shap_html")
+    }
 
 # Example usage
 # Testing code for SHAP HTML generation

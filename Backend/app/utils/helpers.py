@@ -134,7 +134,7 @@ def URL_decoder(url):
         print(f"Error occurred: {e}")
 
 
-def get_article_details(url, article_html):
+def get_article_details(url, article_html, news_id=None):
     from app.services.sentiment_analysis import (
         get_sentiment,
     )  # Move import here to avoid circular import
@@ -158,9 +158,12 @@ def get_article_details(url, article_html):
         if not summary:
             summary = article_result.summary
 
-        # get the sentiment of the article
+        # get the sentiment of the article with news_id for auto-enqueueing
         sentiment = get_sentiment(
-            article_result.title + summary, use_openai=False, use_gemini=True
+            article_result.title + summary, 
+            use_openai=False, 
+            use_gemini=True,
+            news_id=news_id  # Pass news_id for auto-enqueueing
         )
 
         keyword = article_result.keywords
