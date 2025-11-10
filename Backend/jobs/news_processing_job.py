@@ -1,18 +1,22 @@
 """
-News Processing Job - Unified Pipeline
-Fetches URLs → Scrapes → Extracts Entities → Analyzes Sentiment → Generates SHAP → Saves to DB
+News Processing Job - Orchestrator for Original Service Pipeline
 
 This job is designed to run as a Kubernetes CronJob every 1-2 days.
-All heavy dependencies (crawl4ai, playwright, spaCy, FinBERT, SHAP) are isolated here.
+It orchestrates the existing service methods without reimplementing them.
 
 The job performs:
 1. URL fetching from GNews API for all active entities
-2. Article scraping using crawl4ai
-3. Entity extraction (companies, regions, sectors) using spaCy NER
-4. Sentiment analysis using ensemble of FinBERT, Gemini, and OpenAI
-5. SHAP explainability generation for sentiment predictions
-6. Upload SHAP visualizations to Azure Blob Storage
-7. Save all data to News table with complete field population
+2. Delegates to get_article_details() which handles:
+   - Article scraping using crawl4ai + newspaper
+   - LLM-based entity extraction (companies, regions, sectors via news_interpreter)
+   - Sentiment analysis using ensemble of FinBERT + Gemini
+   - SHAP explainability generation
+3. Uploads SHAP visualizations to Azure Blob Storage
+4. Saves all data to News table with proper field population:
+   - entities: [ticker symbols]
+   - company_names: [extracted company names]
+   - tags: [keywords from article]
+   - All sentiment scores, confidence, agreement_rate
 """
 
 import os
@@ -32,8 +36,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.config import config
 from app.models import db, News, Entity, SentimentHistory
 from app.services.article_scraper import scrape_article_async
-from app.services.sentiment_analysis import SentimentAnalyzer
-from app.utils.helpers import extract_company, extract_region, extract_sector
+# Removed unused imports: SentimentAnalyzer, extract_company, extract_region, extract_sector
+# These are now only used internally by get_article_details()
 
 # Configure logging
 logging.basicConfig(
@@ -48,18 +52,14 @@ logger = logging.getLogger(__name__)
 
 class NewsProcessor:
     """
-    Unified News Processing Pipeline
+    News Processing Pipeline - Orchestrator for Original Services
+
+    This class delegates to the original service methods instead of reimplementing them.
     """
-    
+
     def __init__(self, app: Flask):
         self.app = app
-        self.sentiment_analyzer = None
-        
-    def initialize_services(self):
-        """Initialize all heavy services (models, APIs)"""
-        logger.info("Initializing sentiment analyzer...")
-        self.sentiment_analyzer = SentimentAnalyzer()
-        logger.info("Services initialized successfully")
+        # Removed: self.sentiment_analyzer - no longer needed as get_article_details() handles this
         
     async def fetch_news_urls(self, lookback_days: int = 2) -> List[Dict[str, Any]]:
         """
@@ -213,155 +213,106 @@ class NewsProcessor:
     
     async def scrape_article_content(self, url: str) -> Optional[Dict[str, Any]]:
         """
-        Scrape article content from URL
-        
+        Scrape article content from URL using the ORIGINAL service implementation
+
+        This now properly uses get_article_details() which includes:
+        - Article scraping
+        - LLM-based entity extraction (companies, regions, sectors)
+        - Sentiment analysis with ensemble models
+        - SHAP explainability generation
+
         Args:
             url: Article URL
-            
+
         Returns:
-            Dict with 'content', 'title', 'published_date' or None if failed
+            Dict with 'content', 'title', 'companies', 'regions', 'sectors', 'sentiment', etc.
         """
         try:
             logger.info(f"Scraping article: {url}")
+
+            # PRE-FILTER: Skip obvious non-article URLs before scraping
+            non_article_patterns = [
+                '/sitemap',           # XML sitemaps
+                '/investing/stock/',  # Stock ticker pages
+                '/quote/',            # Stock quotes
+                '/profile/company/',  # Company profiles
+                '/profile/person/',   # Person profiles
+                '.xml',               # XML files
+                '/api/',              # API endpoints
+                '/search',            # Search pages
+            ]
+
+            url_lower = url.lower()
+            if any(pattern in url_lower for pattern in non_article_patterns):
+                logger.warning(f"Skipping non-article URL: {url}")
+                return None
+
+            # Use the ORIGINAL scraper service (sync wrapper for async context)
+            from app.services.article_scraper import scrape_article
+            from app.utils.helpers import get_article_details
+
+            # Scrape HTML using original service
             raw_html = await scrape_article_async(url)
 
-            if raw_html:
-                # Parse the HTML to extract structured data
-                from newspaper import Article
-                from bs4 import BeautifulSoup
-
-                # Use newspaper4k to parse
-                article = Article(url)
-                article.html = raw_html  # Set HTML directly (not set_html method)
-                article.parse()
-
-                # Extract text content - use article.text or fallback to BeautifulSoup
-                content = article.text
-                if not content or len(content.strip()) < 50:
-                    # Fallback: Use BeautifulSoup to extract text
-                    soup = BeautifulSoup(raw_html, 'html.parser')
-                    # Remove script and style elements
-                    for script in soup(["script", "style"]):
-                        script.decompose()
-                    content = soup.get_text(separator='\n', strip=True)
-
-                if not content or len(content.strip()) < 50:
-                    logger.warning(f"Insufficient content extracted from {url} (length: {len(content.strip()) if content else 0})")
-                    return None
-
-                return {
-                    'content': content,
-                    'title': article.title or '',
-                    'published_date': article.publish_date,
-                    'raw_html': raw_html
-                }
-            else:
+            if not raw_html:
                 logger.warning(f"No content scraped from {url}")
                 return None
-                
+
+            # Use the ORIGINAL get_article_details helper
+            # This includes: LLM entity extraction, sentiment analysis, SHAP generation
+            # IMPORTANT: Wrap in try/except like the original service does (data_ingestion_gnews.py:196-201)
+            try:
+                details = get_article_details(url, raw_html)
+            except Exception as e:
+                logger.warning(f"Error getting details for {url}: {str(e)}")
+                return None
+
+            # Check if get_article_details returned error dict
+            if not details or details.get('text') == "An error occurred while fetching the article details":
+                logger.warning(f"Failed to extract article details from {url}")
+                return None
+
+            # QUALITY CHECK: Use the SAME quality evaluation as data_ingestion_gnews.py
+            from app.utils.scraping_quality import evaluate_scraping_quality
+
+            quality = evaluate_scraping_quality(url, raw_html, details)
+
+            if not quality["is_clean"]:
+                logger.warning(f"Low quality article skipped: {url} (reason: {quality.get('reason', 'unknown')})")
+                return None
+
+            # Return in the format expected by the rest of the pipeline
+            return {
+                'content': details['text'],
+                'summary': details['summary'],
+                'companies': details['companies'],
+                'regions': details['regions'],
+                'sectors': details['sectors'],
+                'keywords': details['keywords'],
+                'sentiment': {
+                    'numerical_score': details['numerical_score'],
+                    'finbert_score': details['finbert_score'],
+                    'second_model_score': details['second_model_score'],
+                    'third_model_score': details['third_model_score'],
+                    'classification': details['classification'],
+                    'confidence': details['confidence'],
+                    'agreement_rate': details['agreement_rate'],
+                    'shap': details['shap'],
+                    'shap_html': details['shap_html']
+                }
+            }
+
         except Exception as e:
-            logger.error(f"Error scraping article {url}: {str(e)}")
+            logger.error(f"Error scraping article {url}: {str(e)}", exc_info=True)
             return None
     
-    def extract_entities_from_content(self, content: str) -> Dict[str, Any]:
-        """
-        Extract entities (companies, regions, sectors) from article content
-        
-        Args:
-            content: Article text content
-            
-        Returns:
-            Dict with 'companies', 'regions', 'sectors' lists
-        """
-        try:
-            logger.debug("Extracting entities from content")
-            
-            companies = extract_company(content)
-            regions = extract_region(content)
-            sectors = extract_sector(content)
-            
-            return {
-                'companies': companies if companies else [],
-                'regions': regions if regions else [],
-                'sectors': sectors if sectors else []
-            }
-            
-        except Exception as e:
-            logger.error(f"Error extracting entities: {str(e)}")
-            return {'companies': [], 'regions': [], 'sectors': []}
+    # REMOVED: extract_entities_from_content
+    # Entity extraction is now handled by get_article_details() in scrape_article_content()
+    # This uses the original news_interpreter_tagger() which combines LLM + NER extraction
     
-    def analyze_sentiment(self, content: str, title: str = "") -> Dict[str, Any]:
-        """
-        Analyze sentiment using ensemble of models (FinBERT, Gemini, OpenAI)
-        with SHAP explainability
-
-        Args:
-            content: Article content
-            title: Article title (optional)
-
-        Returns:
-            Dict with sentiment scores, metadata, and SHAP values
-        """
-        try:
-            logger.debug("Analyzing sentiment with ensemble models and SHAP")
-
-            # Combine title and content for analysis
-            text_to_analyze = f"{title}\n\n{content}" if title else content
-
-            # Use the full sentiment analyzer that includes SHAP calculations
-            # This calls analyze_with_finbert, analyze_with_gemini, and analyze_with_openai
-            # internally and also generates SHAP values
-            from app.services.sentiment_analysis import get_sentiment
-
-            result = get_sentiment(
-                text_to_analyze,
-                use_openai=False,
-                use_gemini=False
-            )
-
-            classification = result.get('classification', 'neutral')
-
-            logger.info(
-                f"Sentiment analysis complete: {classification} "
-                f"(score: {result.get('numerical_score', 0.0):.3f}, "
-                f"confidence: {result.get('confidence', 0.0):.3f}, "
-                f"agreement: {result.get('agreement_rate', 0.0):.3f})"
-            )
-
-            # Return in the format expected by save_to_database
-            # Note: classification is 'bullish'/'bearish'/'neutral' from get_sentiment
-            return {
-                'finbert_score': result.get('finbert_score', 0.0),
-                'finbert_sentiment': classification,
-                'second_model_score': result.get('second_model_score', 0.0),
-                'second_model_sentiment': classification,
-                'third_model_score': result.get('third_model_score', 0.0),
-                'third_model_sentiment': classification,
-                'score': result.get('numerical_score', 0.0),
-                'sentiment': classification,
-                'confidence': result.get('confidence', 0.0),
-                'agreement_rate': result.get('agreement_rate', 0.0),
-                'shap': result.get('shap'),
-                'shap_html': result.get('shap_html')
-            }
-
-        except Exception as e:
-            logger.error(f"Error analyzing sentiment: {str(e)}", exc_info=True)
-            # Return neutral sentiment on error
-            return {
-                'finbert_score': 0.0,
-                'finbert_sentiment': 'neutral',
-                'second_model_score': 0.0,
-                'second_model_sentiment': 'neutral',
-                'third_model_score': 0.0,
-                'third_model_sentiment': 'neutral',
-                'score': 0.0,
-                'sentiment': 'neutral',
-                'confidence': 0.0,
-                'agreement_rate': 0.0,
-                'shap': None,
-                'shap_html': None
-            }
+    # REMOVED: analyze_sentiment
+    # Sentiment analysis is now handled by get_article_details() in scrape_article_content()
+    # This uses the original get_sentiment() function with FinBERT + Gemini ensemble
     
     def save_to_database(
         self,
@@ -373,7 +324,10 @@ class NewsProcessor:
         sentiment: Dict[str, Any],
         publisher: Optional[str] = None,
         description: Optional[str] = None,
-        entity_id: Optional[int] = None
+        entity_id: Optional[int] = None,
+        ticker: Optional[str] = None,
+        summary: Optional[str] = None,
+        keywords: Optional[List[str]] = None
     ) -> Optional[News]:
         """
         Save processed article to database
@@ -400,20 +354,18 @@ class NewsProcessor:
                     logger.info(f"Article already exists: {url}")
                     return existing
 
-                # Create summary (first 200 chars as placeholder)
-                summary = content[:200] + "..." if len(content) > 200 else content
+                # Use summary from get_article_details, fallback to first 200 chars
+                if not summary:
+                    summary = content[:200] + "..." if len(content) > 200 else content
 
-                # Populate entities field - combines companies, regions, and sectors
+                # FIXED: Populate entities field with TICKER SYMBOL (following original service pattern)
+                # The entities field should contain ticker symbols, NOT company names
                 entities_list = []
-                if entities.get('companies'):
-                    entities_list.extend(entities.get('companies'))
-                if entities.get('regions'):
-                    entities_list.extend(entities.get('regions'))
-                if entities.get('sectors'):
-                    entities_list.extend(entities.get('sectors'))
+                if ticker:
+                    entities_list.append(ticker)  # Primary: Add the ticker symbol
 
-                # Populate tags field - use sectors as tags
-                tags_list = entities.get('sectors', [])
+                # Populate tags field - use keywords if available, otherwise sectors
+                tags_list = keywords if keywords else entities.get('sectors', [])
 
                 # Handle SHAP values and upload to blob storage if available
                 shap_data = sentiment.get('shap')
@@ -447,12 +399,12 @@ class NewsProcessor:
                     sectors=entities.get('sectors', []),
                     tags=tags_list if tags_list else None,
 
-                    # Sentiment scores
+                    # Sentiment scores (mapped from get_article_details output)
                     finbert_score=sentiment.get('finbert_score', 0.0),
                     second_model_score=sentiment.get('second_model_score', 0.0),
                     third_model_score=sentiment.get('third_model_score', 0.0),
-                    score=sentiment.get('score', 0.0),  # Ensemble score
-                    sentiment=sentiment.get('sentiment', 'neutral'),
+                    score=sentiment.get('numerical_score', 0.0),  # Ensemble score from get_sentiment
+                    sentiment=sentiment.get('classification', 'neutral'),  # 'bullish'/'bearish'/'neutral'
                     confidence=sentiment.get('confidence', 0.0),
                     agreement_rate=sentiment.get('agreement_rate', 0.0),
 
@@ -538,84 +490,72 @@ class NewsProcessor:
                 logger.error(f"Error updating sentiment history: {str(e)}")
     
     async def process_article(self, url_data: Dict[str, Any]) -> Optional[News]:
+        """
+        Process a single article through the full pipeline using ORIGINAL service methods
+
+        Now properly uses get_article_details() which handles:
+        - Article scraping and parsing
+        - LLM-based entity extraction (companies, regions, sectors)
+        - Sentiment analysis with ensemble models
+        - SHAP explainability generation
+
+        Args:
+            url_data: Dict with 'url', 'entity_name', 'entity_id', 'ticker', etc.
+
+        Returns:
+            Saved News object or None if failed
+        """
         url = url_data['url']
-        logger.info(f"Processing article: {url}")
+        ticker = url_data.get('ticker', '')
+        logger.info(f"Processing article: {url} (ticker: {ticker})")
 
         try:
+            # Use the ORIGINAL service implementation (scrape + get_article_details)
+            # This returns ALL data: content, entities, sentiment, SHAP, etc.
             scraped_data = await self.scrape_article_content(url)
 
             if not scraped_data:
-                description = url_data.get('description', '')
-                if not description:
-                    logger.warning(f"Skipping article (no content): {url}")
-                    return None
-                scraped_data = {'content': description, 'title': url_data.get('title', 'Untitled')}
+                logger.error(f"Skipping article (scraping failed): {url}")
+                return None
 
-            # Entity extraction first
-            entities = self.extract_entities_from_content(scraped_data['content'])
+            # Extract data from the original service response
+            # All entity extraction and sentiment analysis is ALREADY DONE
+            entities = {
+                'companies': scraped_data.get('companies', []),
+                'regions': scraped_data.get('regions', []),
+                'sectors': scraped_data.get('sectors', [])
+            }
 
-            # 🔹 Run sentiment BEFORE committing the News row
-            sentiment = self.analyze_sentiment(
-                scraped_data['content'],
-                scraped_data.get('title', '')
+            sentiment = scraped_data.get('sentiment', {})
+            summary = scraped_data.get('summary', '')
+            keywords = scraped_data.get('keywords', [])
+
+            # Log extraction results
+            logger.info(
+                f"Extracted entities - Companies: {len(entities['companies'])}, "
+                f"Regions: {len(entities['regions'])}, Sectors: {len(entities['sectors'])}"
             )
 
-            with self.app.app_context():
-                existing = News.query.filter_by(url=url).first()
-                if existing:
-                    logger.info(f"Article already exists, updating: {url}")
-                    news = existing
-                else:
-                    news = News(
-                        id=str(uuid.uuid4()),
-                        url=url,
-                        title=scraped_data.get('title', url_data.get('title', 'Untitled')),
-                        publisher=url_data.get('publisher'),
-                        description=url_data.get('description'),
-                        content=scraped_data['content'],
-                        published_date=scraped_data.get('published_date') or url_data.get('published_date') or datetime.utcnow(),
-                        scraped_at=datetime.utcnow(),
-                        entities=(entities.get('companies') or [])
-                                + (entities.get('regions') or [])
-                                + (entities.get('sectors') or []),
-                        company_names=entities.get('companies', []),
-                        regions=entities.get('regions', []),
-                        sectors=entities.get('sectors', []),
-                        tags=entities.get('sectors', []),
-                        summary=(scraped_data['content'][:200] + "...") if len(scraped_data['content']) > 200 else scraped_data['content'],
-                    )
-
-                    db.session.add(news)
-
-                # 🔹 Update sentiment scores directly on the same instance
-                news.score = sentiment.get('score')
-                news.finbert_score = sentiment.get('finbert_score')
-                news.second_model_score = sentiment.get('second_model_score')
-                news.third_model_score = sentiment.get('third_model_score')
-                news.sentiment = sentiment.get('sentiment')
-                news.confidence = sentiment.get('confidence')
-                news.agreement_rate = sentiment.get('agreement_rate')
-
-                # Optional SHAP handling
-                shap_html = sentiment.get('shap_html')
-                if shap_html:
-                    try:
-                        from app.utils.helpers import upload_shap_to_blob
-                        shap_url = upload_shap_to_blob(shap_html, url)
-                        news.shapUrl = shap_url
-                    except Exception as e:
-                        logger.warning(f"SHAP upload failed: {e}")
-                news.shap = sentiment.get('shap')
-
-                # 🔹 Commit ONCE — ensures all fields are persisted atomically
-                db.session.commit()
-                logger.info(f"✅ Saved News + Sentiment: {news.title} (id={news.id})")
+            # Save to database with TICKER in entities field
+            news = self.save_to_database(
+                url=url,
+                title=url_data.get('title', 'Untitled'),
+                content=scraped_data['content'],
+                published_date=url_data.get('published_date'),
+                entities=entities,
+                sentiment=sentiment,
+                publisher=url_data.get('publisher'),
+                description=url_data.get('description'),
+                entity_id=url_data.get('entity_id'),
+                ticker=ticker,  # IMPORTANT: Pass ticker for entities field
+                summary=summary,  # Use LLM-generated summary
+                keywords=keywords  # Use extracted keywords for tags
+            )
 
             return news
 
         except Exception as e:
-            db.session.rollback()
-            logger.error(f"❌ Error processing article {url}: {e}", exc_info=True)
+            logger.error(f"Error processing article {url}: {str(e)}", exc_info=True)
             return None
 
     
@@ -634,11 +574,10 @@ class NewsProcessor:
         logger.info("=" * 80)
         
         start_time = datetime.utcnow()
-        
+
         try:
-            # Initialize services
-            self.initialize_services()
-            
+            # No initialization needed - get_article_details() handles all services internally
+
             # Fetch URLs to process
             urls_to_process = await self.fetch_news_urls(lookback_days)
             
