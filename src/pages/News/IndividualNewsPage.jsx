@@ -78,8 +78,9 @@ function IndividualNewsPage() {
         );
     }
 
-    // helper function for formatting integration reason
+    // Helper function for formatting integration reason
     const formatIntegrationReason = (reason) => {
+        // Add fallback for when field doesn't exist
         if (!reason) return "Standard weighted analysis";
 
         const reasonMap = {
@@ -238,8 +239,8 @@ function IndividualNewsPage() {
                                     </Grid>
                                 )}
 
-                                {/* Analysis Method - Only show if interesting */}
-                                {newsData.integration_reason && newsData.integration_reason !== 'standard' && (
+                                {/* Analysis Method - Only show if exists */}
+                                {newsData.integration_reason && (
                                     <Grid item xs={12} md={6}>
                                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                                             Analysis Method

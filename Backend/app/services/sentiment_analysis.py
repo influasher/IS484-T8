@@ -28,10 +28,11 @@ load_dotenv()
 
 class SentimentAnalyzer:
     def __init__(self):
-        self._finbert_pipeline = None  # Lazy loading - don't load model at startup
+        self._finbert_pipeline = None
         self.gemini_client = None
         self.feature_builder = SentimentFeatureBuilder()
-
+        self._meta_classifier = None  # NEW: Lazy-load trained meta-classifier
+    
     @property
     def finbert_pipeline(self):
         """Lazy load FinBERT model on first access"""
@@ -40,6 +41,13 @@ class SentimentAnalyzer:
             self._finbert_pipeline = self._load_finbert()
             logger.info("FinBERT model loaded successfully")
         return self._finbert_pipeline
+
+    @property
+    def meta_classifier(self):
+        """Lazy load meta-classifier model"""
+        if self._meta_classifier is None:
+            self._load_meta_classifier()
+        return self._meta_classifier
 
     def _load_finbert(self):
         """Initialize and load the FinBERT model"""
@@ -98,6 +106,32 @@ class SentimentAnalyzer:
             logger.error(f"Error storing OpenAI API key: {e}")
             raise
 
+    def _load_meta_classifier(self):
+        """Load the active meta-classifier from disk"""
+        try:
+            from flask import current_app
+            from app.models.active_learning import ModelRun
+            
+            with current_app.app_context():
+                # Get active model
+                active_model = ModelRun.query.filter_by(is_active=True).first()
+                
+                if not active_model:
+                    logger.warning("No active meta-classifier found. Using rule-based integration.")
+                    return None
+                
+                # Load model
+                import joblib
+                model_data = joblib.load(active_model.artifact_path)
+                self._meta_classifier = model_data
+                
+                logger.info(f"Loaded meta-classifier: {active_model.model_version}")
+                logger.info(f"Model accuracy: {model_data['metrics'].get('accuracy', 'N/A')}")
+                
+        except Exception as e:
+            logger.warning(f"Failed to load meta-classifier: {e}. Falling back to rule-based.")
+            self._meta_classifier = None
+
     def preprocess_text(self, text):
         """
         Preprocess the input text for sentiment analysis
@@ -154,63 +188,75 @@ class SentimentAnalyzer:
         """
         Analyze sentiment using FinBERT model with improved error handling
         """
+        if not text or len(text.strip()) < 5:
+            logger.warning("Empty or very short text passed to FinBERT.")
+            return {
+                "numerical_score": 0.0,
+                "classification": "neutral",
+                "detailed_scores": {"positive": 0.33, "negative": 0.33, "neutral": 0.34},
+            }
+
         try:
+            # Run model inference
             results = self.finbert_pipeline(text)
-            
-            # Validate results structure
+
+            # Validate structure
             if not results or not isinstance(results, list):
+                logger.warning("FinBERT returned empty or malformed results.")
                 return self._get_default_sentiment_result()
-            
-            # Extract scores and validate
+
+            # Extract label scores
             scores_dict = {}
             for item in results:
                 if isinstance(item, dict) and 'label' in item and 'score' in item:
                     label = item['label'].lower()
-                    score = item['score']
-                    # Validate score is a valid number
-                    if isinstance(score, (int, float)) and not np.isnan(score) and not np.isinf(score):
-                        scores_dict[label] = float(score)
-            
-            # Ensure we have the required labels with valid defaults
+                    score = float(item['score'])
+                    if np.isnan(score) or np.isinf(score):
+                        continue
+                    scores_dict[label] = score
+
+            # Default fallback values
             positive_score = scores_dict.get('positive', 0.33)
             negative_score = scores_dict.get('negative', 0.33)
-            neutral_score = scores_dict.get('neutral', 0.34) 
-            
-            # Normalize scores to ensure they sum to 1.0 and are valid
+            neutral_score  = scores_dict.get('neutral', 0.34)
+
+            # Normalize safely
             total = positive_score + negative_score + neutral_score
             if total <= 0 or np.isnan(total) or np.isinf(total):
-                # Fallback to uniform distribution
-                positive_score = negative_score = neutral_score = 1/3
+                positive_score = negative_score = neutral_score = 1 / 3
                 total = 1.0
-            else:
-                positive_score /= total
-                negative_score /= total
-                neutral_score /= total
-            
-            # Calculate numerical score with validation
+
+            positive_score /= total
+            negative_score /= total
+            neutral_score  /= total
+
+            # Compute numeric sentiment
             numerical_score = positive_score - negative_score
-            numerical_score = self._validate_numeric(numerical_score)
-            
-            # Determine classification
+            numerical_score = float(np.clip(numerical_score, -1.0, 1.0))
+
+            # ✅ Log debug info
+            logger.debug(f"FinBERT raw: pos={positive_score:.3f}, neg={negative_score:.3f}, neu={neutral_score:.3f}, num={numerical_score:.3f}")
+
+            # Classification threshold
             if numerical_score > SENTIMENT_THRESHOLD:
                 classification = "positive"
             elif numerical_score < -SENTIMENT_THRESHOLD:
                 classification = "negative"
             else:
                 classification = "neutral"
-            
+
             return {
                 "numerical_score": numerical_score,
                 "classification": classification,
                 "detailed_scores": {
-                    'positive': positive_score,
-                    'negative': negative_score,
-                    'neutral': neutral_score
+                    "positive": positive_score,
+                    "negative": negative_score,
+                    "neutral": neutral_score,
                 },
             }
-            
+
         except Exception as e:
-            logger.error(f"Error analyzing with FinBERT: {e}")
+            logger.error(f"Error analyzing with FinBERT: {e}", exc_info=True)
             return self._get_default_sentiment_result()
     
     def _get_default_sentiment_result(self):
@@ -424,85 +470,141 @@ class SentimentAnalyzer:
         except Exception:
             return default
 
-    # def weighted_integration(self, finbert_result, second_model_result):
-    #     """
-    #     Implement the Weighted Integration Algorithm (WIP)
-    #     - Model consensus evaluation (70% agreement required)
-    #     - Confidence score calculation based on model agreement
-    #     - Normalization to scale of -100 (bearish) to +100 (bullish)
-    #     """
-    #     # Check model agreement
-    #     models_agree = (
-    #             finbert_result["classification"] == second_model_result["classification"]
-    #     )
-
-    #     # Calculate base score (average of the two models)
-    #     # FinBERT range: -1.0 to +1.0, Second model range is similar for our purposes
-    #     base_score = (
-    #                          finbert_result["numerical_score"] + second_model_result["numerical_score"]
-    #                  ) / 2
-
-    #     # Calculate confidence score based on model agreement and score differences
-    #     score_difference = abs(
-    #         finbert_result["numerical_score"] - second_model_result["numerical_score"]
-    #     )
-    #     confidence = 1.0 if models_agree else max(0.0, 1.0 - score_difference)
-
-    #     # Apply confidence to score
-    #     adjusted_score = base_score * confidence
-
-    #     # Normalize to -100 to +100 scale
-    #     normalized_score = adjusted_score * 100
-
-    #     # Final classification with financial terminology
-    #     if normalized_score > 10:
-    #         classification = "bullish"
-    #     elif normalized_score < -10:
-    #         classification = "bearish"
-    #     else:
-    #         classification = "neutral"
-
-    #     return {
-    #         "numerical_score": normalized_score,
-    #         "classification": classification,
-    #         "models_agree": models_agree,
-    #         "confidence": confidence,
-    #         "model_scores": {
-    #             "finbert": finbert_result["numerical_score"],
-    #             "second_model": second_model_result["numerical_score"],
-    #         },
-    #     }
-    
     def _build_features_dict(self, features, feature_names):
-        """Safely build feature dictionary with validation"""
-        if not feature_names or not features:
-            logger.warning("Empty features or feature_names provided")
+        """Safely build feature dictionary with validation and automatic shape alignment"""
+        import numpy as np
+
+        # Basic sanity check
+        if feature_names is None or features is None:
+            logger.warning("Feature builder received None values.")
             return {}
-        
-        features_flat = features[0] if hasattr(features, 'ndim') and features.ndim > 1 else features
-        
-        if len(feature_names) != len(features_flat):
-            logger.error(
-                f"Feature mismatch: {len(feature_names)} names vs {len(features_flat)} values. "
-                f"Names: {feature_names[:5]}... Values shape: {features_flat.shape if hasattr(features_flat, 'shape') else len(features_flat)}"
-            )
-            # Return partial dict rather than empty
-            min_len = min(len(feature_names), len(features_flat))
-            return dict(zip(feature_names[:min_len], features_flat[:min_len]))
-        
-        return dict(zip(feature_names, features_flat))
+
+        # Convert numpy arrays safely
+        if isinstance(features, np.ndarray):
+            features = features.squeeze()  # remove singleton dims like (1, n) or (n, 1)
+            if features.ndim == 0:
+                # single scalar (not a vector)
+                features = [float(features)]
+            else:
+                features = features.tolist()
+
+        # Handle plain scalar (e.g., float or int)
+        if isinstance(features, (float, int)):
+            features = [float(features)]
+
+        # Handle nested lists (e.g., [[0.2, 0.3]])
+        if isinstance(features, list) and len(features) == 1 and isinstance(features[0], list):
+            features = features[0]
+
+        # Final validation
+        if len(feature_names) != len(features):
+            logger.warning(f"Feature mismatch: {len(feature_names)} names vs {len(features)} values")
+            min_len = min(len(feature_names), len(features))
+            feature_names = feature_names[:min_len]
+            features = features[:min_len]
+
+        # Zip safely
+        features_dict = dict(zip(feature_names, features))
+        logger.debug(f"Built features_dict with {len(features_dict)} entries")
+        return features_dict
 
     def enhanced_weighted_integration(self, finbert_result, second_model_result, text, model_type='gemini'):
         """
-        Enhanced integration using feature-based weighting with rule-based integration
+        Enhanced integration with optional meta-classifier prediction
         """
-        # Build features for this sample
+        # 1. Build features for this sample
         features, feature_names = self.feature_builder.build_single_sample_features(
             finbert_result, second_model_result, text, model_type
         )
         
-        # Convert to dict for easier access
         features_dict = self._build_features_dict(features, feature_names)
+        
+        # 2. Try meta-classifier prediction if available
+        if self.meta_classifier:
+            try:
+                # Prepare feature vector matching training schema
+                model_feature_names = self.meta_classifier['feature_names']
+                
+                # Build feature vector in SAME ORDER as training
+                feature_vector = np.array([
+                    features_dict.get(fname, 0.0) for fname in model_feature_names
+                ])
+                
+                # Validate feature vector
+                if len(feature_vector) != len(model_feature_names):
+                    raise ValueError(
+                        f"Feature count mismatch: got {len(feature_vector)}, expected {len(model_feature_names)}"
+                    )
+                
+                # Check for invalid values
+                if np.any(np.isnan(feature_vector)) or np.any(np.isinf(feature_vector)):
+                    logger.warning("Invalid values in feature vector, replacing with 0")
+                    feature_vector = np.nan_to_num(feature_vector, 0.0)
+                
+                feature_vector = feature_vector.reshape(1, -1)
+                
+                # Predict sentiment
+                prediction = self.meta_classifier['model'].predict(feature_vector)[0]
+                
+                # Get prediction probabilities for confidence
+                if hasattr(self.meta_classifier['model'], 'predict_proba'):
+                    probas = self.meta_classifier['model'].predict_proba(feature_vector)[0]
+                    confidence = float(max(probas))
+                else:
+                    confidence = 0.75  # Default confidence for non-probabilistic models
+                
+                # Convert prediction to classification
+                label_map = {1: 'bullish', 0: 'neutral', -1: 'bearish'}
+                classification = label_map.get(prediction, 'neutral')
+                
+                # Scale to -100 to +100
+                scaled_score = prediction * 100
+                
+                logger.info(
+                    f"✓ Meta-classifier prediction: {classification} "
+                    f"(score: {scaled_score:.2f}, confidence: {confidence:.2f})"
+                )
+                
+                # FIX: Return complete dict matching rule-based integration schema
+                return {
+                    "numerical_score": scaled_score,
+                    "classification": classification,
+                    "models_agree": True,  # Meta-classifier makes final decision
+                    "confidence": confidence,
+                    "agreement_rate": 1.0,  # Single prediction
+                    "model_scores": {
+                        "finbert": finbert_result["numerical_score"],
+                        "second_model": second_model_result["numerical_score"],
+                    },
+                    "model_weights": {
+                        "finbert": 0.0,  # Meta-classifier overrides weights
+                        "second_model": 0.0,
+                        "meta_classifier": 1.0
+                    },
+                    # FIX: Add missing fields expected downstream
+                    "confidence_weights": {
+                        "finbert": 0.0,
+                        "second_model": 0.0,
+                    },
+                    "model_confidences": {
+                        "finbert": features_dict.get('finbert_confidence', 0.5),
+                        "second_model": features_dict.get(f'{model_type}_confidence', 0.5),
+                    },
+                    "features": features.tolist(),
+                    "feature_names": feature_names,
+                    "score_difference": features_dict.get('score_difference', 0),
+                    "magnitude": {
+                        "finbert": features_dict.get('finbert_magnitude', 0),
+                        "second_model": features_dict.get(f'{model_type}_magnitude', 0),
+                    },
+                    "both_confident": features_dict.get('both_confident', 0),
+                    "neither_confident": features_dict.get('neither_confident', 0),
+                    "needs_human_labeling": False,  # Confident meta-classifier prediction
+                    "integration_reason": "meta_classifier_prediction"
+                }
+                
+            except Exception as e:
+                logger.warning(f"Meta-classifier prediction failed: {e}. Falling back to rule-based integration.")
         
         # Extract key metrics (is classification agreeable?)
         classifications_agree = (finbert_result.get('classification') == 
@@ -1176,17 +1278,20 @@ class SentimentAnalyzer:
             needs_human_feedback = False
             any_needs_human_labeling = False
 
+        # After getting integrated_results:
+        first_segment = integrated_results[0] if integrated_results else {}
+        
         return {
-            "numerical_score": float(final_score),  # Ensure Python float for News.score
-            "finbert_score": float(final_finbert_score),  # For News.finbert_score
-            "second_model_score": float(final_second_model_score),  # For News.second_model_score
-            "classification": final_classification,  # For News.sentiment
-            "confidence": float(avg_confidence),  # For News.confidence
-            "agreement_rate": float(avg_agreement_rate),  # For News.agreement_rate
+            "numerical_score": float(final_score),
+            "finbert_score": float(final_finbert_score),
+            "second_model_score": float(final_second_model_score),
+            "classification": final_classification,
+            "confidence": float(avg_confidence),
+            "agreement_rate": float(avg_agreement_rate),
             "segment_count": len(text_segments),
             "segment_results": integrated_results,
-            "shap": shap_json,  # For News.shap (JSON field)
-            "shap_html": shap_html,  # For News.shapUrl (Text field)
+            "shap": shap_json,
+            "shap_html": shap_html,
             "model_type_used": model_type,
             "model_weights": {
                 "finbert": avg_finbert_weight,
@@ -1215,7 +1320,7 @@ class SentimentAnalyzer:
             )
             disagreement_score = selector.calculate_disagreement_score(finbert_result, llm_result)
             uncertainty_score = selector.calculate_uncertainty_score(finbert_result, llm_result)
-            
+
             # Determine priority and reason
             features_dict = self._build_features_dict(features, feature_names)
             should_sample, reason, priority = selector.should_sample_for_disagreement(
@@ -1239,7 +1344,7 @@ class SentimentAnalyzer:
             if should_sample:
                 # Convert news_id to string for LabelingQueue.news_id
                 news_id_str = str(news_id) if news_id else None
-
+                
                 # Prepare queue item data with enhanced fields
                 queue_data = {
                     'news_id': news_id_str,
@@ -1253,7 +1358,6 @@ class SentimentAnalyzer:
                     'priority': int(priority),
                     'features_json': list(feature_names) if feature_names else [],
                     'feature_names_json': list(feature_names) if feature_names else [],
-                    
                     # NEW: Enhanced metadata
                     'model_weights': segment_result.get('model_weights'),
                     'integration_reason': segment_result.get('integration_reason'),
@@ -1263,23 +1367,17 @@ class SentimentAnalyzer:
                     'is_financial_heavy': features_dict.get('is_financial_heavy', 0) == 1,
                     'final_combined_score': float(segment_result.get('numerical_score', 0.0)),
                 }
-                
-                # Make internal API call to enqueue
                 from flask import current_app
                 with current_app.test_client() as client:
-                    response = client.post('/api/labeling/enqueue', 
-                                         json=queue_data,
+                    response = client.post('/api/labeling/enqueue',     json=queue_data,
                                          content_type='application/json')
                     
                     if response.status_code != 201:
                         logger.error(f"Failed to enqueue item: {response.get_json()}")
                     else:
                         logger.info(f"Successfully enqueued disagreement case with priority {priority}")
-                        
         except Exception as e:
             logger.error(f"Error in auto-enqueue process: {e}")
-            # Don't raise - this is a background enhancement, shouldn't break main flow
-
 
 def get_sentiment(text, use_openai=True, use_gemini=False, news_id=None):
     """
@@ -1342,6 +1440,87 @@ def get_sentiment(text, use_openai=True, use_gemini=False, news_id=None):
         "agreement_rate": result["agreement_rate"],
         "shap": result.get("shap"),
         "shap_html": result.get("shap_html")
+    }
+
+def run_full_analysis(self, text: str, title: str = "", news_id: str = None):
+    """
+    Minimal wrapper so callers (like the cron job) can:
+    - run both models
+    - get integrated result
+    - optionally auto-enqueue WITH news_id
+    - get a DB-friendly payload back
+    """
+    full_text = f"{title}\n\n{text}" if title else text
+
+    # 1) base model runs
+    finbert_result = self.analyze_with_finbert(full_text)
+    llm_result = self.analyze_with_gemini(full_text)
+
+    # 2) integrate using your existing logic
+    integrated = self.enhanced_weighted_integration(
+        finbert_result,
+        llm_result,
+        full_text,
+        model_type="gemini",
+    )
+
+    # extract numbers in the same shape as your DB expects (-100..100)
+    combined_score = float(integrated.get("numerical_score", 0.0))
+    classification = integrated.get("classification", "neutral")
+    confidence = float(integrated.get("confidence", 0.0))
+    agreement_rate = float(integrated.get("agreement_rate", 0.0))
+
+    # 3) build features, run selector, and enqueue if needed
+    selector = ActiveLearningSelector()
+    disagreement_score = selector.calculate_disagreement_score(finbert_result, llm_result)
+    uncertainty_score = selector.calculate_uncertainty_score(finbert_result, llm_result)
+    features, feature_names = self.feature_builder.build_single_sample_features(
+        finbert_result,
+        llm_result,
+        full_text,
+        model_type="gemini",
+    )
+    features_dict = self._build_features_dict(features, feature_names)
+
+    should_sample, sampling_reason, priority = selector.should_sample_for_disagreement(
+        disagreement_score,
+        uncertainty_score,
+        features_dict,
+    )
+
+    if should_sample:
+        try:
+            from app import db
+            from app.models.active_learning import LabelingQueue, QueueStatus
+
+            queue_item = LabelingQueue(
+                news_id=str(news_id) if news_id else None,  # ✅ attach news_id here
+                text=full_text[:512],
+                finbert_score=finbert_result.get("numerical_score", 0.0),
+                llm_score=llm_result.get("numerical_score", 0.0),
+                model_type="gemini",
+                disagreement_score=disagreement_score,
+                uncertainty_score=uncertainty_score,
+                sampling_reason=sampling_reason,
+                priority=priority,
+                status=QueueStatus.PENDING,
+                features_json=features.tolist() if hasattr(features, "tolist") else features_dict,
+                feature_names_json=feature_names,
+                final_combined_score=combined_score,
+            )
+            db.session.add(queue_item)
+            db.session.commit()
+        except Exception as e:
+            logger.warning(f"Auto-enqueue failed: {e}")
+
+    # 4) hand back values the News row can store
+    return {
+        "classification": classification,
+        "combined_score": combined_score,
+        "confidence": confidence,
+        "finbert_score": finbert_result.get("numerical_score", 0.0) * 100.0,
+        "second_model_score": llm_result.get("numerical_score", 0.0) * 100.0,
+        "agreement_rate": agreement_rate,
     }
 
 # Example usage
