@@ -19,8 +19,48 @@ from datetime import date, timedelta
 news_bp = Blueprint("news", __name__)
 
 
+def check_scraping_dependencies():
+    """
+    Check if heavy scraping dependencies are installed.
+
+    Returns None if dependencies are available, otherwise returns a Flask response
+    with 503 Service Unavailable and installation instructions.
+
+    This allows scraping endpoints to work in development (with jobs/ deps installed)
+    while gracefully failing in production (without heavy deps).
+    """
+    try:
+        from app.services.article_scraper import _ensure_deps_loaded
+        _ensure_deps_loaded()  # Will raise ImportError if crawl4ai missing
+        return None  # Dependencies available
+    except ImportError as e:
+        return format_response(
+            {
+                "error": "Heavy dependencies not installed",
+                "install_command": "cd Backend && uv pip install -e jobs/",
+                "note": "This endpoint is for local testing only. Use news-processor CronJob for production."
+            },
+            f"Scraping dependencies missing: {str(e)}",
+            503  # Service Unavailable
+        )
+
+
 @news_bp.route("/gnews/premium", methods=["POST"])
 def ingest_premium_news_gnews_entity():
+    """
+    Test endpoint for news scraping (DEVELOPMENT ONLY).
+
+    Requires heavy dependencies (crawl4ai, spacy, torch).
+    To enable locally: cd Backend && uv pip install -e jobs/
+
+    In production, this endpoint returns 503 as heavy deps are not installed.
+    Use the news-processor CronJob for production scraping.
+    """
+    # Check if scraping dependencies are available
+    dep_check = check_scraping_dependencies()
+    if dep_check:
+        return dep_check
+
     ticker = request.json.get("entity")
 
     # Get the start_date from 24hr before today and end_date as today
@@ -45,6 +85,12 @@ def ingest_premium_news_gnews_entity():
 # ** generate news data based on ticker
 @news_bp.route("/gnews", methods=["POST"])
 def ingest_news_gnews_entity():
+    """Test endpoint for GNews scraping. Requires: uv pip install -e jobs/"""
+    # Check dependencies
+    dep_check = check_scraping_dependencies()
+    if dep_check:
+        return dep_check
+
     # Get the entity, period, start_date, and end_date from the request
     ticker = request.json.get("entity")
 
@@ -74,6 +120,12 @@ def ingest_news_gnews_entity():
 # ** generate news data based on ticker using finviz
 @news_bp.route("/finviz", methods=["POST"])
 def ingest_news_finviz_entity():
+    """Test endpoint for Finviz scraping. Requires: uv pip install -e jobs/"""
+    # Check dependencies
+    dep_check = check_scraping_dependencies()
+    if dep_check:
+        return dep_check
+
     # Get the entity, period, start_date, and end_date from the request
     ticker = request.json.get("entity")
 
@@ -92,6 +144,12 @@ def ingest_news_finviz_entity():
 # ** generate news data based on ticker using yfinance
 @news_bp.route("/yfinance", methods=["POST"])
 def ingest_news_yfinance_entity():
+    """Test endpoint for yfinance scraping. Requires: uv pip install -e jobs/"""
+    # Check dependencies
+    dep_check = check_scraping_dependencies()
+    if dep_check:
+        return dep_check
+
     # Get the entity, period, start_date, and end_date from the request
     ticker = request.json.get("entity")
 
@@ -109,6 +167,12 @@ def ingest_news_yfinance_entity():
 
 @news_bp.route("/all", methods=["POST"])
 def ingest_all_news():
+    """Test endpoint for all news sources. Requires: uv pip install -e jobs/"""
+    # Check dependencies
+    dep_check = check_scraping_dependencies()
+    if dep_check:
+        return dep_check
+
     # Get the news using GNews
     gnews_result = get_all_top_gnews()
     print("gnews done")
@@ -163,6 +227,12 @@ def ingest_all_news():
 
 @news_bp.route("/IngestNewsOfAllEntityByGnews", methods=["POST"])
 def automate_news_of_all_entity_by_gnews():
+    """Test endpoint for all entities via GNews. Requires: uv pip install -e jobs/"""
+    # Check dependencies
+    dep_check = check_scraping_dependencies()
+    if dep_check:
+        return dep_check
+
     tickers_list = get_all_ticker_entities()
 
     start_date = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -215,6 +285,12 @@ def automate_news_of_all_entity_by_gnews():
 # ** automate news of entity and all
 @news_bp.route("/IngestNewsOfEntityAndAll", methods=["POST"])
 def automate_news_of_entity_and_all():
+    """Test endpoint for full news ingestion. Requires: uv pip install -e jobs/"""
+    # Check dependencies
+    dep_check = check_scraping_dependencies()
+    if dep_check:
+        return dep_check
+
     tickers_list = get_all_ticker_entities()
 
     start_date = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
