@@ -58,6 +58,10 @@ dev = [
     "flake8>=5.0.0",
 ]
 
+# Optional: Install jobs dependencies for local testing of scraping endpoints
+# Usage: uv pip install -e jobs/
+# This allows testing /api/news/gnews/premium endpoint locally
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
