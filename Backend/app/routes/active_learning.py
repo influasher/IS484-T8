@@ -2,9 +2,15 @@ import uuid
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import func
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import json
+import csv
+import io
+from flask import send_file
+import subprocess
+import threading
+import os
 
 from app.models.active_learning import LabelingQueue, UserVote, AggregatedLabel, UserStats, QueueStatus, SentimentVote, ModelRun, FinalSentiment
 from app.models.user import User 
@@ -16,6 +22,17 @@ logger = logging.getLogger(__name__)
 active_learning_bp = Blueprint("active_learning", __name__)
 
 MIN_VOTES_FOR_FINALIZATION = 3
+
+def to_uuid_safe(value):
+    """Convert to UUID or return None, without throwing."""
+    if not value:
+        return None
+    if isinstance(value, uuid.UUID):
+        return value
+    try:
+        return uuid.UUID(str(value))
+    except ValueError:
+        return None
 
 @active_learning_bp.route("/enqueue", methods=["POST"])
 def enqueue_item():
@@ -108,53 +125,6 @@ def enqueue_batch():
         db.session.rollback()
         return format_response(None, f"Failed to enqueue batch: {str(e)}", 500)
 
-@active_learning_bp.route("/pending", methods=["GET"])
-def get_pending_items():
-    """Get pending items for annotation, sorted by priority"""
-    limit = request.args.get('limit', 10, type=int)
-    priority_filter = request.args.get('priority_filter', type=int)
-    
-    # Validate limit
-    if limit < 1 or limit > 100:
-        return format_response(None, "Limit must be between 1 and 100", 400)
-    
-    try:
-        query = LabelingQueue.query.filter(LabelingQueue.status == QueueStatus.PENDING)
-        
-        if priority_filter and 1 <= priority_filter <= 5:
-            query = query.filter(LabelingQueue.priority == priority_filter)
-        
-        # Order by priority (1=highest), then by disagreement_score (highest first)
-        pending_items = query.order_by(
-            LabelingQueue.priority.asc(),
-            LabelingQueue.disagreement_score.desc(),
-            LabelingQueue.created_at.asc()
-        ).limit(limit).all()
-        
-        results = []
-        for item in pending_items:
-            vote_count = UserVote.query.filter(UserVote.queue_item_id == item.id).count()
-            results.append({
-                'id': item.id,
-                'news_id': item.news_id,
-                'text': item.text,
-                'finbert_score': item.finbert_score,
-                'llm_score': item.llm_score,
-                'model_type': item.model_type,
-                'disagreement_score': item.disagreement_score,
-                'uncertainty_score': item.uncertainty_score,
-                'sampling_reason': item.sampling_reason,
-                'priority': item.priority,
-                'status': item.status.value,
-                'created_at': item.created_at.isoformat(),
-                'vote_count': vote_count
-            })
-        
-        return format_response(results, "Pending items fetched successfully", 200)
-        
-    except Exception as e:
-        return format_response(None, f"Failed to fetch pending items: {str(e)}", 500)
-
 @active_learning_bp.route("/vote", methods=["POST"])
 @jwt_required()
 def submit_vote():
@@ -169,12 +139,16 @@ def submit_vote():
         if not current_user_id:
             return format_response(None, "No user identity in token", 401)
             
-        current_user = User.query.filter(User.id == uuid.UUID(current_user_id)).first()
+        user_uuid = to_uuid_safe(current_user_id)
+        if not user_uuid:
+            return format_response(None, "Invalid user id in token", 400)
+
+        current_user = User.query.filter(User.id == user_uuid).first()
 
         if not current_user:
             return format_response(None, "User not found", 404)
 
-        queue_item_id = data.get('queue_item_id')  # Can be null for non-queued items
+        queue_item_id = data.get('queue_item_id')
         vote_value = data.get('vote')
         session_info = data.get('session_info', {})
         
@@ -194,7 +168,6 @@ def submit_vote():
             if queue_item.status != QueueStatus.PENDING:
                 return format_response(None, "Queue item is not available for voting", 400)
             
-            # Check if user already voted on this queued item
             existing_vote = UserVote.query.filter(
                 UserVote.queue_item_id == queue_item_id,
                 UserVote.user_id == current_user.id
@@ -203,11 +176,21 @@ def submit_vote():
             if existing_vote:
                 return format_response(None, "User has already voted on this item", 400)
         
-        # For non-queued items, create a simple queue entry for tracking
+        # For non-queued items, fetch from News and populate fields
         else:
             news_id = session_info.get('news_id')
             if news_id:
-                # Check if we already have a queue item for this news article + user combination
+                from app.models.news import News
+                
+                news_uuid = to_uuid_safe(news_id)
+                if not news_uuid:
+                    return format_response(None, "Invalid news ID format", 400)
+                news_article = News.query.filter_by(id=news_uuid).first()    
+                            
+                if not news_article:
+                    return format_response(None, "News article not found", 404)
+                
+                # Check for duplicate vote - use string representation for comparison
                 existing_user_vote = db.session.query(UserVote).join(LabelingQueue).filter(
                     LabelingQueue.news_id == str(news_id),
                     UserVote.user_id == current_user.id,
@@ -217,32 +200,85 @@ def submit_vote():
                 if existing_user_vote:
                     return format_response(None, "You have already provided feedback for this news article", 400)
                 
-                # Create a simple queue entry for non-priority feedback
-                queue_item = LabelingQueue(
-                    news_id=str(news_id),  # Ensure it's stored as string
-                    text="General user feedback",  # Placeholder
-                    finbert_score=0.0,  # Placeholder
-                    llm_score=0.0,     # Placeholder
-                    model_type="user_feedback",
-                    disagreement_score=0.0,
-                    uncertainty_score=0.0,
-                    sampling_reason="User provided feedback",
-                    priority=5,  # Lowest priority
-                    status=QueueStatus.PENDING
+                # Rebuild features from News data
+                finbert_score = float(news_article.finbert_score or 0.0)
+                llm_score = float(news_article.second_model_score or 0.0)
+                
+                # Reconstruct model results for feature building
+                finbert_result = {
+                    'numerical_score': finbert_score / 100.0,  # Scale back to -1 to 1
+                    'classification': 'positive' if finbert_score > 10 else ('negative' if finbert_score < -10 else 'neutral'),
+                    'detailed_scores': {
+                        'positive': max(0, finbert_score / 100.0),
+                        'negative': max(0, -finbert_score / 100.0),
+                        'neutral': 1.0 - abs(finbert_score / 100.0)
+                    }
+                }
+                
+                llm_result = {
+                    'numerical_score': llm_score / 100.0,
+                    'classification': 'positive' if llm_score > 10 else ('negative' if llm_score < -10 else 'neutral'),
+                    'detailed_scores': {
+                        'positive': max(0, llm_score / 100.0),
+                        'negative': max(0, -llm_score / 100.0),
+                        'neutral': 1.0 - abs(llm_score / 100.0)
+                    }
+                }
+                
+                # Build features using the same feature builder
+                from app.services.sentiment.features import SentimentFeatureBuilder
+                
+                feature_builder = SentimentFeatureBuilder()
+                text = news_article.summary or news_article.title or news_article.content[:500]
+                
+                features, feature_names = feature_builder.build_single_sample_features(
+                    finbert_result, 
+                    llm_result, 
+                    text,
+                    model_type='gemini'  # or detect from news_article if stored
                 )
+                
+                # Convert to serializable format
+                features_json = features.tolist() if hasattr(features, 'tolist') else list(features[0])
+                feature_names_json = list(feature_names)
+                
+                queue_item = LabelingQueue(
+                    news_id=str(news_id),  # Store as string for consistency
+                    text=text,
+                    finbert_score=finbert_score,
+                    llm_score=llm_score,
+                    model_type="user_feedback",
+                    disagreement_score=abs(finbert_score - llm_score),
+                    uncertainty_score=1.0 - (news_article.confidence or 0.5),
+                    sampling_reason="User provided feedback",
+                    priority=5,
+                    status=QueueStatus.PENDING,
+                    
+                    # Properly populated features
+                    features_json=features_json,
+                    feature_names_json=feature_names_json,
+                    
+                    # Store existing metadata if available
+                    finbert_confidence=float(news_article.confidence or 0.5),
+                    llm_confidence=float(news_article.confidence or 0.5),
+                    both_confident=(news_article.confidence or 0) > 0.6,
+                    is_financial_heavy=False,
+                    final_combined_score=float(news_article.score or 0.0)
+                )
+                
                 db.session.add(queue_item)
-                db.session.flush()  # Get ID
+                db.session.flush()
                 queue_item_id = queue_item.id
             else:
                 return format_response(None, "News ID is required for feedback", 400)
         
-        # ensure enum uses lowercase string values defined in SentimentVote
+        # Create vote
         vote = UserVote(
             queue_item_id=queue_item_id,
             user_id=current_user.id,
             vote=SentimentVote(vote_value.lower()),
             session_info=session_info,
-            news_id=session_info.get('news_id')  # Extract and store
+            news_id=str(session_info.get('news_id')) if session_info.get('news_id') else None  # Store as string
         )
         
         db.session.add(vote)
@@ -258,11 +294,10 @@ def submit_vote():
         
         db.session.commit()
         
-        # Auto-finalize single-vote items (non-priority)
+        # Auto-finalize user feedback immediately
         if not data.get('queue_item_id'): 
             _try_finalize_item(queue_item_id, force=True)
         else:
-            # Check if high-priority item should be finalized
             vote_count = UserVote.query.filter(UserVote.queue_item_id == queue_item_id).count()
             if vote_count >= MIN_VOTES_FOR_FINALIZATION:
                 _try_finalize_item(queue_item_id)
@@ -283,7 +318,7 @@ def submit_vote():
         db.session.rollback()
         return format_response(None, f"Invalid data format: {str(e)}", 400)
     except Exception as e:
-        logger.error(f"Unexpected error in submit_vote: {str(e)}")
+        logger.error(f"Unexpected error in submit_vote: {str(e)}", exc_info=True)
         db.session.rollback()
         return format_response(None, f"Failed to submit vote: {str(e)}", 500)
 
@@ -444,34 +479,6 @@ def get_all_user_statistics():
     except Exception as e:
         return format_response(None, f"Failed to fetch user statistics: {str(e)}", 500)
 
-@active_learning_bp.route("/analytics/disagreement-patterns", methods=["GET"])
-def get_disagreement_patterns():
-    """Get analytics on disagreement patterns and model performance"""
-    try:
-        # Analyze disagreement patterns
-        high_disagreement_items = db.session.query(LabelingQueue).filter(
-            LabelingQueue.disagreement_score > 0.7
-        ).all()
-        
-        patterns = {
-            'total_high_disagreement': len(high_disagreement_items),
-            'common_reasons': {},
-            'model_performance': {
-                'avg_finbert_confidence': 0.75,  # Calculate from actual data
-                'avg_llm_confidence': 0.68,     # Calculate from actual data
-                'frequent_disagreement_topics': ['earnings', 'guidance', 'market_outlook']
-            }
-        }
-        
-        # Count sampling reasons
-        for item in high_disagreement_items:
-            reason = item.sampling_reason
-            patterns['common_reasons'][reason] = patterns['common_reasons'].get(reason, 0) + 1
-        
-        return format_response(patterns, "Disagreement patterns analyzed successfully", 200)
-        
-    except Exception as e:
-        return format_response(None, f"Failed to analyze patterns: {str(e)}", 500)
 
 @active_learning_bp.route("/votes/news/<news_id>", methods=["GET"])
 def get_votes_by_news_id(news_id):
@@ -596,51 +603,507 @@ def _try_finalize_item(queue_item_id, force=False):
         db.session.rollback()
         return None
 
-# TODO: Implement CSV export for retraining pipeline
-# Below is for future sprints retraining purposes
-# @active_learning_bp.route("/export", methods=["GET"])
-# def export_labeled_data():
-#     """Export labeled data as CSV for training"""
-#     try:
-#         completed_count = LabelingQueue.query.filter(LabelingQueue.status == QueueStatus.COMPLETED).count()
+@active_learning_bp.route("/export", methods=["GET"])
+def export_labeled_data():
+    """Export labeled data as CSV for meta-classifier training"""
+    try:
+        # Get all completed labeling items with aggregated labels
+        completed_items = db.session.query(
+            LabelingQueue.id,
+            LabelingQueue.news_id,
+            LabelingQueue.text,
+            LabelingQueue.finbert_score,
+            LabelingQueue.llm_score,
+            LabelingQueue.model_type,
+            LabelingQueue.disagreement_score,
+            LabelingQueue.uncertainty_score,
+            LabelingQueue.features_json,
+            LabelingQueue.feature_names_json,
+            AggregatedLabel.final_label,
+            AggregatedLabel.vote_count,
+            AggregatedLabel.agreement_rate
+        ).join(
+            AggregatedLabel,
+            LabelingQueue.id == AggregatedLabel.queue_item_id
+        ).filter(
+            LabelingQueue.status == QueueStatus.COMPLETED
+        ).all()
         
-#         result = {
-#             'total_samples': completed_count,
-#             'export_url': '/labeling/download/latest.csv',  # Implement actual file generation
-#             'created_at': datetime.now().isoformat()
-#         }
+        if not completed_items:
+            return format_response(None, "No labeled data available for export", 404)
         
-#         return format_response(result, "Export data prepared successfully", 200)
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
         
-#     except Exception as e:
-#         return format_response(None, f"Failed to prepare export: {str(e)}", 500)
+        # Header row
+        header = [
+            'queue_id', 'news_id', 'finbert_score', 'llm_score', 'model_type',
+            'disagreement_score', 'uncertainty_score', 'vote_count', 'agreement_rate',
+            'human_label', 'features', 'feature_names'
+        ]
+        writer.writerow(header)
+        
+        # Data rows
+        for item in completed_items:
+            # Convert enum to string
+            human_label = item.final_label.value  # 'bullish', 'bearish', 'neutral'
+            
+            # Serialize features as JSON strings
+            features_json = json.dumps(item.features_json) if item.features_json else '[]'
+            feature_names_json = json.dumps(item.feature_names_json) if item.feature_names_json else '[]'
+            
+            writer.writerow([
+                item.id,
+                item.news_id,
+                item.finbert_score,
+                item.llm_score,
+                item.model_type,
+                item.disagreement_score,
+                item.uncertainty_score,
+                item.vote_count,
+                item.agreement_rate,
+                human_label,
+                features_json,
+                feature_names_json
+            ])
+        
+        # Prepare file for download
+        output.seek(0)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"labeled_data_{timestamp}.csv"
+        
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to export labeled data: {str(e)}")
+        return format_response(None, f"Failed to export data: {str(e)}", 500)
 
-# TODO: Implement for retraining pipeline
-# @active_learning_bp.route("/retrain-needed", methods=["POST"])
-# def check_retrain_needed():
-#     """Check if enough new labels exist to trigger retraining"""
-#     data = request.get_json() or {}
-#     threshold = data.get('threshold', 100)
+@active_learning_bp.route("/export/stats", methods=["GET"])
+def get_export_stats():
+    """Get statistics about available labeled data"""
+    try:
+        # Count completed items
+        total_completed = LabelingQueue.query.filter(
+            LabelingQueue.status == QueueStatus.COMPLETED
+        ).count()
+        
+        # Count by label
+        label_distribution = db.session.query(
+            AggregatedLabel.final_label,
+            func.count(AggregatedLabel.id)
+        ).group_by(AggregatedLabel.final_label).all()
+        
+        # Last export time (track via ModelRun table)
+        last_model_run = ModelRun.query.order_by(ModelRun.created_at.desc()).first()
+        
+        # New samples since last training
+        if last_model_run:
+            new_samples = db.session.query(func.count(AggregatedLabel.id)).filter(
+                AggregatedLabel.finalized_at > last_model_run.created_at
+            ).scalar()
+        else:
+            new_samples = total_completed
+        
+        result = {
+            'total_completed': total_completed,
+            'label_distribution': {
+                label.value: count for label, count in label_distribution
+            },
+            'new_samples_since_last_training': new_samples,
+            'last_training_date': last_model_run.created_at.isoformat() if last_model_run else None,
+            'ready_for_retraining': new_samples >= 20  # Threshold
+        }
+        
+        return format_response(result, "Export stats fetched successfully", 200)
+        
+    except Exception as e:
+        return format_response(None, f"Failed to fetch export stats: {str(e)}", 500)
+
+@active_learning_bp.route("/training-history", methods=["GET"])
+def get_training_history():
+    """Get historical training runs"""
+    try:
+        # Get all model runs ordered by most recent first
+        model_runs = ModelRun.query.order_by(ModelRun.created_at.desc()).all()
+        
+        results = []
+        for run in model_runs:
+            results.append({
+                'id': run.id,
+                'model_version': run.model_version,
+                'created_at': run.created_at.isoformat(),
+                'training_samples': run.training_samples,
+                'performance_metrics': run.performance_metrics,
+                'is_active': run.is_active,
+                'artifact_path': run.artifact_path
+            })
+        
+        return format_response(results, "Training history fetched successfully", 200)
+        
+    except Exception as e:
+        return format_response(None, f"Failed to fetch training history: {str(e)}", 500)
+
+@active_learning_bp.route("/trigger-retrain", methods=["POST"])
+def trigger_retrain():
+    """
+    Trigger meta-classifier retraining job
+    This runs the training script in a background thread
+    """
+    try:
+        # Check if enough data is available - call the function directly to get stats
+        total_completed = LabelingQueue.query.filter(
+            LabelingQueue.status == QueueStatus.COMPLETED
+        ).count()
+        
+        # Last export time (track via ModelRun table)
+        last_model_run = ModelRun.query.order_by(ModelRun.created_at.desc()).first()
+        
+        # New samples since last training
+        if last_model_run:
+            new_samples = db.session.query(func.count(AggregatedLabel.id)).filter(
+                AggregatedLabel.finalized_at > last_model_run.created_at
+            ).scalar()
+        else:
+            new_samples = total_completed
+        
+        ready_for_retraining = new_samples >= 20
+        
+        if not ready_for_retraining:
+            return format_response(
+                None, 
+                f"Not enough labeled data. Need 20+ samples, currently have {new_samples}",
+                400
+            )
+        
+        # Path to training script
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            '..',
+            'jobs',
+            'meta_classifier_training.py'
+        )
+        
+        if not os.path.exists(script_path):
+            return format_response(None, f"Training script not found at {script_path}", 500)
+        
+        # Run training in background thread to avoid timeout
+        def run_training():
+            try:
+                logger.info(f"Starting meta-classifier training job: {script_path}")
+                result = subprocess.run(
+                    ['python', script_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=600  # 10 minute timeout
+                )
+                
+                if result.returncode == 0:
+                    logger.info("Training job completed successfully")
+                    logger.info(f"Output: {result.stdout}")
+                else:
+                    logger.error(f"Training job failed with code {result.returncode}")
+                    logger.error(f"Error: {result.stderr}")
+                    
+            except subprocess.TimeoutExpired:
+                logger.error("Training job timed out after 10 minutes")
+            except Exception as e:
+                logger.error(f"Error running training job: {str(e)}")
+        
+        # Start training in background
+        training_thread = threading.Thread(target=run_training, daemon=True)
+        training_thread.start()
+        
+        return format_response(
+            {'status': 'training_started'},
+            "Retraining job started in background. Check server logs for progress.",
+            200
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to trigger retraining: {str(e)}")
+        return format_response(None, f"Failed to trigger retraining: {str(e)}", 500)
+
+@active_learning_bp.route("/delete-model/<int:model_id>", methods=["POST"])
+def delete_model(model_id):
+    """
+    Delete an old model file and database record
+    WARNING: Cannot delete the active model
+    """
+    try:
+        model_run = ModelRun.query.filter_by(id=model_id).first()
+        
+        if not model_run:
+            return format_response(None, "Model not found", 404)
+        
+        if model_run.is_active:
+            return format_response(None, "Cannot delete the active model", 400)
+        
+        # Delete model file if it exists
+        if model_run.artifact_path and os.path.exists(model_run.artifact_path):
+            try:
+                os.remove(model_run.artifact_path)
+                logger.info(f"Deleted model file: {model_run.artifact_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete model file: {str(e)}")
+        
+        # Delete database record
+        db.session.delete(model_run)
+        db.session.commit()
+        
+        return format_response(
+            {'deleted_model_id': model_id},
+            "Model deleted successfully",
+            200
+        )
+        
+    except Exception as e:
+        db.session.rollback()
+        return format_response(None, f"Failed to delete model: {str(e)}", 500)
+
+@active_learning_bp.route("/purge-old-models", methods=["POST"])
+def purge_old_models():
+    """
+    Purge all inactive models older than a specified number of days
+    Keeps only the active model and recent inactive models
+    """
+    data = request.get_json() or {}
+    keep_days = data.get('keep_days', 30)  
     
-#     try:        
-#         # Get count of completed items since last model run
-#         last_model_run = db.session.query(func.max(ModelRun.created_at)).scalar()
+    try:
+        cutoff_date = datetime.now() - timedelta(days=keep_days)
         
-#         if last_model_run:
-#             new_labels = db.session.query(func.count(AggregatedLabel.id)).filter(
-#                 AggregatedLabel.finalized_at > last_model_run
-#             ).scalar()
-#         else:
-#             new_labels = AggregatedLabel.query.count()
+        # Find old inactive models
+        old_models = ModelRun.query.filter(
+            ModelRun.is_active == False,
+            ModelRun.created_at < cutoff_date
+        ).all()
         
-#         result = {
-#             'retrain_needed': new_labels >= threshold,
-#             'new_labels_count': new_labels,
-#             'threshold': threshold,
-#             'last_model_run': last_model_run.isoformat() if last_model_run else None
-#         }
+        deleted_count = 0
+        for model in old_models:
+            # Delete model file if it exists
+            if model.artifact_path and os.path.exists(model.artifact_path):
+                try:
+                    os.remove(model.artifact_path)
+                    logger.info(f"Deleted model file: {model.artifact_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete model file: {str(e)}")
+            
+            # Delete database record
+            db.session.delete(model)
+            deleted_count += 1
         
-#         return format_response(result, "Retrain status checked successfully", 200)
+        db.session.commit()
         
-#     except Exception as e:
-#         return format_response(None, f"Failed to check retrain status: {str(e)}", 500)
+        return format_response(
+            {'deleted_count': deleted_count},
+            "Old models purged successfully",
+            200
+        )
+        
+    except Exception as e:
+        db.session.rollback()
+        return format_response(None, f"Failed to purge old models: {str(e)}", 500)
+
+# Archive and clear labeled data
+@active_learning_bp.route("/archive-labels", methods=["POST"])
+@jwt_required()
+def archive_labels():
+    """
+    Archive completed labels to CSV and optionally clear from database
+    Useful after model training to free up database space
+    """
+    data = request.get_json() or {}
+    clear_after_archive = data.get('clear_after_archive', False)
+    
+    try:
+        # Get all completed items
+        completed_items = db.session.query(
+            LabelingQueue.id,
+            LabelingQueue.news_id,
+            LabelingQueue.text,
+            LabelingQueue.finbert_score,
+            LabelingQueue.llm_score,
+            LabelingQueue.model_type,
+            LabelingQueue.disagreement_score,
+            LabelingQueue.uncertainty_score,
+            LabelingQueue.created_at,
+            LabelingQueue.updated_at,
+            AggregatedLabel.final_label,
+            AggregatedLabel.vote_count,
+            AggregatedLabel.agreement_rate,
+            AggregatedLabel.finalized_at
+        ).join(
+            AggregatedLabel,
+            LabelingQueue.id == AggregatedLabel.queue_item_id
+        ).filter(
+            LabelingQueue.status == QueueStatus.COMPLETED
+        ).all()
+        
+        if not completed_items:
+            return format_response(None, "No completed labels to archive", 404)
+        
+        # Create archive
+        archives_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            '..',
+            'archives',
+            'labeled_data'
+        )
+        os.makedirs(archives_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        archive_path = os.path.join(archives_dir, f'labels_archive_{timestamp}.csv')
+        
+        # Write to CSV
+        import csv
+        with open(archive_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                'queue_id', 'news_id', 'text', 'finbert_score', 'llm_score',
+                'model_type', 'disagreement_score', 'uncertainty_score',
+                'final_label', 'vote_count', 'agreement_rate',
+                'created_at', 'updated_at', 'finalized_at'
+            ])
+            
+            for item in completed_items:
+                writer.writerow([
+                    item.id,
+                    item.news_id,
+                    item.text[:500],  # Truncate long text
+                    item.finbert_score,
+                    item.llm_score,
+                    item.model_type,
+                    item.disagreement_score,
+                    item.uncertainty_score,
+                    item.final_label.value,
+                    item.vote_count,
+                    item.agreement_rate,
+                    item.created_at.isoformat(),
+                    item.updated_at.isoformat(),
+                    item.finalized_at.isoformat()
+                ])
+        
+        logger.info(f"Archived {len(completed_items)} labels to {archive_path}")
+        
+        # Optionally clear from database
+        cleared_count = 0
+        if clear_after_archive:
+            # Delete aggregated labels (cascades to votes due to FK)
+            for item in completed_items:
+                aggregated = AggregatedLabel.query.filter_by(queue_item_id=item.id).first()
+                if aggregated:
+                    db.session.delete(aggregated)
+                
+                # Delete queue item
+                queue_item = LabelingQueue.query.filter_by(id=item.id).first()
+                if queue_item:
+                    db.session.delete(queue_item)
+                    cleared_count += 1
+            
+            db.session.commit()
+            logger.info(f"Cleared {cleared_count} completed labels from database")
+        
+        return format_response({
+            'archived_count': len(completed_items),
+            'cleared_count': cleared_count,
+            'archive_path': archive_path
+        }, "Labels archived successfully", 200)
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Failed to archive labels: {str(e)}")
+        return format_response(None, f"Failed to archive labels: {str(e)}", 500)
+
+# Clear all user votes
+@active_learning_bp.route("/reset-votes", methods=["POST"])
+@jwt_required()
+def reset_votes():
+    """
+    Reset all user votes and statistics
+    WARNING: This is irreversible! Use with caution.
+    """
+    data = request.get_json() or {}
+    confirm = data.get('confirm', False)
+    
+    if not confirm:
+        return format_response(
+            None, 
+            "Must provide 'confirm': true to reset votes",
+            400
+        )
+    
+    try:
+        # Count before deletion
+        vote_count = UserVote.query.count()
+        stats_count = UserStats.query.count()
+        
+        # Delete all votes
+        UserVote.query.delete()
+        
+        # Reset user stats
+        UserStats.query.update({
+            'total_votes': 0,
+            'gold_standard_correct': 0,
+            'gold_standard_total': 0,
+            'reliability_score': 1.0
+        })
+        
+        db.session.commit()
+        
+        logger.warning(f"Reset {vote_count} votes and {stats_count} user stats")
+        
+        return format_response({
+            'votes_deleted': vote_count,
+            'stats_reset': stats_count
+        }, "Votes reset successfully", 200)
+        
+    except Exception as e:
+        db.session.rollback()
+        return format_response(None, f"Failed to reset votes: {str(e)}", 500)
+
+# Clear pending queue MIGHT REMOVE ON FRONTEND TOO AND THIS
+@active_learning_bp.route("/clear-queue", methods=["POST"])
+@jwt_required()
+def clear_queue():
+    """
+    Clear all pending items from labeling queue
+    Useful for removing stale/irrelevant items
+    """
+    data = request.get_json() or {}
+    confirm = data.get('confirm', False)
+    older_than_days = data.get('older_than_days', None)
+    
+    if not confirm:
+        return format_response(
+            None,
+            "Must provide 'confirm': true to clear queue",
+            400
+        )
+    
+    try:
+        query = LabelingQueue.query.filter(LabelingQueue.status == QueueStatus.PENDING)
+        
+        # Optional: Only clear old items
+        if older_than_days:
+            cutoff_date = datetime.now() - timedelta(days=older_than_days)
+            query = query.filter(LabelingQueue.created_at < cutoff_date)
+        
+        count = query.count()
+        query.delete()
+        db.session.commit()
+        
+        logger.info(f"Cleared {count} pending queue items")
+        
+        return format_response({
+            'cleared_count': count
+        }, "Queue cleared successfully", 200)
+        
+    except Exception as e:
+        db.session.rollback()
+        return format_response(None, f"Failed to clear queue: {str(e)}", 500)

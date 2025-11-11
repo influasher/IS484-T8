@@ -21,6 +21,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import asyncio
+import uuid
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -314,8 +315,8 @@ class NewsProcessor:
 
             result = get_sentiment(
                 text_to_analyze,
-                use_openai=True,
-                use_gemini=True
+                use_openai=False,
+                use_gemini=False
             )
 
             classification = result.get('classification', 'neutral')
@@ -537,83 +538,86 @@ class NewsProcessor:
                 logger.error(f"Error updating sentiment history: {str(e)}")
     
     async def process_article(self, url_data: Dict[str, Any]) -> Optional[News]:
-        """
-        Process a single article through the full pipeline with fallback mechanisms
-
-        Args:
-            url_data: Dict with 'url', 'entity_name', 'entity_id', etc.
-
-        Returns:
-            Saved News object or None if failed
-        """
         url = url_data['url']
         logger.info(f"Processing article: {url}")
 
         try:
-            # Step 1: Scrape content (with fallback to description/title)
             scraped_data = await self.scrape_article_content(url)
 
-            content_source = "full_content"
-
             if not scraped_data:
-                # Fallback 1: Try using description from GNews
                 description = url_data.get('description', '')
-                title = url_data.get('title', 'Untitled')
-
-                if description and len(description.strip()) >= 30:
-                    logger.warning(f"Using description as fallback for {url}")
-                    scraped_data = {
-                        'content': description,
-                        'title': title,
-                        'published_date': url_data.get('published_date')
-                    }
-                    content_source = "description"
-
-                # Fallback 2: Use title only if no description
-                elif title and len(title.strip()) >= 10:
-                    logger.warning(f"Using title only as fallback for {url}")
-                    scraped_data = {
-                        'content': title,
-                        'title': title,
-                        'published_date': url_data.get('published_date')
-                    }
-                    content_source = "title_only"
-
-                else:
-                    logger.error(f"Skipping article (no usable content): {url}")
+                if not description:
+                    logger.warning(f"Skipping article (no content): {url}")
                     return None
+                scraped_data = {'content': description, 'title': url_data.get('title', 'Untitled')}
 
-            # Step 2: Extract entities
+            # Entity extraction first
             entities = self.extract_entities_from_content(scraped_data['content'])
 
-            # Step 3: Analyze sentiment
+            # 🔹 Run sentiment BEFORE committing the News row
             sentiment = self.analyze_sentiment(
                 scraped_data['content'],
                 scraped_data.get('title', '')
             )
 
-            # Log which content source was used
-            if content_source != "full_content":
-                logger.info(f"Article processed using {content_source}: {url}")
+            with self.app.app_context():
+                existing = News.query.filter_by(url=url).first()
+                if existing:
+                    logger.info(f"Article already exists, updating: {url}")
+                    news = existing
+                else:
+                    news = News(
+                        id=str(uuid.uuid4()),
+                        url=url,
+                        title=scraped_data.get('title', url_data.get('title', 'Untitled')),
+                        publisher=url_data.get('publisher'),
+                        description=url_data.get('description'),
+                        content=scraped_data['content'],
+                        published_date=scraped_data.get('published_date') or url_data.get('published_date') or datetime.utcnow(),
+                        scraped_at=datetime.utcnow(),
+                        entities=(entities.get('companies') or [])
+                                + (entities.get('regions') or [])
+                                + (entities.get('sectors') or []),
+                        company_names=entities.get('companies', []),
+                        regions=entities.get('regions', []),
+                        sectors=entities.get('sectors', []),
+                        tags=entities.get('sectors', []),
+                        summary=(scraped_data['content'][:200] + "...") if len(scraped_data['content']) > 200 else scraped_data['content'],
+                    )
 
-            # Step 4: Save to database
-            news = self.save_to_database(
-                url=url,
-                title=scraped_data.get('title', url_data.get('title', 'Untitled')),
-                content=scraped_data['content'],
-                published_date=scraped_data.get('published_date') or url_data.get('published_date'),
-                entities=entities,
-                sentiment=sentiment,
-                publisher=url_data.get('publisher'),
-                description=url_data.get('description'),
-                entity_id=url_data.get('entity_id')
-            )
+                    db.session.add(news)
+
+                # 🔹 Update sentiment scores directly on the same instance
+                news.score = sentiment.get('score')
+                news.finbert_score = sentiment.get('finbert_score')
+                news.second_model_score = sentiment.get('second_model_score')
+                news.third_model_score = sentiment.get('third_model_score')
+                news.sentiment = sentiment.get('sentiment')
+                news.confidence = sentiment.get('confidence')
+                news.agreement_rate = sentiment.get('agreement_rate')
+
+                # Optional SHAP handling
+                shap_html = sentiment.get('shap_html')
+                if shap_html:
+                    try:
+                        from app.utils.helpers import upload_shap_to_blob
+                        shap_url = upload_shap_to_blob(shap_html, url)
+                        news.shapUrl = shap_url
+                    except Exception as e:
+                        logger.warning(f"SHAP upload failed: {e}")
+                news.shap = sentiment.get('shap')
+
+                # 🔹 Commit ONCE — ensures all fields are persisted atomically
+                db.session.commit()
+                logger.info(f"✅ Saved News + Sentiment: {news.title} (id={news.id})")
 
             return news
 
         except Exception as e:
-            logger.error(f"Error processing article {url}: {str(e)}")
+            db.session.rollback()
+            logger.error(f"❌ Error processing article {url}: {e}", exc_info=True)
             return None
+
     
     async def run(self, lookback_days: int = 2, max_articles: Optional[int] = None):
         """

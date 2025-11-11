@@ -10,6 +10,7 @@ from .user import user_bp
 from .recommendations import recommendations_bp
 from .transactions import transactions_bp
 from .portfolio import portfolio_bp
+from .analytics import analytics_bp
 
 
 def register_routes(app):
@@ -25,3 +26,4 @@ def register_routes(app):
     app.register_blueprint(transactions_bp, url_prefix="/api/transactions")
     app.register_blueprint(portfolio_bp, url_prefix="/api/portfolio")
     app.register_blueprint(active_learning_bp, url_prefix="/api/labeling")
+    app.register_blueprint(analytics_bp, url_prefix="/api/analytics")

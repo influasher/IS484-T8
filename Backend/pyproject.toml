@@ -48,7 +48,12 @@ dependencies = [
     "azure-storage-blob>=12.27.0",
     "azure-core>=1.35.1",
     "shap==0.48.0",
-
+    "crawl4ai>=0.7.6",
+    "playwright>=1.55.0",
+    "transformers>=4.57.1",
+    "torch>=2.9.0",
+    "torchvision>=0.24.0",
+    "spacy>=3.8.8",
 ]
 
 [dependency-groups]
