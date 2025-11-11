@@ -7,7 +7,8 @@ import os
 import re
 import logging
 import json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import numpy as np
 from app.services.sentiment.active_learning import should_request_human_feedback, ActiveLearningSelector
 
@@ -73,15 +74,19 @@ class SentimentAnalyzer:
     def _load_gemini(self):
         """Initialize Gemini AI client"""
         try:
-            # Direct API key for testing purposes
             load_dotenv()
 
-            # Try GEMINI_API_KEY_SW first (secondary key), fallback to GEMINI_API_KEY
-            api_key = os.getenv("GEMINI_API_KEY_SW") or os.getenv("GEMINI_API_KEY")
+            # Use API key for standard Gemini API (no billing required)
+            api_key = os.getenv("GEMINI_API_KEY")
 
-            # Configure the Gemini API client
-            genai.configure(api_key=api_key)
-            self.gemini_client = genai.GenerativeModel("gemini-2.0-flash")
+            if not api_key:
+                raise ValueError(
+                    "API key not found. Please set GEMINI_API_KEY in the .env file."
+                )
+
+            # Initialize standard Gemini API client
+            # Store the full client, not just .models, to keep connection alive
+            self.gemini_client = genai.Client(api_key=api_key)
 
             logger.info("Gemini AI client initialized successfully")
             return True
@@ -297,7 +302,10 @@ class SentimentAnalyzer:
             Text to analyze: {text}
             """
 
-            response = self.gemini_client.generate_content(prompt)
+            response = self.gemini_client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt
+            )
             response_text = response.text
 
             # Parse and validate response
@@ -826,23 +834,6 @@ class SentimentAnalyzer:
             "base_values": base_values
         }
         return json.dumps(result)
-
-    # def generate_shap_html(self, explanation) -> str:
-    #     """
-    #     Generate HTML representation of SHAP explanation
-    #     """
-    #     # Lazy import shap only when actually needed
-    #     try:
-    #         import shap
-    #     except ImportError as e:
-    #         logger.error("shap library not installed - this is expected in lightweight backend")
-    #         raise ImportError(
-    #             "shap is not installed. "
-    #             "This functionality is only available in the news-processor microservice."
-    #         ) from e
-    #
-    #     html = shap.plots.text(explanation[0], display=False)
-    #     return html
 
     def generate_shap_html(self, explanation) -> str:
         """

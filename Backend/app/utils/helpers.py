@@ -1,11 +1,14 @@
 import logging
+import time
+import random
 
 from flask import jsonify
 from newspaper import article
 from googlenewsdecoder import new_decoderv1
 import os
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import re
 from rapidfuzz import process, fuzz
 # spacy moved to news-processor microservice - not needed in backend API
@@ -47,9 +50,11 @@ def _get_sp500_dataframe():
         _sp500_plus2 = pd.DataFrame.from_dict(sp500_plus2_dict)
     return _sp500_plus2
 
+
 # Add to the dictionary
 for region in regions:
     country_to_region[region] = region
+
 
 # spaCy model moved to news-processor microservice
 # nlp = spacy.load("en_core_web_trf")
@@ -73,11 +78,14 @@ for region in regions:
 def get_known_companies():
     return _get_sp500_dataframe()["Security"].tolist()
 
+
 known_companies = None  # Will be populated lazily
+
 
 # Create list of unique GICS sectors (lazy loaded)
 def get_sectors():
     return _get_sp500_dataframe()["GICS Sector"].unique().tolist()
+
 
 sectors = None  # Will be populated lazily
 
@@ -144,8 +152,22 @@ def get_article_details(url, article_html, news_id=None):
         article_result = article(url, input_html=article_html)
         article_result.nlp()
 
-        # Summaries the article text
+        # Log extracted text length for debugging
+        text_length = len(article_result.text) if article_result.text else 0
+        logging.info(f"📰 Extracted article text: {text_length} chars from {url}")
+
+        # Early check: if text extraction failed, return immediately
+        if not article_result.text or text_length < 100:
+            logging.error(f"✗ Article text extraction failed or too short ({text_length} chars) - aborting processing")
+            return None
+
+        # Summarize and extract entities from the article text
         interpreted_news = news_interpreter(article_result.text, 100)
+
+        # If news_interpreter returned None, article is invalid
+        if not interpreted_news:
+            logging.error(f"✗ Article validation failed for {url} - aborting processing")
+            return None
 
         # extract the metadata from the interpreted news
         metadata = interpreted_news.get("metadata", {})
@@ -160,8 +182,8 @@ def get_article_details(url, article_html, news_id=None):
 
         # get the sentiment of the article with news_id for auto-enqueueing
         sentiment = get_sentiment(
-            article_result.title + summary, 
-            use_openai=False, 
+            article_result.title + summary,
+            use_openai=False,
             use_gemini=True,
             news_id=news_id  # Pass news_id for auto-enqueueing
         )
@@ -205,43 +227,209 @@ def get_article_details(url, article_html, news_id=None):
         }
 
 
+def retry_gemini_call(func, *args, max_retries=3, base_delay=2, **kwargs):
+    """
+    Retry wrapper for Gemini API calls with exponential backoff.
+
+    Handles:
+    - 503 Service Unavailable (model overloaded)
+    - 429 Too Many Requests (rate limiting)
+    - Transient network errors
+    """
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            error_str = str(e)
+
+            # Check if it's a retriable error
+            is_503 = "503" in error_str or "overloaded" in error_str.lower()
+            is_429 = "429" in error_str or "rate limit" in error_str.lower()
+            is_unavailable = "UNAVAILABLE" in error_str
+
+            if not (is_503 or is_429 or is_unavailable):
+                # Non-retriable error, raise immediately
+                raise
+
+            if attempt < max_retries - 1:
+                # Exponential backoff with jitter
+                delay = base_delay * (2 ** attempt) + random.uniform(0, 2)
+                logging.warning(
+                    f"Gemini API error (attempt {attempt + 1}/{max_retries}): {error_str}. "
+                    f"Retrying in {delay:.1f}s..."
+                )
+                time.sleep(delay)
+            else:
+                logging.error(f"Gemini API failed after {max_retries} attempts: {error_str}")
+                raise
+
+
 def news_interpreter_summariser(news_text, summary_length):
+    """
+    Enhanced article summarizer with validation and quality checks.
+
+    Returns:
+        str: Summary text, or None if content is invalid
+    """
+    # Log incoming text for debugging
+    text_length = len(news_text) if news_text else 0
+    logging.info(f"=" * 80)
+    logging.info(f"📝 SUMMARIZER INPUT | Length: {text_length} chars | Target: {summary_length} words")
+    logging.info(f"=" * 80)
+
+    if news_text:
+        # Show first 300 chars
+        preview_start = news_text[:300].replace('\n', ' ').strip()
+        logging.info(f"📄 FIRST 300 CHARS: {preview_start}...")
+
+        # Show last 200 chars to see if it's complete
+        if text_length > 500:
+            preview_end = news_text[-200:].replace('\n', ' ').strip()
+            logging.info(f"📄 LAST 200 CHARS: ...{preview_end}")
+    else:
+        logging.warning("⚠️  EMPTY OR NULL TEXT RECEIVED")
+
+    logging.info(f"=" * 80)
+
+    # Pre-validation: Check if input is valid article content
+    if not news_text or len(news_text) < 100:
+        logging.warning("Input text too short for summarization")
+        return None
+
+    # Check for error page indicators
+    ERROR_KEYWORDS = ["javascript", "cookies", "browser not supporting", "reference id",
+                      "access denied", "captcha", "verify you are human"]
+    text_lower = news_text.lower() if news_text else ""
+
+    if len(news_text) < 300 and any(keyword in text_lower for keyword in ERROR_KEYWORDS):
+        logging.warning("⚠️  Input appears to be an error page, skipping summarization")
+        return None
+
+    # Use API key for standard Gemini API (no billing required)
     api_key = os.getenv("GEMINI_API_KEY")
 
     if not api_key:
         raise ValueError(
-            "API key not found. Please set the GEMINI_API_KEY in the .env file."
+            "API key not found. Please set GEMINI_API_KEY in the .env file."
         )
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    client = genai.Client(api_key=api_key)
 
-    prompt = f"""
-        Summarize the article in {summary_length} words or less.
+    # Enhanced prompt with clear instructions and constraints
+    prompt = f"""You are a professional financial news summarizer. Your task is to create a clear, informative summary of the following news article.
 
-        {news_text}
-    """
+        INSTRUCTIONS:
+        1. Write a summary of approximately {summary_length} words (between {int(summary_length * 0.8)} and {int(summary_length * 1.2)} words)
+        2. Focus on the KEY FACTS: What happened, who is involved, why it matters, and potential impact
+        3. Use COMPLETE SENTENCES - no bullet points, no fragments
+        4. Write in THIRD PERSON and maintain a neutral, professional tone
+        5. Do NOT include phrases like "The article discusses..." or "According to the text..."
+        6. Do NOT summarize meta-information (e.g., "content could not be loaded", "enable JavaScript")
+        7. If the article is not about financial news or appears to be an error page, respond with exactly: "INVALID_CONTENT"
+        
+        ARTICLE TEXT:
+        {news_text[:4000]}
+        
+        SUMMARY:"""
 
-    response = model.generate_content(prompt)
+    # Wrap API call with retry logic
+    def _make_api_call():
+        return client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.3,  # Lower temperature for more focused summaries
+                max_output_tokens=int(summary_length * 5) + 500,
+                # Account for model's internal reasoning (thoughts_token_count)
+            )
+        )
 
-    # Check if we have a valid response
-    if (
-            not response
-            or not response.candidates
-            or not response.candidates[0].content.parts
-    ):
-        print("Error: No valid response received from the model")
+    try:
+        response = retry_gemini_call(_make_api_call, max_retries=3, base_delay=3)
+
+        # Simplified logging - only log details if there's an issue
+        if response and hasattr(response, 'text') and response.text:
+            # Success case - just log that we got a response
+            logging.info(f"✓ Gemini response received ({len(response.text)} chars)")
+        elif response:
+            # Issue case - log detailed debug info
+            logging.error(f"🔍 GEMINI RESPONSE DEBUG (text is None):")
+            logging.error(f"   - Response type: {type(response)}")
+
+            # Check candidates for issues
+            if hasattr(response, 'candidates') and response.candidates:
+                for i, candidate in enumerate(response.candidates):
+                    if hasattr(candidate, 'finish_reason'):
+                        finish_reason = str(candidate.finish_reason)
+                        logging.error(f"   - Candidate {i} finish_reason: {finish_reason}")
+
+                        # Check for MAX_TOKENS issue
+                        if 'MAX_TOKENS' in finish_reason:
+                            logging.error(f"     ⚠️  Hit max_output_tokens limit ({int(summary_length * 5) + 500})")
+
+                    if hasattr(candidate, 'safety_ratings') and candidate.safety_ratings:
+                        logging.error(f"   - safety_ratings: {candidate.safety_ratings}")
+
+            # Check for prompt_feedback (safety blocks)
+            if hasattr(response, 'prompt_feedback') and response.prompt_feedback:
+                logging.error(f"   - prompt_feedback: {response.prompt_feedback}")
+
+        # Check if we have a valid response
+        if not response:
+            logging.error("❌ No response object received from Gemini")
+            return None
+
+        if not response.text:
+            logging.error("❌ response.text is None - this should not happen after passing validation")
+            logging.error("❌ Full response object for debugging:")
+            logging.error(f"   - Response repr: {repr(response)}")
+            logging.error(
+                f"   - Response dict (if available): {response.__dict__ if hasattr(response, '__dict__') else 'N/A'}")
+            return None
+
+        # Process the response
+        news_summary = response.text.strip()
+
+        # Clean markdown formatting
+        news_summary = re.sub(r"```json\s*|\s*```$", "", news_summary)
+        news_summary = re.sub(r"```\s*", "", news_summary)
+        news_summary = news_summary.strip()
+
+        # Validation checks
+        if news_summary == "INVALID_CONTENT":
+            logging.warning("Model detected invalid content")
+            return None
+
+        if len(news_summary) < 30:
+            logging.warning(f"Summary too short ({len(news_summary)} chars): {news_summary[:100]}")
+            return None
+
+        # Check if summary contains error indicators
+        summary_lower = news_summary.lower()
+        if any(keyword in summary_lower for keyword in ["javascript", "cookies", "error loading", "reference id"]):
+            logging.warning("Summary contains error keywords, rejecting")
+            return None
+
+        # Check for gibberish (less than 70% alphabetic characters)
+        alpha_count = sum(1 for c in news_summary if c.isalpha())
+        if alpha_count / len(news_summary) < 0.7:
+            logging.warning("Summary appears to be gibberish")
+            return None
+
+        # Word count validation
+        word_count = len(news_summary.split())
+        expected_min = int(summary_length * 0.5)  # At least 50% of target
+
+        if word_count < expected_min:
+            logging.warning(f"Summary too short: {word_count} words (expected ~{summary_length})")
+            return None
+
+        logging.info(f"✓ Generated valid summary: {word_count} words")
+        return news_summary
+
+    except Exception as e:
+        logging.error(f"Error in summarization: {str(e)}")
         return None
-
-    # Process the response
-    news_summary = response.candidates[0].content.parts[0].text
-
-    # Clean the text of any markdown or extra formatting
-    clean_text = re.sub(r"```json\s*|\s*```$", "", news_summary)
-    clean_text = clean_text.strip()
-
-    # clean_text = "Hello world"
-    return clean_text
 
 
 ### NEWS_INTERPRETER_TAGGER FUNCTIONS START HERE ###
@@ -260,26 +448,30 @@ def extract_info_from_article(article):
     """
 
     try:
-        api_key = os.getenv(
-            "GEMINI_API_KEY"
-        )  # Replace with env management for security
+        # Use API key for standard Gemini API (no billing required)
+        api_key = os.getenv("GEMINI_API_KEY")
+
         if not api_key:
-            raise ValueError("API key not found. Please set the GEMINI_API_KEY.")
+            raise ValueError(
+                "API key not found. Please set GEMINI_API_KEY in the .env file."
+            )
 
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        client = genai.Client(api_key=api_key)
 
-        response_obj = model.generate_content(prompt)
+        # Wrap API call with retry logic
+        def _make_api_call():
+            return client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt
+            )
 
-        if (
-                not response_obj
-                or not response_obj.candidates
-                or not response_obj.candidates[0].content.parts
-        ):
+        response_obj = retry_gemini_call(_make_api_call, max_retries=3, base_delay=3)
+
+        if not response_obj or not response_obj.text:
             print("Error: No valid response from Gemini model")
             return None
 
-        raw = response_obj.candidates[0].content.parts[0].text
+        raw = response_obj.text
         # print(raw)
         return raw.strip()
 
@@ -364,9 +556,10 @@ def extract_company(text, confidence_score_arg=90):
     orgs = list(set(ent.text for ent in doc.ents if ent.label_ == "ORG"))
 
     match_list = []
+    companies = get_known_companies()  # Lazy load companies list
 
     for org in orgs:
-        match, score, _ = process.extractOne(org, known_companies)
+        match, score, _ = process.extractOne(org, companies)
         if score >= confidence_score_arg:
             match_list.append(match)
 
@@ -463,18 +656,18 @@ def lookup_sectors_from_companies(company_list):
 ### NEWS_INTERPRETER_TAGGER FUNCTIONS END HERE ###
 
 
-def news_interpreter_tagger(news_text):
+def news_interpreter_tagger(news_text, news_summary):
     # Step 1: Extract summary-like LLM response
-    llm_output = extract_info_from_article(news_text)
+    # llm_output = extract_info_from_article(news_text)
 
     # print("Extracting from raw description...")
     company_names_ner = extract_company(news_text, 90)
     regions_ner = extract_region(news_text, 90)
 
     # print("Extracting from LLM output...")
-    company_names_llm_ner = extract_company(llm_output, 90)
-    regions_llm_ner = extract_region(llm_output, 90)
-    sectors_llm_ner = classify_sector(llm_output, 90)
+    company_names_llm_ner = extract_company(news_summary, 90)
+    regions_llm_ner = extract_region(news_summary, 90)
+    sectors_llm_ner = classify_sector(news_summary, 90)
 
     # Combine company names
     company_names = combine_company_names(
@@ -500,8 +693,36 @@ def news_interpreter_tagger(news_text):
 
 
 def news_interpreter(news_text, summary_length):
+    """
+    Interpret news article: generate summary and extract entities.
+
+    Returns None if article is invalid to prevent wasted API calls.
+    """
+    # Early validation: Check if text is valid before ANY API calls
+    if not news_text or len(news_text) < 100:
+        logging.warning(
+            f"⚠️  Article text too short ({len(news_text) if news_text else 0} chars) - skipping ALL processing")
+        return None
+
+    # Check for error page indicators
+    ERROR_KEYWORDS = ["javascript", "cookies", "browser not supporting", "reference id",
+                      "access denied", "captcha", "verify you are human"]
+    text_lower = news_text.lower()
+
+    if len(news_text) < 300 and any(keyword in text_lower for keyword in ERROR_KEYWORDS):
+        logging.warning("⚠️  Article appears to be error page - skipping ALL processing")
+        return None
+
+    # If validation passes, proceed with API calls
     summary = news_interpreter_summariser(news_text, summary_length)
-    companies, regions, sectors = news_interpreter_tagger(news_text)
+
+    # If summarization failed, don't bother with entity extraction
+    if not summary:
+        logging.warning("⚠️  Summary generation failed - skipping entity extraction")
+        return None
+
+    companies, regions, sectors = news_interpreter_tagger(news_text, summary)
+
     return {
         "summary": summary,
         "metadata": {"companies": companies, "regions": regions, "sectors": sectors},

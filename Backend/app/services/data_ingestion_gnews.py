@@ -69,58 +69,94 @@ def check_if_data_exists(url):
 
 
 PREMIUM_SOURCES = {
+    # ✓✓✓ TOP TIER - Free, reliable, scrapable financial news sites
     "reuters.com": {
-        "reliability": 0.90, "paywall": False, "specialization": ["markets", "macro"],
-        "max_results": 2, "min_text_len": 300, "min_ratio": 0.15}
-    ,
+        "reliability": 0.90, "paywall": False, "specialization": ["markets", "macro", "breaking"],
+        "max_results": 4, "min_text_len": 200, "min_ratio": 0.05, "enabled": True
+    },
+    "cnbc.com": {
+        "reliability": 0.82, "paywall": False, "specialization": ["markets", "tv", "breaking"],
+        "max_results": 4, "min_text_len": 200, "min_ratio": 0.05, "enabled": True
+    },
+    "investing.com": {
+        "reliability": 0.75, "paywall": False, "specialization": ["fx", "macro", "commodities", "analysis"],
+        "max_results": 4, "min_text_len": 200, "min_ratio": 0.04, "enabled": True
+    },
+
+    # ✓✓ GOOD - Free business/financial news with reliable scraping
+    "businessinsider.com": {
+        "reliability": 0.76, "paywall": False, "specialization": ["markets", "tech", "business"],
+        "max_results": 4, "min_text_len": 200, "min_ratio": 0.05, "enabled": True
+    },
+    "finance.yahoo.com": {
+        "reliability": 0.73, "paywall": False, "specialization": ["markets", "earnings", "analysis"],
+        "max_results": 4, "min_text_len": 200, "min_ratio": 0.05, "enabled": True
+    },
+    "forbes.com": {
+        "reliability": 0.77, "paywall": False, "specialization": ["business", "markets", "wealth"],
+        "max_results": 3, "min_text_len": 200, "min_ratio": 0.05, "enabled": True
+    },
+    "theguardian.com": {
+        "reliability": 0.83, "paywall": False, "specialization": ["business", "markets", "uk"],
+        "max_results": 3, "min_text_len": 200, "min_ratio": 0.05, "enabled": True
+    },
+
+    # ✓ DECENT - Generally free with occasional soft paywalls
+    "marketwatch.com": {
+        "reliability": 0.78, "paywall": False, "specialization": ["retail investors", "analysis"],
+        "max_results": 3, "min_text_len": 200, "min_ratio": 0.05, "enabled": True
+    },
+    "fortune.com": {
+        "reliability": 0.75, "paywall": False, "specialization": ["corporate", "leadership", "tech"],
+        "max_results": 2, "min_text_len": 200, "min_ratio": 0.05, "enabled": True
+    },
+    "thestreet.com": {
+        "reliability": 0.70, "paywall": False, "specialization": ["investing", "markets", "stocks"],
+        "max_results": 3, "min_text_len": 200, "min_ratio": 0.04, "enabled": True
+    },
+
+    # △ SPECIALIST - Niche but valuable when available
+    "tradingeconomics.com": {
+        "reliability": 0.74, "paywall": False, "specialization": ["macro", "data", "indicators"],
+        "max_results": 2, "min_text_len": 200, "min_ratio": 0.04, "enabled": True
+    },
+    "nasdaq.com": {
+        "reliability": 0.76, "paywall": False, "specialization": ["tech stocks", "markets", "ipos"],
+        "max_results": 3, "min_text_len": 200, "min_ratio": 0.04, "enabled": True
+    },
+
+    # ⊗ DISABLED - Hard paywalls (kept for reference, can enable manually if needed)
     "wsj.com": {
         "reliability": 0.88, "paywall": True, "specialization": ["markets", "equities"],
-        "max_results": 2, "min_text_len": 320, "min_ratio": 0.16
+        "max_results": 1, "min_text_len": 320, "min_ratio": 0.16, "enabled": False
     },
     "ft.com": {
         "reliability": 0.90, "paywall": True, "specialization": ["global", "fx"],
-        "max_results": 2, "min_text_len": 330, "min_ratio": 0.17
+        "max_results": 1, "min_text_len": 330, "min_ratio": 0.17, "enabled": False
     },
     "bloomberg.com": {
         "reliability": 0.92, "paywall": True, "specialization": ["financial", "commodities"],
-        "max_results": 2, "min_text_len": 340, "min_ratio": 0.18
+        "max_results": 1, "min_text_len": 340, "min_ratio": 0.18, "enabled": False
     },
     "barrons.com": {
         "reliability": 0.86, "paywall": True, "specialization": ["equities", "analysis"],
-        "max_results": 2, "min_text_len": 320, "min_ratio": 0.17
+        "max_results": 1, "min_text_len": 320, "min_ratio": 0.17, "enabled": False
     },
-    "marketwatch.com": {
-        "reliability": 0.80, "paywall": False, "specialization": ["retail investors"],
-        "max_results": 2, "min_text_len": 290, "min_ratio": 0.14
-    },
-    "cnbc.com": {
-        "reliability": 0.78, "paywall": False, "specialization": ["breaking", "tv"],
-        "max_results": 2, "min_text_len": 280, "min_ratio": 0.14
-    }
-    ,
     "seekingalpha.com": {
         "reliability": 0.74, "paywall": True, "specialization": ["analysis", "earnings"],
-        "max_results": 2, "min_text_len": 300, "min_ratio": 0.15
-    },
-    "morningstar.com": {
-        "reliability": 0.82, "paywall": True, "specialization": ["funds", "valuation"],
-        "max_results": 2, "min_text_len": 300, "min_ratio": 0.16
-    },
-    "investing.com": {
-        "reliability": 0.72, "paywall": False, "specialization": ["fx", "macro", "commodities"],
-        "max_results": 2, "min_text_len": 270, "min_ratio": 0.13
-    },
-    "fortune.com": {
-        "reliability": 0.78, "paywall": True, "specialization": ["corporate", "leadership"],
-        "max_results": 2, "min_text_len": 300, "min_ratio": 0.15
-    },
-    "nikkei.com": {
-        "reliability": 0.85, "paywall": True, "specialization": ["asia", "macro", "supply chain"],
-        "max_results": 2, "min_text_len": 310, "min_ratio": 0.16
+        "max_results": 1, "min_text_len": 300, "min_ratio": 0.15, "enabled": False
     },
     "economist.com": {
         "reliability": 0.90, "paywall": True, "specialization": ["macro", "geopolitics"],
-        "max_results": 2, "min_text_len": 350, "min_ratio": 0.19
+        "max_results": 1, "min_text_len": 350, "min_ratio": 0.19, "enabled": False
+    },
+    "morningstar.com": {
+        "reliability": 0.82, "paywall": True, "specialization": ["funds", "valuation"],
+        "max_results": 1, "min_text_len": 300, "min_ratio": 0.16, "enabled": False
+    },
+    "nikkei.com": {
+        "reliability": 0.85, "paywall": True, "specialization": ["asia", "supply chain"],
+        "max_results": 1, "min_text_len": 310, "min_ratio": 0.16, "enabled": False
     }
 }
 
@@ -129,14 +165,65 @@ EXCLUDED_SOURCES = {
     "wrrv.com", "apnnews.com"
 }
 
-PAYWALL_KEY_HINTS = ["subscribe", "paywall", "premium", "metered"]  # crude heuristic
+PAYWALL_KEY_HINTS = [
+    "subscribe to continue reading",
+    "become a subscriber",
+    "sign up to read",
+    "this article is for subscribers only",
+    "paywall",
+    "premium content",
+    "subscriber-only",
+    "subscription required",
+    "unlock this article"
+]
+
+PAYWALL_URL_PATTERNS = [
+    "/subscribe",
+    "/subscription",
+    "/paywall",
+    "/register-required"
+]
 
 
-def looks_paywalled(html: str | None) -> bool:
+def looks_paywalled(html: str | None, url: str = "") -> bool:
+    """
+    Enhanced paywall detection using multiple heuristics.
+
+    Checks:
+    1. Paywall keywords in content
+    2. Very short article length (< 500 chars suggests truncated content)
+    3. Paywall indicators in URL
+    4. Ratio of subscription-related text
+    """
     if not html:
-        return False
-    low = html.lower()
-    return any(k in low for k in PAYWALL_KEY_HINTS) and len(low) < 5000  # simple heuristic
+        return True  # Treat empty content as paywalled
+
+    html_low = html.lower()
+    html_len = len(html)
+
+    # Check 1: Too short - likely paywalled/truncated
+    if html_len < 500:
+        logging.debug(f"Short content detected ({html_len} chars), likely paywalled")
+        return True
+
+    # Check 2: Strong paywall keywords
+    keyword_matches = sum(1 for keyword in PAYWALL_KEY_HINTS if keyword in html_low)
+    if keyword_matches >= 2:  # Multiple paywall indicators
+        logging.debug(f"Multiple paywall keywords found ({keyword_matches})")
+        return True
+
+    # Check 3: Paywall patterns in URL
+    if any(pattern in url.lower() for pattern in PAYWALL_URL_PATTERNS):
+        logging.debug(f"Paywall pattern in URL: {url}")
+        return True
+
+    # Check 4: High density of subscription-related content (crude ratio)
+    subscribe_count = html_low.count("subscribe") + html_low.count("subscription")
+    if subscribe_count > 5 and html_len < 3000:
+        logging.debug(f"High subscription keyword density ({subscribe_count} mentions)")
+        return True
+
+    return False
 
 
 def get_premium_news_sources(query, start_date, end_date):
@@ -153,6 +240,11 @@ def get_premium_news_sources(query, start_date, end_date):
     rate_counter = 0
 
     for domain, meta in PREMIUM_SOURCES.items():
+        # Skip disabled sources (hard paywalls)
+        if not meta.get("enabled", True):
+            logging.info(f"⊗ Skipping {domain} - disabled (paywall/anti-bot too strong)")
+            continue
+
         site_query = f"{query} site:{domain}"
         gn = GNews(
             start_date=start_date,
@@ -188,27 +280,48 @@ def get_premium_news_sources(query, start_date, end_date):
                 logging.warning("Error scraping %s: %s", url, str(e))
                 continue
 
-            if meta["paywall"] and looks_paywalled(article_html):
+            if meta["paywall"] and looks_paywalled(article_html, url):
                 metrics["paywall_flagged"] += 1
                 logging.warning("Article likely paywalled, skipping: %s", url)
                 continue
 
             try:
+                logging.info(f"📋 Processing article details for: {url}")
                 details = get_article_details(url, article_html)
+
+                # Check if article processing failed entirely (returns None)
+                if details is None:
+                    metrics["low_quality_skipped"] += 1
+                    logging.warning(f"✗ Article processing failed (empty/invalid content): {url}")
+                    continue
+
+                # Check if summary was rejected by the summarizer
+                if not details.get("summary"):
+                    metrics["low_quality_skipped"] += 1
+                    logging.warning(f"✗ Article summary rejected (likely error page): {url}")
+                    continue
+
+                logging.info(f"✓ Article details extracted successfully for: {url}")
+
             except Exception as e:
                 metrics["failed_scrapes"] += 1
-                logging.warning("Error getting details for %s: %s", url, str(e))
+                logging.warning("✗ Error getting details for %s: %s", url, str(e))
+                logging.exception(e)
                 continue
 
+            logging.info(f"🔍 Evaluating scraping quality for: {url}")
             quality = evaluate_scraping_quality(
                 url,
                 article_html,
-                details
+                details,
+                min_text_len=meta.get("min_text_len", 200),
+                min_ratio=meta.get("min_ratio", 0.1)
             )
 
             if not quality["is_clean"]:
                 metrics["low_quality_skipped"] += 1
-                logging.warning("Low quality article skipped: %s", url)
+                rejection_reason = quality.get("rejection_reason", "Unknown")
+                logging.warning(f"Low quality article skipped: {url} | Reason: {rejection_reason}")
                 continue
 
             try:
@@ -246,10 +359,19 @@ def get_premium_news_sources(query, start_date, end_date):
                 logging.info("AI news details fetch error, skipping: %s", url)
                 continue
 
-            if insert_data_to_db(news, query):
-                final_data.append(news)
-                metrics["successful_scrapes"] += 1
-                logging.info("Inserted article from %s: %s", domain, url)
+            logging.info(f"Attempting to insert article to DB: {url}")
+            try:
+                if insert_data_to_db(news, query):
+                    final_data.append(news)
+                    metrics["successful_scrapes"] += 1
+                    logging.info("✓ Inserted article from %s: %s", domain, url)
+                else:
+                    logging.error(f"✗ insert_data_to_db returned False for {url}")
+                    metrics["failed_scrapes"] += 1
+            except Exception as e:
+                logging.error(f"✗ Exception during insert_data_to_db for {url}: {str(e)}")
+                logging.exception(e)
+                metrics["failed_scrapes"] += 1
 
         # Soft delay between domains to reduce burst risk
         time.sleep(4)
