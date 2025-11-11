@@ -47,7 +47,8 @@ dependencies = [
     "yfinance[nospam]>=0.2.65",
     "azure-storage-blob>=12.27.0",
     "azure-core>=1.35.1",
-    "shap>=0.49.1",
+    "shap==0.48.0",
+
 ]
 
 [dependency-groups]
