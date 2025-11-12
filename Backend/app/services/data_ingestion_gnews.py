@@ -6,7 +6,7 @@ from app import db
 from app.models.news import News
 from app.utils.helpers import URL_decoder, get_article_details, upload_shap_to_blob
 from app.services.article_scraper import scrape_article
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.utils.scraping_quality import (
     evaluate_scraping_quality,
 )  # assuming you've saved the modular quality function
@@ -51,7 +51,8 @@ def insert_data_to_db(news, query):
         regions=news["regions"],
         sectors=news["sectors"],
         shap=news["shap"],
-        shapUrl=news.get("shapUrl", None)
+        shapUrl=news.get("shapUrl", None),
+        scraped_at=datetime.now(timezone(timedelta(hours=8)))
     )
 
     db.session.add(n)
@@ -62,7 +63,7 @@ def insert_data_to_db(news, query):
 def check_if_data_exists(url):
     existing_news = News.query.filter_by(url=url).first()
     if existing_news:
-        logging.info(f"⏭️  Article already in database, skipping: {url}")
+        logging.info(f"Article already in database, skipping: {url}")
         return True
     logging.debug(f"Article not in database: {url}")
     return False
@@ -77,10 +78,6 @@ PREMIUM_SOURCES = {
     "cnbc.com": {
         "reliability": 0.82, "paywall": False, "specialization": ["markets", "tv", "breaking"],
         "max_results": 4, "min_text_len": 200, "min_ratio": 0.05, "enabled": True
-    },
-    "investing.com": {
-        "reliability": 0.75, "paywall": False, "specialization": ["fx", "macro", "commodities", "analysis"],
-        "max_results": 4, "min_text_len": 200, "min_ratio": 0.04, "enabled": True
     },
 
     # ✓✓ GOOD - Free business/financial news with reliable scraping
@@ -310,7 +307,9 @@ def get_premium_news_sources(query, start_date, end_date):
         "failed_scrapes": 0,
         "duplicates_skipped": 0,
         "paywall_flagged": 0,
-        "quote_pages_skipped": 0
+        "quote_pages_skipped": 0,
+        "missing_url_skipped": 0,
+        "empty_description_skipped": 0
     }
 
     final_data = []
@@ -336,25 +335,30 @@ def get_premium_news_sources(query, start_date, end_date):
         for news in articles:
             raw_url = news.get("url")
             if not raw_url:
+                metrics["missing_url_skipped"] += 1
+                logging.warning(f"Article from {domain} missing URL, skipping")
                 continue
 
             decoded = URL_decoder(raw_url)
             url = decoded["decoded_url"]
 
             if check_if_data_exists(url):
+                metrics["duplicates_skipped"] += 1
+                logging.info(f"Duplicate article already in DB, skipping: {url}")
                 continue
 
             # Check if URL is a quote page before scraping
             if is_quote_page(url):
                 metrics["quote_pages_skipped"] += 1
-                logging.info(f"📊 Quote page detected, skipping: {url}")
+                logging.info(f"Quote page detected, skipping: {url}")
                 continue
 
             # New article detected - starting scrape process
-            logging.info(f"🚀 Starting new scrape for: {url}")
+            logging.info(f"Starting new scrape for: {url}")
 
             rate_counter += 1
             if rate_counter >= 15:
+                logging.info("Rate limit reached, sleeping 60 seconds...")
                 time.sleep(60)
                 rate_counter = 0
 
@@ -372,30 +376,30 @@ def get_premium_news_sources(query, start_date, end_date):
                 continue
 
             try:
-                logging.info(f"📋 Processing article details for: {url}")
+                logging.info(f"Processing article details for: {url}")
                 details = get_article_details(url, article_html)
 
                 # Check if article processing failed entirely (returns None)
                 if details is None:
                     metrics["low_quality_skipped"] += 1
-                    logging.warning(f"✗ Article processing failed (empty/invalid content): {url}")
+                    logging.warning(f"Article processing failed (empty/invalid content): {url}")
                     continue
 
                 # Check if summary was rejected by the summarizer
                 if not details.get("summary"):
                     metrics["low_quality_skipped"] += 1
-                    logging.warning(f"✗ Article summary rejected (likely error page): {url}")
+                    logging.warning(f"Article summary rejected (likely error page): {url}")
                     continue
 
-                logging.info(f"✓ Article details extracted successfully for: {url}")
+                logging.info(f"Article details extracted successfully for: {url}")
 
             except Exception as e:
                 metrics["failed_scrapes"] += 1
-                logging.warning("✗ Error getting details for %s: %s", url, str(e))
+                logging.warning("Error getting details for %s: %s", url, str(e))
                 logging.exception(e)
                 continue
 
-            logging.info(f"🔍 Evaluating scraping quality for: {url}")
+            logging.info(f"Evaluating scraping quality for: {url}")
             quality = evaluate_scraping_quality(
                 url,
                 article_html,
@@ -414,7 +418,7 @@ def get_premium_news_sources(query, start_date, end_date):
                 shapUrl = upload_shap_to_blob(details['shap_html'], url)
             except Exception as e:
                 shapUrl = None
-                logging.warning(str(e))
+                logging.warning(f"Failed to upload SHAP visualization for {url}: {str(e)}")
 
             news.update({
                 "url": url,
@@ -442,6 +446,7 @@ def get_premium_news_sources(query, start_date, end_date):
 
             if news["description"] in ("", "An error occurred while fetching the article details"):
                 ## if gemini fails
+                metrics["empty_description_skipped"] += 1
                 logging.info("AI news details fetch error, skipping: %s", url)
                 continue
 
@@ -450,12 +455,12 @@ def get_premium_news_sources(query, start_date, end_date):
                 if insert_data_to_db(news, query):
                     final_data.append(news)
                     metrics["successful_scrapes"] += 1
-                    logging.info("✓ Inserted article from %s: %s", domain, url)
+                    logging.info("Inserted article from %s: %s", domain, url)
                 else:
-                    logging.error(f"✗ insert_data_to_db returned False for {url}")
+                    logging.error(f"insert_data_to_db returned False for {url}")
                     metrics["failed_scrapes"] += 1
             except Exception as e:
-                logging.error(f"✗ Exception during insert_data_to_db for {url}: {str(e)}")
+                logging.error(f"Exception during insert_data_to_db for {url}: {str(e)}")
                 logging.exception(e)
                 metrics["failed_scrapes"] += 1
 
@@ -505,6 +510,7 @@ def get_gnews_news_by_ticker(query, start_date, end_date):
 
     data = gn.get_news(query)
     if not data:
+        logging.info(f"No news articles found for query: {query}")
         return {
             "data": [],
             "metrics": {
@@ -524,6 +530,7 @@ def get_gnews_news_by_ticker(query, start_date, end_date):
     error_count = 0
     low_quality_count = 0
     quote_pages_count = 0
+    duplicates_count = 0
 
     number_of_request_start = 0
 
@@ -532,48 +539,49 @@ def get_gnews_news_by_ticker(query, start_date, end_date):
 
         url = news["url"]
         decoded_url = URL_decoder(url)
-        print("THIS IS THE DECODED URL", decoded_url)
+        logging.debug(f"Decoded URL: {decoded_url}")
         news["url"] = decoded_url["decoded_url"]
 
         if check_if_data_exists(news["url"]):
+            duplicates_count += 1
+            logging.info(f"Duplicate article already in DB, skipping: {news['url']}")
             continue
 
         # Check if URL is a quote page before scraping
         if is_quote_page(news["url"]):
             quote_pages_count += 1
-            logging.info(f"📊 Quote page detected, skipping: {news['url']}")
+            logging.info(f"Quote page detected, skipping: {news['url']}")
             continue
 
         # New article detected - starting scrape process
-        logging.info(f"🚀 Starting new scrape for: {decoded_url['decoded_url']}")
+        logging.info(f"Starting new scrape for: {decoded_url['decoded_url']}")
 
         number_of_request_start += 1
         if number_of_request_start > 15:
-            print("Rate limit reached. Sleeping for 60 seconds...")
+            logging.info("Rate limit reached, sleeping 60 seconds...")
             time.sleep(60)
             number_of_request_start = 0
 
         article = scrape_article(decoded_url["decoded_url"])
         if not article:
-            print(f"Failed to scrape article for URL: {decoded_url['decoded_url']}")
+            logging.warning(f"Failed to scrape article: {decoded_url['decoded_url']}")
             error_count += 1
             continue
 
         article_details = get_article_details(decoded_url["decoded_url"], article)
         if not article_details:
-            print(
-                f"Failed to get article details for URL: {decoded_url['decoded_url']}"
-            )
+            logging.warning(f"Failed to get article details: {decoded_url['decoded_url']}")
             error_count += 1
             continue
 
         quality_metrics = evaluate_scraping_quality(
             decoded_url["decoded_url"], article, article_details
         )
-        print("Scraping Metrics:", quality_metrics)
+        logging.debug(f"Scraping quality metrics: {quality_metrics}")
 
         if not quality_metrics["is_clean"]:
-            print(f"[LOW QUALITY] Skipping article: {decoded_url['decoded_url']}")
+            rejection_reason = quality_metrics.get("rejection_reason", "Unknown")
+            logging.warning(f"Low quality article skipped: {decoded_url['decoded_url']} | Reason: {rejection_reason}")
             low_quality_count += 1
             continue
 
@@ -601,17 +609,22 @@ def get_gnews_news_by_ticker(query, start_date, end_date):
             "",
             "An error occurred while fetching the article details",
         ]:
+            logging.info(f"Empty or error description, skipping: {decoded_url['decoded_url']}")
             continue
 
         if insert_data_to_db(news, query):
             final_data.append(news)
             success_count += 1
+            logging.info(f"Inserted article: {news['url']}")
         else:
-            print("Data not inserted")
+            logging.warning(f"insert_data_to_db returned False for {news['url']}")
+            error_count += 1
 
     metrics = {
         "total_articles_fetched": total_count,
         "successful_scrapes": success_count,
+        "duplicates_skipped": duplicates_count,
+        "quote_pages_skipped": quote_pages_count,
         "low_quality_skipped": low_quality_count,
         "failed_scrapes": error_count,
         "scrape_success_rate": (
@@ -658,6 +671,7 @@ def get_all_top_gnews():
     data = gn.get_top_news()
 
     if not data:
+        logging.info("No top news articles found")
         return {
             "data": [],
             "metrics": {
@@ -677,6 +691,8 @@ def get_all_top_gnews():
     error_count = 0
     low_quality_count = 0
     quote_pages_count = 0
+    duplicates_count = 0
+    date_filtered_count = 0
     number_of_request_start = 0
 
     today = datetime.today().strftime("%Y-%m-%d")
@@ -692,43 +708,43 @@ def get_all_top_gnews():
         formatted_date = dt.strftime("%Y-%m-%d")
 
         if formatted_date != today and formatted_date != yesterday:
-            print("Date is not within the range")
+            date_filtered_count += 1
+            logging.debug(f"Article date ({formatted_date}) outside range, skipping: {url}")
             continue
 
         decoded_url = URL_decoder(url)
         news["url"] = decoded_url["decoded_url"]
 
         if check_if_data_exists(news["url"]):
-            print("Data already exists")
+            duplicates_count += 1
+            logging.info(f"Duplicate article already in DB, skipping: {news['url']}")
             continue
 
         # Check if URL is a quote page before scraping
         if is_quote_page(news["url"]):
             quote_pages_count += 1
-            logging.info(f"📊 Quote page detected, skipping: {news['url']}")
+            logging.info(f"Quote page detected, skipping: {news['url']}")
             continue
 
         # New article detected - starting scrape process
-        logging.info(f"🚀 Starting new scrape for: {decoded_url['decoded_url']}")
+        logging.info(f"Starting new scrape for: {decoded_url['decoded_url']}")
 
         number_of_request_start += 1
         if number_of_request_start > 15:
-            print("Rate limit reached. Sleeping for 60 seconds...")
+            logging.info("Rate limit reached, sleeping 60 seconds...")
             time.sleep(60)
             number_of_request_start = 0
 
         try:
             article = scrape_article(decoded_url["decoded_url"])
             if not article:
-                print(f"Failed to scrape article for URL: {decoded_url['decoded_url']}")
+                logging.warning(f"Failed to scrape article: {decoded_url['decoded_url']}")
                 error_count += 1
                 continue
 
             article_details = get_article_details(decoded_url["decoded_url"], article)
             if not article_details:
-                print(
-                    f"Failed to get article details for URL: {decoded_url['decoded_url']}"
-                )
+                logging.warning(f"Failed to get article details: {decoded_url['decoded_url']}")
                 error_count += 1
                 continue
 
@@ -736,10 +752,11 @@ def get_all_top_gnews():
             quality_metrics = evaluate_scraping_quality(
                 decoded_url["decoded_url"], article, article_details
             )
-            print("Scraping Metrics:", quality_metrics)
+            logging.debug(f"Scraping quality metrics: {quality_metrics}")
 
             if not quality_metrics["is_clean"]:
-                print(f"[LOW QUALITY] Skipping article: {decoded_url['decoded_url']}")
+                rejection_reason = quality_metrics.get("rejection_reason", "Unknown")
+                logging.warning(f"Low quality article skipped: {decoded_url['decoded_url']} | Reason: {rejection_reason}")
                 low_quality_count += 1
                 continue
 
@@ -766,22 +783,29 @@ def get_all_top_gnews():
                 "",
                 "An error occurred while fetching the article details",
             ]:
+                logging.info(f"Empty or error description, skipping: {decoded_url['decoded_url']}")
                 continue
 
             if insert_data_to_db(news, "Top News"):
                 final_data.append(news)
                 success_count += 1
+                logging.info(f"Inserted article: {news['url']}")
             else:
-                print("Data not inserted")
+                logging.warning(f"insert_data_to_db returned False for {news['url']}")
+                error_count += 1
 
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logging.error(f"Unexpected error processing article {decoded_url.get('decoded_url', 'unknown')}: {str(e)}")
+            logging.exception(e)
             error_count += 1
 
     # Final metrics summary
     metrics = {
         "total_articles_fetched": total_count,
         "successful_scrapes": success_count,
+        "duplicates_skipped": duplicates_count,
+        "quote_pages_skipped": quote_pages_count,
+        "date_filtered": date_filtered_count,
         "low_quality_skipped": low_quality_count,
         "failed_scrapes": error_count,
         "scrape_success_rate": (

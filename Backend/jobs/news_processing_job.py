@@ -3,21 +3,9 @@ News Processing Job - Orchestrator for Service Pipeline
 
 This job is designed to run as a Kubernetes CronJob every 1-2 days.
 It orchestrates the existing service methods without reimplementing them.
-It orchestrates the existing service methods without reimplementing them.
 
 The job performs:
 1. URL fetching from GNews API for all active entities
-2. Delegates to get_article_details() which handles:
-   - Article scraping using crawl4ai + newspaper
-   - LLM-based entity extraction (companies, regions, sectors via news_interpreter)
-   - Sentiment analysis using ensemble of FinBERT + Gemini
-   - SHAP explainability generation
-3. Uploads SHAP visualizations to Azure Blob Storage
-4. Saves all data to News table with proper field population:
-   - entities: [ticker symbols]
-   - company_names: [extracted company names]
-   - tags: [keywords from article]
-   - All sentiment scores, confidence, agreement_rate
 2. Delegates to get_article_details() which handles:
    - Article scraping using crawl4ai + newspaper
    - LLM-based entity extraction (companies, regions, sectors via news_interpreter)
