@@ -35,7 +35,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import config
 from app.models import db, News, Entity, SentimentHistory
-from app.services.article_scraper import scrape_article_async
+from app.services.article_scraper import scrape_article_async, scrape_article
+from app.services.data_ingestion_gnews import fetch_urls_for_entities
+from app.utils.helpers import URL_decoder, get_article_details, upload_shap_to_blob
+from app.utils.scraping_quality import evaluate_scraping_quality
 # Removed unused imports: SentimentAnalyzer, extract_company, extract_region, extract_sector
 # These are now only used internally by get_article_details()
 
@@ -63,139 +66,44 @@ class NewsProcessor:
         
     async def fetch_news_urls(self, lookback_days: int = 2) -> List[Dict[str, Any]]:
         """
-        Fetch URLs to process from GNews data source.
-        
-        Integrates with existing GNews service to fetch article URLs
-        for all active entities.
-        
+        Fetch URLs using the shared service (NO DUPLICATION).
+
+        This method delegates to the reusable fetch_urls_for_entities() function
+        in data_ingestion_gnews.py, which handles all the GNews API logic.
+
         Args:
             lookback_days: Number of days to look back for news
-            
+
         Returns:
-            List of dicts with 'url', 'entity_name', 'entity_id' fields
+            List of dicts with 'url', 'entity_name', 'entity_id', 'ticker', etc.
         """
         logger.info(f"Fetching news URLs for the last {lookback_days} days")
-        
+
         with self.app.app_context():
             try:
-                from gnews import GNews
-                from app.models.entity import Entity
-                from app.utils.helpers import URL_decoder
-                from datetime import datetime, timedelta
-                
-                # Get all active entities with tickers
+                # Get all active entities
                 entities = Entity.query.filter(
                     Entity.ticker.isnot(None),
                     Entity.ticker != ''
                 ).all()
-                
+
                 if not entities:
                     logger.warning("No entities found in database")
                     return []
-                
+
                 logger.info(f"Found {len(entities)} entities to process")
-                
-                # Calculate date range
-                end_date = datetime.utcnow()
-                start_date = end_date - timedelta(days=lookback_days)
-                
-                # Format dates for GNews (year, month, day)
-                start_tuple = (start_date.year, start_date.month, start_date.day)
-                end_tuple = (end_date.year, end_date.month, end_date.day)
-                
-                urls_to_process = []
-                
-                # Premium news sources (from your existing config)
-                PREMIUM_SOURCES = [
-                    "reuters.com",
-                    "bloomberg.com",
-                    "wsj.com",
-                    "ft.com",
-                    "marketwatch.com",
-                    "cnbc.com",
-                    "barrons.com"
-                ]
-                
-                # Fetch news for each entity
-                for entity in entities:
-                    try:
-                        # Use ticker as primary query, name as fallback
-                        query = entity.ticker if entity.ticker else entity.name
-                        
-                        logger.info(f"Fetching news for {entity.name} ({query})")
-                        
-                        # Search across premium sources
-                        for source in PREMIUM_SOURCES:
-                            site_query = f"{query} site:{source}"
-                            
-                            try:
-                                gn = GNews(
-                                    start_date=start_tuple,
-                                    end_date=end_tuple,
-                                    max_results=3,
-                                    language='en'
-                                )
-                                
-                                articles = gn.get_news(site_query)
-                                
-                                if not articles:
-                                    continue
-                                
-                                logger.info(f"Found {len(articles)} articles from {source} for {query}")
-                                
-                                for article in articles:
-                                    raw_url = article.get('url')
-                                    if not raw_url:
-                                        continue
-                                    
-                                    # Decode Google News redirect URL
-                                    try:
-                                        decoded = URL_decoder(raw_url)
-                                        url = decoded.get('decoded_url', raw_url)
-                                    except:
-                                        url = raw_url
-                                    
-                                    # Check if already processed
-                                    existing = News.query.filter_by(url=url).first()
-                                    if existing:
-                                        logger.debug(f"Article already exists: {url}")
-                                        continue
-                                    
-                                    # Parse published date
-                                    published_date = None
-                                    if article.get('published date'):
-                                        try:
-                                            published_date = datetime.strptime(
-                                                article['published date'],
-                                                '%a, %d %b %Y %H:%M:%S %Z'
-                                            )
-                                        except:
-                                            published_date = datetime.utcnow()
-                                    
-                                    urls_to_process.append({
-                                        'url': url,
-                                        'entity_name': entity.name,
-                                        'entity_id': entity.id,
-                                        'ticker': query,
-                                        'title': article.get('title', 'Untitled'),
-                                        'publisher': article.get('publisher', {}).get('title', source),
-                                        'published_date': published_date,
-                                        'description': article.get('description', '')
-                                    })
-                                
-                            except Exception as e:
-                                logger.warning(f"Error fetching from {source} for {query}: {str(e)}")
-                                continue
-                        
-                        # Rate limiting - avoid hitting API limits
-                        await asyncio.sleep(2)
-                        
-                    except Exception as e:
-                        logger.error(f"Error processing entity {entity.name}: {str(e)}")
-                        continue
-                
+
+                # Delegate to service (NO REIMPLEMENTATION!)
+                # This uses the full PREMIUM_SOURCES list with metadata for quality
+                urls_to_process = fetch_urls_for_entities(
+                    entities=entities,
+                    lookback_days=lookback_days,
+                    use_premium_sources=True,  # Use full premium sources list
+                    max_results_per_source=3
+                )
+
                 logger.info(f"Found {len(urls_to_process)} URLs to process")
-                
+
                 if len(urls_to_process) == 0:
                     logger.warning(
                         "⚠️  No new articles found. Possible reasons:\n"
@@ -204,9 +112,9 @@ class NewsProcessor:
                         "   - GNews API rate limit\n"
                         "   - Network connectivity issues"
                     )
-                
+
                 return urls_to_process
-                
+
             except Exception as e:
                 logger.error(f"Error fetching news URLs: {str(e)}", exc_info=True)
                 return []
@@ -248,9 +156,6 @@ class NewsProcessor:
                 return None
 
             # Use the ORIGINAL scraper service (sync wrapper for async context)
-            from app.services.article_scraper import scrape_article
-            from app.utils.helpers import get_article_details
-
             # Scrape HTML using original service
             raw_html = await scrape_article_async(url)
 
@@ -273,8 +178,6 @@ class NewsProcessor:
                 return None
 
             # QUALITY CHECK: Use the SAME quality evaluation as data_ingestion_gnews.py
-            from app.utils.scraping_quality import evaluate_scraping_quality
-
             quality = evaluate_scraping_quality(url, raw_html, details)
 
             if not quality["is_clean"]:
@@ -374,7 +277,6 @@ class NewsProcessor:
 
                 if shap_html:
                     try:
-                        from app.utils.helpers import upload_shap_to_blob
                         shap_url = upload_shap_to_blob(shap_html, url)
                         if shap_url:
                             logger.info(f"SHAP HTML uploaded to: {shap_url}")
@@ -580,10 +482,12 @@ class NewsProcessor:
 
             # Fetch URLs to process
             urls_to_process = await self.fetch_news_urls(lookback_days)
-            
+
             if not urls_to_process:
                 logger.warning("No URLs found to process")
                 return
+
+            logger.info(f"✅ Found {len(urls_to_process)} new articles to process")
             
             # Limit if specified
             if max_articles:
