@@ -184,6 +184,82 @@ PAYWALL_URL_PATTERNS = [
     "/register-required"
 ]
 
+QUOTE_PAGE_PATTERNS = [
+    "/quote/",
+    "/quotes/",
+    "/symbol/",
+    "/symbols/",
+    "/stock/",
+    "/stocks/",
+    "/market-data/",
+    "/markets/quote/",
+    "/investing/quote/",
+    "/research/stocks/",
+    "/chart/",
+    "/charts/",
+    "/ticker/"
+]
+
+QUOTE_PAGE_KEYWORDS = [
+    "stock quote",
+    "real-time quote",
+    "delayed quote",
+    "market data",
+    "stock price",
+    "historical data",
+    "52-week high",
+    "52-week low",
+    "market cap",
+    "price-to-earnings",
+    "dividend yield",
+    "volume:",
+    "open:",
+    "high:",
+    "low:",
+    "previous close:"
+]
+
+
+def is_quote_page(url: str, html: str | None = None) -> bool:
+    """
+    Detects if a URL or page content is a stock quote page rather than news.
+
+    Checks:
+    1. Quote page URL patterns
+    2. High density of quote-related keywords in content
+    3. Very short narrative content with lots of numeric data
+    """
+    # Check 1: URL patterns
+    url_lower = url.lower()
+    if any(pattern in url_lower for pattern in QUOTE_PAGE_PATTERNS):
+        logging.debug(f"Quote page pattern detected in URL: {url}")
+        return True
+
+    # Check 2: Content analysis (if HTML provided)
+    if html:
+        html_lower = html.lower()
+        html_len = len(html)
+
+        # Count quote-related keywords
+        keyword_matches = sum(1 for keyword in QUOTE_PAGE_KEYWORDS if keyword in html_lower)
+
+        # High density of quote keywords suggests it's a quote page
+        if keyword_matches >= 5:
+            logging.debug(f"Quote page detected: {keyword_matches} quote keywords found in {url}")
+            return True
+
+        # Check for high numeric density (quote pages have lots of numbers)
+        if html_len > 0:
+            numeric_chars = sum(c.isdigit() or c in '.,-%$' for c in html)
+            numeric_ratio = numeric_chars / html_len
+
+            # If more than 15% of content is numbers/symbols, likely a quote page
+            if numeric_ratio > 0.15 and keyword_matches >= 2:
+                logging.debug(f"High numeric density ({numeric_ratio:.2%}) with quote keywords, likely quote page: {url}")
+                return True
+
+    return False
+
 
 def looks_paywalled(html: str | None, url: str = "") -> bool:
     """
@@ -233,7 +309,8 @@ def get_premium_news_sources(query, start_date, end_date):
         "low_quality_skipped": 0,
         "failed_scrapes": 0,
         "duplicates_skipped": 0,
-        "paywall_flagged": 0
+        "paywall_flagged": 0,
+        "quote_pages_skipped": 0
     }
 
     final_data = []
@@ -265,6 +342,12 @@ def get_premium_news_sources(query, start_date, end_date):
             url = decoded["decoded_url"]
 
             if check_if_data_exists(url):
+                continue
+
+            # Check if URL is a quote page before scraping
+            if is_quote_page(url):
+                metrics["quote_pages_skipped"] += 1
+                logging.info(f"📊 Quote page detected, skipping: {url}")
                 continue
 
             # New article detected - starting scrape process
@@ -440,6 +523,7 @@ def get_gnews_news_by_ticker(query, start_date, end_date):
     success_count = 0
     error_count = 0
     low_quality_count = 0
+    quote_pages_count = 0
 
     number_of_request_start = 0
 
@@ -452,6 +536,12 @@ def get_gnews_news_by_ticker(query, start_date, end_date):
         news["url"] = decoded_url["decoded_url"]
 
         if check_if_data_exists(news["url"]):
+            continue
+
+        # Check if URL is a quote page before scraping
+        if is_quote_page(news["url"]):
+            quote_pages_count += 1
+            logging.info(f"📊 Quote page detected, skipping: {news['url']}")
             continue
 
         # New article detected - starting scrape process
@@ -586,6 +676,7 @@ def get_all_top_gnews():
     success_count = 0
     error_count = 0
     low_quality_count = 0
+    quote_pages_count = 0
     number_of_request_start = 0
 
     today = datetime.today().strftime("%Y-%m-%d")
@@ -609,6 +700,12 @@ def get_all_top_gnews():
 
         if check_if_data_exists(news["url"]):
             print("Data already exists")
+            continue
+
+        # Check if URL is a quote page before scraping
+        if is_quote_page(news["url"]):
+            quote_pages_count += 1
+            logging.info(f"📊 Quote page detected, skipping: {news['url']}")
             continue
 
         # New article detected - starting scrape process
