@@ -62,9 +62,9 @@ def insert_data_to_db(news, query):
 def check_if_data_exists(url):
     existing_news = News.query.filter_by(url=url).first()
     if existing_news:
-        print("Data already exists")
+        logging.info(f"⏭️  Article already in database, skipping: {url}")
         return True
-    print("Data does not exist")
+    logging.debug(f"Article not in database: {url}")
     return False
 
 
@@ -267,6 +267,9 @@ def get_premium_news_sources(query, start_date, end_date):
             if check_if_data_exists(url):
                 continue
 
+            # New article detected - starting scrape process
+            logging.info(f"🚀 Starting new scrape for: {url}")
+
             rate_counter += 1
             if rate_counter >= 15:
                 time.sleep(60)
@@ -451,6 +454,9 @@ def get_gnews_news_by_ticker(query, start_date, end_date):
         if check_if_data_exists(news["url"]):
             continue
 
+        # New article detected - starting scrape process
+        logging.info(f"🚀 Starting new scrape for: {decoded_url['decoded_url']}")
+
         number_of_request_start += 1
         if number_of_request_start > 15:
             print("Rate limit reached. Sleeping for 60 seconds...")
@@ -604,6 +610,9 @@ def get_all_top_gnews():
         if check_if_data_exists(news["url"]):
             print("Data already exists")
             continue
+
+        # New article detected - starting scrape process
+        logging.info(f"🚀 Starting new scrape for: {decoded_url['decoded_url']}")
 
         number_of_request_start += 1
         if number_of_request_start > 15:
