@@ -16,6 +16,7 @@ import { ChartsReferenceLine } from '@mui/x-charts/ChartsReferenceLine';
 import { PieChart } from '@mui/x-charts/PieChart';
 import ClientTransactionTable from './ClientTransactionTable';
 import ClientPortfolioTable from './ClientPortfolioTable';
+import { getData } from '../../services/api';
 
 const PortfolioDashboard = ({ clientId }) => {
   // Portfolio-related state
@@ -107,20 +108,14 @@ const PortfolioDashboard = ({ clientId }) => {
   // Function to fetch IRX data from real API
   const fetchIRXData = async (timeRange) => {
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-      const irxUrl = `${API_BASE_URL}/api/entities/ticker=^IRX/chart?period=${timeRange}`;
+      console.log(`Fetching IRX data for period: ${timeRange}`);
+      const result = await getData(`/entities/ticker=^IRX/chart?period=${timeRange}`);
 
-      console.log(`Fetching IRX data from: ${irxUrl}`);
-      const response = await fetch(irxUrl);
-
-      if (!response.ok) {
-        console.error('IRX API error - Status:', response.status);
-        const errorText = await response.text();
-        console.error('IRX API error - Response:', errorText);
+      if (!result) {
+        console.error('IRX API error - No result returned');
         return [];
       }
 
-      const result = await response.json();
       console.log("Raw IRX API response:", result);
 
       // Extract dates and prices from the API response
@@ -222,27 +217,13 @@ const PortfolioDashboard = ({ clientId }) => {
   const fetchPortfolioData = async (transactions, period = '1Y') => {
     setLoading(true);
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-
       // Fetch portfolio allocation
-      const portfolioResponse = await fetch(`${API_BASE_URL}/api/portfolio/${clientId}`);
-      const portfolioResult = portfolioResponse.ok ? await portfolioResponse.json() : null;
+      console.log(`Fetching portfolio data for client: ${clientId}`);
+      const portfolioResult = await getData(`/portfolio/${clientId}`);
 
       // Fetch performance history
-      console.log(`Fetching performance data from: ${API_BASE_URL}/api/performance/${clientId}`);
-      const performanceResponse = await fetch(`${API_BASE_URL}/api/portfolio/performance/${clientId}`);
-      console.log('Performance response status:', performanceResponse.status);
-      console.log('Performance response ok:', performanceResponse.ok);
-
-      let performanceResult = null;
-      if (performanceResponse.ok) {
-        performanceResult = await performanceResponse.json();
-        console.log("Successfully fetched performance data:", performanceResult);
-      } else {
-        console.error('Performance API error - Status:', performanceResponse.status);
-        const errorText = await performanceResponse.text();
-        console.error('Performance API error - Response:', errorText);
-      }
+      console.log(`Fetching performance data for client: ${clientId}`);
+      const performanceResult = await getData(`/portfolio/performance/${clientId}`);
 
 
       const calculatedMetrics = calculatePortfolioMetrics(transactions);
@@ -309,24 +290,13 @@ const PortfolioDashboard = ({ clientId }) => {
   const fetchTransactionData = async () => {
     setTransactionLoading(true);
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
       console.log(`Fetching transactions for client: ${clientId}`);
-      const response = await fetch(`${API_BASE_URL}/api/transactions/client/${clientId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const result = await getData(`/transactions/client/${clientId}`);
 
-      console.log('Response status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error response:', errorData);
+      if (!result) {
         throw new Error('Failed to fetch transactions');
       }
 
-      const result = await response.json();
       console.log('Fetched transactions:', result);
 
       // Transform the data to match the expected format
