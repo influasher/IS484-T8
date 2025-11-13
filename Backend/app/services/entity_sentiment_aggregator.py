@@ -31,7 +31,7 @@ class EntitySentimentAggregator:
         """
         self.lookback_days = lookback_days
 
-    def get_entity_news_articles(self, entity_ticker: str, limit: Optional[int] = None) -> List[News]:
+    def entity_news_articles(self, entity_ticker: str, limit: Optional[int] = None) -> List[News]:
         """
         Get recent news articles that mention the entity by ticker
 
@@ -299,7 +299,7 @@ class EntitySentimentAggregator:
                 }
 
             # Get recent articles and calculate sentiment using ticker
-            articles = self.get_entity_news_articles(entity.ticker)
+            articles = self.entity_news_articles(entity.ticker)
             sentiment_result = self.calculate_weighted_sentiment(articles)
 
             # Update entity in database using existing service
@@ -444,7 +444,7 @@ class EntitySentimentAggregator:
             }
 
             # Calculate new values using ticker
-            articles = self.get_entity_news_articles(entity.ticker)
+            articles = self.entity_news_articles(entity.ticker)
             calculated_sentiment = self.calculate_weighted_sentiment(articles)
 
             return {

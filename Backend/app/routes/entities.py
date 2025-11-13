@@ -48,8 +48,9 @@ def get_entities():
     )  # Get sorting params - Default to ascending
     filter_operator = request.args.get("filter_operator", None)  # Get filter operator
     filter_value = request.args.get("filter_value", None)  # Get filter value
+    time_period = request.args.get("time_period", None, type=int)  # Get time period for dynamic sentiment
 
-    entities_list = get_all_entities(page, per_page, sort_order, search_term, filter_operator, filter_value)
+    entities_list = get_all_entities(page, per_page, sort_order, search_term, filter_operator, filter_value, time_period)
 
     if not entities_list:
         return format_response([], "Entities not found", 404)
@@ -356,9 +357,9 @@ def preview_entity_sentiment(entity_name):
 def refresh_all_entity_sentiments():
     """Refresh sentiment for all entities by aggregating from recent news"""
     try:
-        # Get lookback days from request (default 30)
+        # Get lookback days from request (default 7 for baseline)
         data = request.get_json() or {}
-        lookback_days = data.get('lookback_days', 30)
+        lookback_days = data.get('lookback_days', 7)
 
         # Validate lookback_days
         if not isinstance(lookback_days, int) or lookback_days < 1 or lookback_days > 365:
