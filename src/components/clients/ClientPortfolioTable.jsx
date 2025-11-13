@@ -138,7 +138,7 @@ const ClientPortfolioTable = ({ clientId }) => {
             ${entity.average_cost_basis?.toFixed(2) || 'N/A'}
           </TableCell>
           <TableCell>
-            {entity.value}
+            {entity.quantity || 0}
           </TableCell>
           <TableCell>
             ${entity.total_invested.toFixed(2)}

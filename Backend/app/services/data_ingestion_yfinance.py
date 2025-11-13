@@ -9,11 +9,37 @@ from app.utils.scraping_quality import evaluate_scraping_quality
 
 
 def get_stock_price(ticker):
-    stock = yf.Ticker(ticker)
-    stock.actions
-    stock_info = stock.info
-    stock_price = stock_info["currentPrice"]
-    return stock_price
+    """Get current stock price with fallback options for different security types"""
+    try:
+        stock = yf.Ticker(ticker)
+        stock.actions
+        stock_info = stock.info
+
+        # Try different price fields in order of preference
+        # Some securities use different fields (ETFs, foreign stocks, etc.)
+        price_fields = [
+            "currentPrice",
+            "regularMarketPrice",
+            "previousClose",
+            "navPrice",  # For funds
+            "regularMarketPreviousClose"
+        ]
+
+        for field in price_fields:
+            price = stock_info.get(field)
+            if price is not None and price > 0:
+                return float(price)
+
+        # If no price found in info, try history as last resort
+        hist = stock.history(period="1d")
+        if not hist.empty:
+            return float(hist['Close'].iloc[-1])
+
+        return None
+
+    except Exception as e:
+        print(f"Error fetching price for {ticker}: {e}")
+        return None
 
 
 def get_performance(prices):
