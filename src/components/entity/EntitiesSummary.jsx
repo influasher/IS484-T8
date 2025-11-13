@@ -8,6 +8,8 @@ import {
   Link as MuiLink,
   Stack,
   Box,
+  ToggleButtonGroup,
+  ToggleButton,
 } from "@mui/material";
 import { Link } from "react-router-dom";
 import SearchTable from '../ui/SearchTable';
@@ -21,9 +23,10 @@ const Entities = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [filterOperator, setFilterOperator] = useState("");
   const [filterValue, setFilterValue] = useState("");
+  const [timePeriod, setTimePeriod] = useState(7); // Default to 7 days
   const entitiesPerPage = 5;
 
-  const url = `/entities/?page=${currentPage}&per_page=${entitiesPerPage}&sort_order=${sortOrder}&search=${encodeURIComponent(searchTerm)}&filter_operator=${encodeURIComponent(filterOperator)}&filter_value=${encodeURIComponent(filterValue)}`;
+  const url = `/entities/?page=${currentPage}&per_page=${entitiesPerPage}&sort_order=${sortOrder}&search=${encodeURIComponent(searchTerm)}&filter_operator=${encodeURIComponent(filterOperator)}&filter_value=${encodeURIComponent(filterValue)}&time_period=${timePeriod}`;
   const { data, loading, error } = useFetch(url);
   
   const entityData = data ? data.data.entities : [];
@@ -60,6 +63,15 @@ const Entities = () => {
     setFilterValue(value);
     setCurrentPage(1);
   };
+
+  // Handle time period change
+  const handleTimePeriodChange = (event, newTimePeriod) => {
+    if (newTimePeriod !== null) {
+      setTimePeriod(newTimePeriod);
+      setCurrentPage(1); // Reset to first page when filter changes
+    }
+  };
+
 
   // Render entities table body
   const renderEntitiesTableBody = (entityData) => (
@@ -148,6 +160,8 @@ const Entities = () => {
         itemsPerPage={entitiesPerPage}
         entityType="entities"
         enableAdvancedFilter={true}
+        timePeriod={timePeriod}
+        onTimePeriodChange={handleTimePeriodChange}
       />
     </Container>
   );

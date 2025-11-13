@@ -390,6 +390,13 @@ const PortfolioDashboard = ({ clientId }) => {
   const { performance, metrics, allocation, irxPerformance } = portfolioData;
   const totalAllocation = allocation?.reduce((sum, item) => sum + item.value, 0) || 0;
 
+  // Transform allocation data to show percentages
+  const allocationWithPercentages = allocation?.map(item => ({
+    ...item,
+    value: totalAllocation > 0 ? ((item.value / totalAllocation) * 100).toFixed(1) : 0,
+    originalValue: item.value // Keep original value for reference
+  })) || [];
+
   // Prepare data for LineChart - handle empty performance data
   const dates = performance?.map(item => item.date) || [];
   const portfolioValues = performance?.map(item => item.value) || [];
@@ -697,7 +704,7 @@ const PortfolioDashboard = ({ clientId }) => {
                         <PieChart
                           series={[
                             {
-                              data: allocation,
+                              data: allocationWithPercentages,
                               innerRadius: 60,
                               outerRadius: 100,
                               paddingAngle: 2,
@@ -711,27 +718,11 @@ const PortfolioDashboard = ({ clientId }) => {
                             legend: { hidden: true }
                           }}
                         />
-
-                        {/* Center Total */}
-                        <Typography
-                          variant="h3"
-                          sx={{
-                            position: 'absolute',
-                            top: '50%',
-                            left: '50%',
-                            transform: 'translate(-50%, -50%)',
-                            color: 'text.primary',
-                            pointerEvents: 'none',
-                            fontSize: { xs: "2rem", sm: "3rem" }
-                          }}
-                        >
-                          {totalAllocation}
-                        </Typography>
                       </Box>
 
                       {/* Legend */}
                       <Stack spacing={1} sx={{ mt: 3, width: '100%' }}>
-                        {allocation.map((item, index) => (
+                        {allocationWithPercentages.map((item, index) => (
                           <Stack
                             key={index}
                             direction="row"
@@ -765,7 +756,7 @@ const PortfolioDashboard = ({ clientId }) => {
                                 fontSize: { xs: "0.75rem", sm: "0.875rem" }
                               }}
                             >
-                              {item.value}
+                              {item.value}%
                             </Typography>
                           </Stack>
                         ))}

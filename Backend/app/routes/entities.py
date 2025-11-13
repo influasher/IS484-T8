@@ -3,6 +3,11 @@ from app.models.entity import Entity
 from app.services.data_ingestion_finviz import get_stock_fundamentals
 from app.services.data_ingestion_yfinance import get_stock_price, get_stock_history
 from app.services.entities_service import get_all_entities, get_all_ticker_entities
+from app.services.entity_sentiment_aggregator import (
+    update_entity_sentiment_from_recent_news,
+    update_all_entity_sentiments_from_recent_news,
+    preview_entity_sentiment_from_recent_news
+)
 from app import db
 from app.utils.decorators import jwt_required
 from app.utils.helpers import format_response
@@ -43,8 +48,9 @@ def get_entities():
     )  # Get sorting params - Default to ascending
     filter_operator = request.args.get("filter_operator", None)  # Get filter operator
     filter_value = request.args.get("filter_value", None)  # Get filter value
+    time_period = request.args.get("time_period", None, type=int)  # Get time period for dynamic sentiment
 
-    entities_list = get_all_entities(page, per_page, sort_order, search_term, filter_operator, filter_value)
+    entities_list = get_all_entities(page, per_page, sort_order, search_term, filter_operator, filter_value, time_period)
 
     if not entities_list:
         return format_response([], "Entities not found", 404)
@@ -255,4 +261,133 @@ def get_stock_price_by_ticker(ticker):
             None,
             f"Error fetching stock price: {str(e)}",
             500,
+        )
+
+
+# ** Refresh Entity Sentiment from Recent News
+@entities_bp.route("/<string:entity_name>/sentiment/refresh", methods=["POST"])
+@jwt_required
+def refresh_entity_sentiment(entity_name):
+    """Refresh entity sentiment by aggregating from recent news articles"""
+    try:
+        # Get lookback days from request (default 30)
+        data = request.get_json() or {}
+        lookback_days = data.get('lookback_days', 30)
+
+        # Validate lookback_days
+        if not isinstance(lookback_days, int) or lookback_days < 1 or lookback_days > 365:
+            return format_response(
+                None,
+                "lookback_days must be an integer between 1 and 365",
+                400
+            )
+
+        # Update entity sentiment
+        result = update_entity_sentiment_from_recent_news(entity_name, lookback_days)
+
+        if result['success']:
+            return format_response(
+                {
+                    'entity': result['entity'],
+                    'sentiment': result['sentiment'],
+                    'lookback_days': lookback_days
+                },
+                f"Entity sentiment refreshed successfully using {lookback_days} days of news data",
+                200
+            )
+        else:
+            return format_response(
+                None,
+                result['error'],
+                404 if 'not found' in result['error'] else 500
+            )
+
+    except Exception as e:
+        return format_response(
+            None,
+            f"Error refreshing entity sentiment: {str(e)}",
+            500
+        )
+
+
+# ** Preview Entity Sentiment Calculation
+@entities_bp.route("/<string:entity_name>/sentiment/preview", methods=["GET"])
+@jwt_required
+def preview_entity_sentiment(entity_name):
+    """Preview entity sentiment calculation without updating the database"""
+    try:
+        # Get lookback days from query params (default 30)
+        lookback_days = request.args.get('lookback_days', 30, type=int)
+
+        # Validate lookback_days
+        if lookback_days < 1 or lookback_days > 365:
+            return format_response(
+                None,
+                "lookback_days must be between 1 and 365",
+                400
+            )
+
+        # Get preview
+        result = preview_entity_sentiment_from_recent_news(entity_name, lookback_days)
+
+        if result['success']:
+            return format_response(
+                result,
+                "Entity sentiment preview generated successfully",
+                200
+            )
+        else:
+            return format_response(
+                None,
+                result['error'],
+                404 if 'not found' in result['error'] else 500
+            )
+
+    except Exception as e:
+        return format_response(
+            None,
+            f"Error generating entity sentiment preview: {str(e)}",
+            500
+        )
+
+
+# ** Refresh All Entity Sentiments
+@entities_bp.route("/sentiment/refresh-all", methods=["POST"])
+@jwt_required
+def refresh_all_entity_sentiments():
+    """Refresh sentiment for all entities by aggregating from recent news"""
+    try:
+        # Get lookback days from request (default 7 for baseline)
+        data = request.get_json() or {}
+        lookback_days = data.get('lookback_days', 7)
+
+        # Validate lookback_days
+        if not isinstance(lookback_days, int) or lookback_days < 1 or lookback_days > 365:
+            return format_response(
+                None,
+                "lookback_days must be an integer between 1 and 365",
+                400
+            )
+
+        # Update all entity sentiments
+        result = update_all_entity_sentiments_from_recent_news(lookback_days)
+
+        if result['success']:
+            return format_response(
+                result,
+                f"Successfully refreshed sentiment for {result['updated']} entities",
+                200
+            )
+        else:
+            return format_response(
+                None,
+                result['error'],
+                500
+            )
+
+    except Exception as e:
+        return format_response(
+            None,
+            f"Error refreshing all entity sentiments: {str(e)}",
+            500
         )

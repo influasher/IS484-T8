@@ -33,7 +33,7 @@ def get_client_portfolio(client_id):
             if entity:
                 allocation.append({
                     'name': entity.ticker,
-                    'value': portfolio.qty or 0,
+                    'value': portfolio.current_market_value or 0,  # Use market value, not quantity
                     'average_cost_basis': portfolio.average_cost_basis,
                     'total_invested': portfolio.total_invested,
                     'color': f'#{hash(entity.ticker) % 0xFFFFFF:06x}',  # Generate color from ticker
