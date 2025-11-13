@@ -515,6 +515,18 @@ class SentimentAnalyzer:
         features_dict = dict(zip(feature_names, features))
         logger.debug(f"Built features_dict with {len(features_dict)} entries")
         return features_dict
+    
+    # Normalize classifications before comparing
+    @staticmethod
+    def _normalize_classification(classification):
+        """Convert all classification formats to bullish/bearish/neutral"""
+        classification = str(classification).lower().strip()
+        if classification in ['positive', 'bullish']:
+            return 'bullish'
+        elif classification in ['negative', 'bearish']:
+            return 'bearish'
+        else:
+            return 'neutral'
 
     def enhanced_weighted_integration(self, finbert_result, second_model_result, text, model_type='gemini'):
         """
@@ -614,10 +626,13 @@ class SentimentAnalyzer:
             except Exception as e:
                 logger.warning(f"Meta-classifier prediction failed: {e}. Falling back to rule-based integration.")
         
+        # Extract and normalize classifications
+        finbert_classification = self._normalize_classification(finbert_result.get('classification', 'neutral'))
+        second_model_classification = self._normalize_classification(second_model_result.get('classification', 'neutral'))
+
         # Extract key metrics (is classification agreeable?)
-        classifications_agree = (finbert_result.get('classification') == 
-                               second_model_result.get('classification'))
-        
+        classifications_agree = (finbert_classification == second_model_classification)
+
         # Calculate confidence scores properly - use features if available
         finbert_confidence = features_dict.get('finbert_confidence', 0.33)
         llm_confidence = features_dict.get(f'{model_type}_confidence', 0.33)
