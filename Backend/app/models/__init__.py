@@ -12,7 +12,7 @@ from .sentiment_history import SentimentHistory
 from .transactions import Transactions, TransactionType
 from .client_portfolio import ClientPortfolio
 from .client_performance import ClientPerformance
-from .active_learning import LabelingQueue, UserVote, AggregatedLabel, UserStats, ModelRun
+from .active_learning import LabelingQueue, UserVote, AggregatedLabel, UserStats, ModelRun, FinalSentiment, QueueStatus, SentimentVote
 
 # Explicitly export all models and db
 __all__ = [
@@ -22,11 +22,18 @@ __all__ = [
     'ClientPreferences',
     'Entity',
     'News',
-    'Feedback',
     'SentimentHistory',
     'Transactions',
     'TransactionType',
     'ClientPortfolio',
-    'ClientPerformance'
+    'ClientPerformance',
+    'LabelingQueue',
+    'UserVote',
+    'AggregatedLabel',
+    'UserStats',
+    'ModelRun',
+    'FinalSentiment',
+    'QueueStatus',
+    'SentimentVote',
     # do new sentiment analysis models 
 ]
