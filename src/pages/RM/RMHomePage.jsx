@@ -31,7 +31,7 @@ const RMHomePage = () => {
             p: 2,
           }}
         >
-          <Paper sx={{ width: "100%", backgroundColor: "white" }}>
+          <Paper sx={{ width: "100%", backgroundColor: "white", p:2}}>
             <StockWatchlist />
           </Paper>
         </Box>
