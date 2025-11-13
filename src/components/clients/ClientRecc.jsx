@@ -86,17 +86,25 @@ const getHealthScoreColor = (score) => {
 const RecommendationBubbleChart = ({ recommendations, onBubbleClick, selectedRecommendation }) => {
 
     // Transform recommendations into bubble chart data
-    const chartData = recommendations.map((rec) => ({
-        x: rec.sentiment_score || 0,
-        y: rec.recommendation_confidence * 100 || 50,
-        z: (rec.recommendation_confidence * 100) * 5, // Size based on confidence
-        name: rec.ticker,
-        fullName: rec.entity_name,
-        sector: rec.sector,
-        action: rec.action,
-        entity_id: rec.entity_id,
-        isSelected: selectedRecommendation === rec.entity_id,
-    }));
+    const chartData = recommendations.map((rec) => {
+        const confidence = rec.recommendation_confidence || 0.5;
+        const confidencePercent = confidence * 100;
+
+        // Debug logging to check values
+        console.log(`${rec.entity_name}: confidence=${confidence}, confidencePercent=${confidencePercent}`);
+
+        return {
+            x: rec.sentiment_score || 0,
+            y: confidencePercent, // Convert to percentage (0.8 -> 80%)
+            z: confidencePercent * 5, // Size based on confidence percentage
+            name: rec.ticker,
+            fullName: rec.entity_name,
+            sector: rec.sector,
+            action: rec.action,
+            entity_id: rec.entity_id,
+            isSelected: selectedRecommendation === rec.entity_id,
+        };
+    });
 
     // Calculate dynamic axis domains
 
@@ -108,8 +116,17 @@ const RecommendationBubbleChart = ({ recommendations, onBubbleClick, selectedRec
     const minConfidence = Math.min(...confidenceScores);
     const maxConfidence = Math.max(...confidenceScores);
 
-    const xaxis_domain = [minSentiment - 5, maxSentiment + 5];
-    const yaxis_domain = [minConfidence - 5, maxConfidence + 5];
+    const sentimentPadding = Math.max(5, (maxSentiment - minSentiment) * 0.1);
+    const confidencePadding = Math.max(5, (maxConfidence - minConfidence) * 0.1);
+
+    const xaxis_domain = [
+        Number((minSentiment - sentimentPadding).toFixed(2)),
+        Number((maxSentiment + sentimentPadding).toFixed(2))
+    ];
+    const yaxis_domain = [
+        Number(Math.max(0, minConfidence - confidencePadding).toFixed(2)),
+        Number(Math.min(100, maxConfidence + confidencePadding).toFixed(2))
+    ];
 
     // Calculate bubble size inversely proportional to axis range
     const xRange = xaxis_domain[1] - xaxis_domain[0];

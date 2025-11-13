@@ -31,17 +31,24 @@ def get_client_portfolio(client_id):
         for portfolio in portfolios:
             entity = Entity.query.get(portfolio.entity_id)
             if entity:
-                allocation.append({
-                    'name': entity.ticker,
-                    'value': portfolio.current_market_value or 0,  # Use market value, not quantity
-                    'average_cost_basis': portfolio.average_cost_basis,
-                    'total_invested': portfolio.total_invested,
-                    'color': f'#{hash(entity.ticker) % 0xFFFFFF:06x}',  # Generate color from ticker
-                    'market_value': portfolio.current_market_value,
-                    'unrealized_pnl': portfolio.unrealized_pnl,
-                    'unrealized_pnl_percent': portfolio.unrealized_pnl_percent,
-                    'allocation_percent': portfolio.portfolio_allocation_percent
-                })
+                # Use current market value if available, otherwise fallback to total invested
+                display_value = portfolio.current_market_value if portfolio.current_market_value is not None and portfolio.current_market_value > 0 else (portfolio.total_invested or 0)
+
+                # Only include positions with positive values
+                if display_value > 0:
+                    allocation.append({
+                        'name': entity.ticker,
+                        'value': display_value,  # For pie chart - use market value or fallback to total invested
+                        'quantity': portfolio.qty,  # Actual quantity of shares
+                        'average_cost_basis': portfolio.average_cost_basis,
+                        'total_invested': portfolio.total_invested,
+                        'color': f'#{hash(entity.ticker) % 0xFFFFFF:06x}',  # Generate color from ticker
+                        'market_value': portfolio.current_market_value,
+                        'unrealized_pnl': portfolio.unrealized_pnl,
+                        'unrealized_pnl_percent': portfolio.unrealized_pnl_percent,
+                        'allocation_percent': portfolio.portfolio_allocation_percent,
+                        'using_fallback': portfolio.current_market_value is None or portfolio.current_market_value <= 0
+                    })
 
         return jsonify({
             'client_id': client_id,
