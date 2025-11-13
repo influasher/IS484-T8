@@ -143,6 +143,8 @@ def get_entity_details(ticker):
             "time_decay": entity.time_decay,
             "simple_average": entity.simple_average,
             "classification": entity.classification,
+            "asset_type": entity.asset_type,
+            "sector": entity.sector,
         },
         "Entity fetched successfully",
         200,
