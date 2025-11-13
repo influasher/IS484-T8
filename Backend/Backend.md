@@ -248,6 +248,8 @@ uv add --dev package-name
 ```
 
 ### Running Tests
+Integration testing done with local Postgres.
+Add `TEST_DATABASE_URI` as an environment variable.
 ```bash
 # Run all tests
 uv run python -m tests.run_tests
