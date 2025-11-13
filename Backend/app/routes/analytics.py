@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
 from sqlalchemy import func
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.active_learning import UserStats, UserVote, AggregatedLabel
 from app import db
 
@@ -11,16 +11,19 @@ def get_user_statistics():
     """Get statistics for all users including voting behavior and reliability"""
     try:
         # Query user stats joined with user information
+        # Only include relationship_managers using the enum
         user_data = (
             db.session.query(
                 User.id,
                 User.email,
                 User.first_name,
                 User.last_name,
+                User.role,
                 UserStats.total_votes,
                 UserStats.last_active
             )
             .outerjoin(UserStats, User.id == UserStats.user_id)
+            .filter(User.role == UserRole.RELATIONSHIP_MANAGER)
             .all()
         )
 
@@ -54,6 +57,7 @@ def get_user_statistics():
                 "user_id": str(user.id),
                 "email": user.email,
                 "name": f"{user.first_name} {user.last_name}",
+                "role": user.role.value,  # Convert enum to string value
                 "total_votes": user.total_votes or 0,
                 "last_active": user.last_active.isoformat() if user.last_active else None,
                 "agreement_with_majority": agreement_rate

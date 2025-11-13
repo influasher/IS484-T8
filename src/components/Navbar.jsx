@@ -20,12 +20,16 @@ const NavBar = ({ role, elevation = 0, sticky = true }) => {
   const navigate = useNavigate();
   const { logout } = useAuth();
 
-  // Build tabs dynamically
+  // Build tabs dynamically - only show Analysis for RMs
   const baseTabs = [
     { label: "Entities", path: ROUTES.ENTITIES },
     { label: "News", path: ROUTES.NEWS },
-    { label: "Analysis Dashboard", path: ROUTES.ANALYSIS, icon: <Assessment /> },
   ];
+
+  // Only add Analysis Dashboard for relationship managers
+  if (role === 'relationship_manager') {
+    baseTabs.push({ label: "Analysis Dashboard", path: ROUTES.ANALYSIS, icon: <Assessment /> });
+  }
 
   const paths = baseTabs.map((t) => t.path);
   const currentIndex = paths.indexOf(location.pathname);

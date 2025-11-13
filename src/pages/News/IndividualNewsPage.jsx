@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import {useLocation, useNavigate, Link, useParams} from 'react-router-dom';
 import useFetch from '../../hooks/useFetch';
+import useAuth from '../../hooks/useAuth';
 import SentimentScore from '../../components/ui/Sentimentscore';
 import SentimentFeedbackForm from '../../components/ui/sentimentFeedback';
 import PieChart from '../../components/ui/feedbackChart';
@@ -25,6 +26,7 @@ function IndividualNewsPage() {
     const [refreshChart, setRefreshChart] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
+    const { userRole } = useAuth();
     const id = location.state?.id || null;
     const newsTitle = location.state?.title || 'Unknown Title';
 
@@ -201,7 +203,7 @@ function IndividualNewsPage() {
                     </Grid>
 
                     {/* NEW: Analysis Insights Section */}
-                    {newsData.confidence !== undefined && (
+                    {newsData.confidence !== undefined && (userRole === 'relationship_manager' || userRole === 'RELATIONSHIP_MANAGER') && (
                         <Box sx={{ mb: 4, p: 2, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid #e0e0e0' }}>
                             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
                                 <InfoOutlined sx={{ color: 'primary.main', fontSize: 20 }} />
@@ -414,38 +416,39 @@ function IndividualNewsPage() {
                 <Divider sx={{mt: 2, mb: 3}}/>
 
 
-                {/* Feedback and Chart Section */}
-                <Container maxWidth="xl">
-                    <Stack direction={{xs: 'column', md: 'row'}} spacing={4} sx={{width: "100%"}}>
-                        {/* LEFT: Sentiment Feedback Form */}
-                        <Stack direction="column" sx={{flex: 1}}>
-                            <Box sx={{p: 2}}>
-                                <SentimentFeedbackForm
-                                    newsTitle={newsTitle}
-                                    onFeedbackSubmit={() => setRefreshChart((prev) => !prev)}
-                                />
-                            </Box>
+                {/* Feedback and Chart Section - Only for Relationship Managers */}
+                {(userRole === 'relationship_manager' || userRole === 'RELATIONSHIP_MANAGER') && (
+                    <Container maxWidth="xl">
+                        <Stack direction={{xs: 'column', md: 'row'}} spacing={4} sx={{width: "100%"}}>
+                            {/* LEFT: Sentiment Feedback Form */}
+                            <Stack direction="column" sx={{flex: 1}}>
+                                <Box sx={{p: 2}}>
+                                    <SentimentFeedbackForm
+                                        newsTitle={newsTitle}
+                                        onFeedbackSubmit={() => setRefreshChart((prev) => !prev)}
+                                    />
+                                </Box>
+                            </Stack>
+
+                            {/* Divider between Left & Right */}
+                            <Divider
+                                orientation="vertical"
+                                flexItem
+                                sx={{
+                                    mx: 2,
+                                    display: {xs: 'none', md: 'block'}
+                                }}
+                            />
+
+                            {/* RIGHT: Pie Chart */}
+                            <Stack direction="column" sx={{flex: 1}}>
+                                <Box sx={{p: 2}}>
+                                    <PieChart key={refreshChart}/>
+                                </Box>
+                            </Stack>
                         </Stack>
-
-                        {/* Divider between Left & Right */}
-                        <Divider
-                            orientation="vertical"
-                            flexItem
-                            sx={{
-                                mx: 2,
-                                display: {xs: 'none', md: 'block'}
-                            }}
-                        />
-
-                        {/* RIGHT: Pie Chart */}
-                        <Stack direction="column" sx={{flex: 1}}>
-                            <Box sx={{p: 2}}>
-                                <PieChart key={refreshChart}/>
-                            </Box>
-                        </Stack>
-                    </Stack>
-
-                </Container>
+                    </Container>
+                )}
             </Box>
         </Box>
     );
