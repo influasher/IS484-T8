@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentifinance-backend
+  namespace: sentifinance
+  labels:
+    app: sentifinance-backend
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 900  # 15 minutes for slow starts
+  selector:
+    matchLabels:
+      app: sentifinance-backend
+  template:
+    metadata:
+      labels:
+        app: sentifinance-backend
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                - aks-agentpool-25263993-vmss00000h  # Avoid old node with stale credentials
+      imagePullSecrets:
+      - name: acr-secret  # Use explicit ACR credentials while managed identity propagates
+      containers:
+      - name: sentifinance-backend
+        image: sentifinancetwo.azurecr.io/sentifinance-backend:latest
+        ports:
+        - containerPort: 5001
+        env:
+        - name: FLASK_ENV
+          value: "production"
+        - name: APP_DEBUG
+          value: "False"
+        - name: PORT
+          value: "5001"
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: secret-key
+        - name: DATABASE_URI
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: database-uri
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: jwt-secret-key
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: gemini-api-key
+        - name: GEMINI_API_KEY_SW
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: gemini-api-key-sw
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: openai-api-key
+        - name: MAIL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: mail-username
+        - name: MAIL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: mail-password
+        - name: AZURE_COMMUNICATION_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: azure-communication-connection-string
+        - name: AZURE_EMAIL_SENDER
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: azure-email-sender
+        resources:
+          requests:
+            memory: "256Mi"  # Lightweight - no ML models in backend
+            cpu: "100m"
+          limits:
+            memory: "1536Mi"  # Sufficient for API operations and data processing
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /api
+            port: 5001
+          initialDelaySeconds: 30  # App starts quickly without ML models
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /api
+            port: 5001
+          initialDelaySeconds: 60  # Reduced - lightweight backend starts fast
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3

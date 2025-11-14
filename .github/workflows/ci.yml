@@ -1,0 +1,103 @@
+name: Basic CI Pipeline
+
+on:
+  push:
+    branches: [ dev ]  # Only run CI on dev branch
+
+jobs:
+  # Backend Job
+  backend-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python and UV
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+        enable-cache: true
+    
+    - name: Install backend dependencies
+      run: |
+        cd Backend
+        uv sync
+    
+    - name: Run backend tests
+      run: |
+        cd Backend
+        uv run pytest dummy_tests/ --verbose
+    
+    - name: Test Flask app startup
+      env:
+        DATABASE_URI: sqlite:///test.db  # Temporary test database for CI
+        SECRET_KEY: test-secret-key-for-ci
+        JWT_SECRET_KEY: test-jwt-secret-for-ci
+      run: |
+        cd Backend
+        uv run python -c "from app import create_app; app = create_app(); print('Flask app created successfully')"
+
+  # Frontend Job
+  frontend-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install frontend dependencies
+      run: npm ci
+    
+    - name: Run frontend tests
+      env:
+        REACT_APP_API_BASE_URL: http://localhost:5001
+        REACT_APP_ENV: testing
+      run: npm test -- --watchAll=false --passWithNoTests
+    
+    - name: Build frontend
+      env:
+        REACT_APP_API_BASE_URL: http://localhost:5001
+        REACT_APP_ENV: testing
+      run: npm run build
+    
+    - name: Verify build output
+      run: |
+        ls -la build/
+        echo "Frontend build completed successfully"
+
+  # Code Quality Check
+  code-quality:
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python and UV
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+        enable-cache: true
+    
+    - name: Install Python linters
+      run: |
+        cd Backend
+        uv sync  # This will install dev dependencies from pyproject.toml
+    
+    - name: Check Python code formatting
+      run: |
+        cd Backend
+        uv run black --check . || echo "Run 'black .' to fix formatting"
+    
+    - name: Check Python code style
+      run: |
+        cd Backend
+        uv run flake8 . --max-line-length=88 --exclude=venv,migrations,.venv || echo "Fix flake8 issues"

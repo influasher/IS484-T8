@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "news-processor"
+version = "1.0.0"
+requires-python = ">=3.11"
+description = "Microservice for batch processing news articles with ML models"
+dependencies = [
+    # Core Framework
+    "flask>=3.0.0,<4.0.0",
+    "flask-cors>=5.0.0",
+    "flask-sqlalchemy>=3.0.0",
+    "flask-jwt-extended>=4.0.0",
+    "flask-mail>=0.10.0",
+    "flask-migrate>=4.0.0",
+    "sqlalchemy>=2.0.0,<3.0.0",
+    "psycopg2-binary>=2.9.9,<3.0.0",
+
+    # Web Scraping (Heavy - ~500MB each)
+    "crawl4ai>=0.3.0,<1.0.0",
+    "playwright>=1.40.0,<2.0.0",
+    "newspaper4k>=0.9.3.1",
+    "fake-useragent>=2.2.0",
+
+    # NLP and Entity Extraction (Heavy - ~500-800MB)
+    "spacy>=3.7.0,<4.0.0",
+    "spacy-transformers>=1.3.0",
+    # spaCy model installed separately in Dockerfile
+    "nltk>=3.9.1",
+
+    # Sentiment Analysis - FinBERT (Heavy - ~400MB)
+    "transformers>=4.35.0,<5.0.0",
+    "torch>=2.1.0,<3.0.0",
+    "sentencepiece>=0.1.99,<1.0.0",
+    "shap==0.48.0",
+    "beautifulsoup4",
+
+    # API-based Sentiment Analysis
+    "google-genai>=0.3.0",
+    "openai>=1.0.0,<2.0.0",
+
+    # News Data Source and Decoding
+    "gnews>=0.3.7,<1.0.0",
+    "googlenewsdecoder>=0.1.6",
+    "finvizfinance>=1.1.1",  # Required by app.services imports
+    "yfinance[nospam]>=0.2.65",  # Required by app.services imports
+
+    # Data Processing
+    "pandas>=2.3.2",
+    "numpy==1.26.4",
+    "rapidfuzz>=3.14.0",
+
+    # Azure Integrations
+    "azure-storage-blob>=12.27.0",
+    "azure-core>=1.35.1",
+    "azure-communication-email>=1.0.0",
+
+    # Utilities
+    "python-dotenv>=1.0.0,<2.0.0",
+    "requests>=2.31.0,<3.0.0",
+    "requests-cache>=1.2.1",
+    "validators>=0.34.0",
+    "lxml[html-clean]>=5.4.0",
+    "lxml-html-clean>=0.4.2",
+    "matplotlib>=3.10.6",
+    "fpdf>=1.7.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0,<9.0.0",
+    "pytest-asyncio>=0.21.0,<1.0.0",
+    "black>=22.0.0",
+    "flake8>=5.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["*"]

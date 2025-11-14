@@ -1,92 +1,168 @@
-import React from 'react';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import { Container, Row, Col } from 'react-bootstrap';
-import SentimentScore from '../ui/Sentimentscore';
-import { Link } from 'react-router-dom'; 
-import useFetch from '../../hooks/useFetch';
+import React, { useState } from "react";
+import {
+  Container,
+  TableBody,
+  TableRow,
+  TableCell,
+  Typography,
+  Link as MuiLink,
+  Stack,
+  Box,
+  ToggleButtonGroup,
+  ToggleButton,
+} from "@mui/material";
+import { Link } from "react-router-dom";
+import SearchTable from '../ui/SearchTable';
+import SentimentScore from "../ui/Sentimentscore";
+import useFetch from "../../hooks/useFetch";
+import { ROUTES } from "../../routes";
 
 const Entities = () => {
-  const styles = {
-    entityBox: {
-      padding: '1.5rem',
-      border: '1px solid #ddd',
-      borderRadius: '12px',
-      backgroundColor: '#fff',
-      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
-      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-      minHeight: '300px'
-    },
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortOrder, setSortOrder] = useState("name-asc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [filterOperator, setFilterOperator] = useState("");
+  const [filterValue, setFilterValue] = useState("");
+  const [timePeriod, setTimePeriod] = useState(7); // Default to 7 days
+  const entitiesPerPage = 5;
 
-    entityHeader: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '0.5rem',
-    },
-    entityName: {
-      fontSize: 'clamp(1rem, 2vw, 1.5rem)',
-      fontWeight: 'bold',
-      color: 'black',
-      marginRight: '1rem',
-    },
-    entitySummary: {
-      fontSize: 'clamp(0.8rem, 1.5vw, 1rem)',
-      color: '#555555',
-      flexGrow: 1,
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      display: '-webkit-box',
-      WebkitLineClamp: 5,
-      WebkitBoxOrient: 'vertical',
-      margin: 0,
-      padding: 0,
-    },
-    sentimentScore: {
-      fontSize: '0.875rem',
-      color: '#4CAF50',
-      fontWeight: 'bold',
-      marginLeft: 'auto',
-    },
-    scrollableContainer: {
-      maxWidth: '100%',
-      width: '100%',
-      margin: '0 auto',
-      height: 'calc(100vh - 100px)', // Adjust based on your layout
-      overflowY: 'auto',
-      padding: '1rem',
-      borderRadius: '8px',
-      boxSizing: 'border-box',
+  const url = `/entities/?page=${currentPage}&per_page=${entitiesPerPage}&sort_order=${sortOrder}&search=${encodeURIComponent(searchTerm)}&filter_operator=${encodeURIComponent(filterOperator)}&filter_value=${encodeURIComponent(filterValue)}&time_period=${timePeriod}`;
+  const { data, loading, error } = useFetch(url);
+  
+  const entityData = data ? data.data.entities : [];
+  const totalPages = data ? data.data.pages : 1;
+
+  // Sort options for entities
+  const sortOptions = [
+    { value: 'name-asc', label: 'Name (A-Z)' },
+    { value: 'name-desc', label: 'Name (Z-A)' },
+    { value: 'sentiment-high', label: 'Sentiment (High to Low)' },
+    { value: 'sentiment-low', label: 'Sentiment (Low to High)' },
+  ];
+
+  // Handle search change
+  const handleSearchChange = (term) => {
+    setSearchTerm(term);
+    setCurrentPage(1);
+  };
+
+  // Handle sort change
+  const handleSortChange = (order) => {
+    setSortOrder(order);
+    setCurrentPage(1);
+  };
+
+  // Handle pagination
+  const handlePageChange = (event, pageNumber) => {
+    setCurrentPage(pageNumber);
+  };
+
+  // Handle advanced filter change
+  const handleFilterChange = (operator, value) => {
+    setFilterOperator(operator);
+    setFilterValue(value);
+    setCurrentPage(1);
+  };
+
+  // Handle time period change
+  const handleTimePeriodChange = (event, newTimePeriod) => {
+    if (newTimePeriod !== null) {
+      setTimePeriod(newTimePeriod);
+      setCurrentPage(1); // Reset to first page when filter changes
     }
   };
 
-  const url = `/entities/`;
-  const { data, loading, error } = useFetch(url);
-  const entityData = data ? data.data : [];
 
-  return ( 
-    <Container fluid style={styles.scrollableContainer}>
-      <Row className="g-4">
-        {entityData.map((entityItem) => (
-          <Col key={entityItem.id} xs={12} sm={6} lg={4} xl={3}>
-            <Link to={`/entity/${entityItem.ticker}`} style={{ textDecoration: 'none' }}>
-              <div style={styles.entityBox}>
-                <div style={styles.entityHeader}>
-                  <h4 style={styles.entityName}>{entityItem.name}</h4>
-                  <span style={styles.sentimentScore}>
-                    <SentimentScore score={entityItem.sentiment_score} sentiment = {entityItem.classification}  />
-                  </span>
-                </div>
-                <p style={styles.entitySummary}>{entityItem.summary}</p>
-              </div>
-            </Link>
-          </Col>
-        ))}
-      </Row>
+  // Render entities table body
+  const renderEntitiesTableBody = (entityData) => (
+    <TableBody>
+      {entityData.map((entity, i) => (
+        <TableRow key={i} hover>
+          <TableCell
+            sx={{
+              height: "100px",
+              maxHeight: "100px",
+              whiteSpace: "normal",
+              wordWrap: "break-word",
+            }}
+          >
+            <MuiLink
+              component={Link}
+              to={`${ROUTES.ENTITY}/${entity.ticker}`}
+              sx={{
+                display: "block",
+                textDecoration: "none",
+                color: "inherit",
+                "&:hover": { textDecoration: "none" },
+              }}
+            >
+              <Stack direction="column" spacing={0.5}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: "bold",
+                      color: "text.secondary",
+                    }}
+                  >
+                    {entity.ticker || 'N/A'}
+                  </Typography>
+                  <SentimentScore
+                    score={entity.sentiment_score}
+                    sentiment={entity.classification}
+                  />
+                </Box>
+                <Typography
+                  variant="subtitle1"
+                  sx={{ color: "text.primary", fontWeight: "bold" }}
+                >
+                  {entity.name}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                  }}
+                >
+                  {entity.summary}
+                </Typography>
+              </Stack>
+            </MuiLink>
+          </TableCell>
+        </TableRow>
+      ))}
+    </TableBody>
+  );
+
+  return (
+    <Container maxWidth={false} sx={{ p: 2 }}>
+      <SearchTable
+        data={entityData}
+        loading={loading}
+        totalPages={totalPages}
+        currentPage={currentPage}
+        onPageChange={handlePageChange}
+        onSearchChange={handleSearchChange}
+        onSortChange={handleSortChange}
+        onFilterChange={handleFilterChange}
+        searchTerm={searchTerm}
+        sortOrder={sortOrder}
+        filterOperator={filterOperator}
+        filterValue={filterValue}
+        searchPlaceholder="Search entities by name, ticker, or summary..."
+        sortOptions={sortOptions}
+        renderTableBody={renderEntitiesTableBody}
+        itemsPerPage={entitiesPerPage}
+        entityType="entities"
+        enableAdvancedFilter={true}
+        timePeriod={timePeriod}
+        onTimePeriodChange={handleTimePeriodChange}
+      />
     </Container>
   );
 };

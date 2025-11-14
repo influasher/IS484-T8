@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentifinance-service
+  labels:
+    app: sentifinance-backend
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 5001
+    protocol: TCP
+    name: http
+  selector:
+    app: sentifinance-backend
+---

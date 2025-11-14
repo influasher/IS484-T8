@@ -12,6 +12,8 @@ venv/
 # Environment variables and secrets
 .env
 *.env
+Backend/jobs/.env
+Backend/jobs/.env.test
 
 # IDEs and Editors
 .vscode/
@@ -59,4 +61,6 @@ data/
 Thumbs.db
 yfinance.cache
 Backend/app/test_summarisation.py
-Backend/migrations/liquibase.properties
+liquibase.properties
+Backend/old_migrations/liquibase.properties
+Backend/old_migrations/liquibase.properties

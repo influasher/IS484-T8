@@ -1,7 +1,10 @@
+import uuid
+from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from app import db
 
+
 class Entity(db.Model):
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = db.Column(db.String(100), nullable=False, unique=True)
     ticker = db.Column(db.String(20), nullable=True)
     summary = db.Column(db.Text, nullable=True)
@@ -13,6 +16,11 @@ class Entity(db.Model):
     time_decay = db.Column(db.Float, nullable=True)
     simple_average = db.Column(db.Float, nullable=True)
     classification = db.Column(db.String(50), nullable=True)
+    asset_type = db.Column(db.String(20), nullable=True)
+    sector = db.Column(
+        ARRAY(db.String), nullable=True
+    )
+
 
     def __repr__(self):
         return f"<Entity {self.name}>"

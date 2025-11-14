@@ -1,0 +1,89 @@
+# Multi-stage build for News Processing Job
+# Includes ALL heavy dependencies: crawl4ai, playwright, spaCy, FinBERT
+
+FROM python:3.11-slim as base
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install UV for fast package management
+# The install script adds UV to ~/.cargo/bin, ensure PATH is set correctly
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
+
+WORKDIR /app
+
+# ============================================
+# Stage 1: Install Python dependencies
+# ============================================
+FROM base as dependencies
+
+# Copy dependency files
+COPY jobs/pyproject.toml /app/jobs/pyproject.toml
+
+# Install Python packages with UV (much faster than pip)
+WORKDIR /app/jobs
+RUN which uv && uv pip install --system -e .
+
+# Install Playwright browsers (required for crawl4ai)
+RUN playwright install chromium
+RUN playwright install-deps chromium
+
+# Download spaCy model (en_core_web_trf - ~500-800MB)
+# Direct download via pip/uv for better caching
+RUN uv pip install --system \
+    https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.7.0/en_core_web_trf-3.7.0-py3-none-any.whl
+
+# ============================================
+# Stage 2: Runtime image
+# ============================================
+FROM base as runtime
+
+# Copy installed packages from dependencies stage
+COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=dependencies /usr/local/bin /usr/local/bin
+COPY --from=dependencies /root/.cache/ms-playwright /root/.cache/ms-playwright
+
+# Install playwright system dependencies in runtime
+RUN playwright install-deps chromium || apt-get update && apt-get install -y \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy application code
+COPY app/ /app/app/
+COPY jobs/ /app/jobs/
+COPY run.py /app/
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV FLASK_ENV=production
+
+# Default configuration (can be overridden by Kubernetes)
+ENV LOOKBACK_DAYS=2
+ENV MAX_ARTICLES=""
+
+# Health check (job will exit after completion, so this is informational)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)"
+
+# Run the job
+CMD ["python", "-u", "/app/jobs/news_processing_job.py"]

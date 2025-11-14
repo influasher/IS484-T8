@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "backend"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "pip",
+    "azure-communication-email>=1.0.0",
+    "coverage>=7.0.0",
+    # Heavy ML dependencies removed - now in news-processor microservice only:
+    # - crawl4ai (web scraping with Playwright)
+    # - playwright (browser automation)
+    # - spacy, spacy-transformers, en-core-web-trf (NLP models)
+    # - torch, torchaudio, torchvision (PyTorch ML framework)
+    # - transformers (HuggingFace models including FinBERT)
+    # - shap (model explainability)
+    "fake-useragent>=2.2.0",
+    "finvizfinance>=1.1.1",
+    "flask==3.1.0",
+    "flask-cors==5.0.0",
+    "flask-jwt-extended==4.7.1",
+    "flask-mail>=0.10.0",
+    "flask-migrate==4.0.7",
+    "flask-sqlalchemy==3.1.1",
+    "flask-testing==0.8.1",
+    "gunicorn>=23.0.0",
+    "fpdf>=1.7.2",
+    "gnews==0.3.9",
+    "google-genai>=0.3.0",
+    "googlenewsdecoder==0.1.6",
+    "lxml-html-clean>=0.4.2",
+    "lxml[html-clean]>=5.4.0",
+    "matplotlib>=3.10.6",
+    "newspaper4k>=0.9.3.1",
+    "nltk==3.9.1",
+    "numpy==1.26.4",
+    "pandas>=2.3.2",
+    "psycopg2-binary==2.9.10",
+    "python-dotenv==1.0.1",
+    "rapidfuzz>=3.14.0",
+    "requests==2.32.3",
+    "requests-cache>=1.2.1",
+    "validators==0.34.0",
+    "yfinance[nospam]>=0.2.65",
+    "azure-storage-blob>=12.27.0",
+    "azure-core>=1.35.1",
+    "shap==0.48.0",
+    "crawl4ai>=0.7.6",
+    "playwright>=1.55.0",
+    "transformers>=4.57.1",
+    "torch>=2.9.0",
+    "torchvision>=0.24.0",
+    "spacy>=3.8.8",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.4",
+    "pytest-flask==1.3.0",
+    "coverage==7.6.9",
+    "black>=22.0.0",
+    "flake8>=5.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.coverage.run]
+source = ["./"]
+omit = [
+    "tests/*",
+    "venv/*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]

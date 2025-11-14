@@ -1,0 +1,42 @@
+## Database Migrations
+
+We are using `Flask-Migrate` to manage our database migrations, this will help version our database schema as our development progresses. However, this involves steps to ensure changes in schema is reflected in our codebase.
+
+**NOTE:** `Flask-Migrate` compares between the current database schema and existing models in the codebase to determine differences and generate migrations. This information is crucial for developeres as changes to database (even in development) must be done through migrations or some changes might not be reflected if done incorrectly.
+
+
+**NOTE:** `alembic` is unable to detect all changes, please take note of these [here](https://alembic.sqlalchemy.org/en/latest/autogenerate.html#what-does-autogenerate-detect-and-what-does-it-not-detect)
+
+### View Current Version
+
+```bash
+flask db current
+```
+
+### Update to Latest Version
+
+Run the following command to upgrade the database to the latest version.
+```bash
+flask db upgrade
+```
+
+### Generate New Migration
+
+The following command generates a new migration based on the difference **between the database schema and models**. Do not you have to run the upgade command to apply the migration.
+```bash
+flask db migrate -m "<message>"
+```
+
+#### Generate a blank migration
+
+The above command only works if a difference has been found. If you require an empty migration file (e.g. alembic fails to find one), you can generate an empty one with the following command
+```bash
+flask db revision
+```
+
+### Downgrade to a Specific Version
+
+```bash
+flask db downgrade               # Rollback to the previous version
+flask db downgrade <version_id>  # Rollback to a specific version
+``` 

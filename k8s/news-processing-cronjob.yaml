@@ -1,0 +1,312 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: news-processor
+  namespace: sentifinance
+  labels:
+    app: news-processor
+    component: batch-job
+spec:
+  # Schedule: Every 2 days at 2 AM UTC
+  # Format: minute hour day-of-month month day-of-week
+  # "0 2 */2 * *" = At 02:00 on every 2nd day
+  schedule: "0 2 */2 * *"
+  
+  # Timezone (optional, defaults to UTC)
+  # timeZone: "Asia/Singapore"
+  
+  # Keep last 3 successful and 1 failed job for debugging
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  
+  # Start deadline - if job doesn't start within 6 hours, skip it
+  startingDeadlineSeconds: 21600
+  
+  # Concurrency policy - don't run multiple instances simultaneously
+  concurrencyPolicy: Forbid
+  
+  jobTemplate:
+    metadata:
+      labels:
+        app: news-processor
+        component: batch-job
+    spec:
+      # Job will be marked as failed if not completed within 4 hours
+      activeDeadlineSeconds: 14400
+
+      # Retry failed jobs up to 2 times with exponential backoff
+      # This handles transient failures (API rate limits, network issues)
+      backoffLimit: 2
+
+      # Clean up completed jobs after 3 days (increased for debugging)
+      ttlSecondsAfterFinished: 259200
+      
+      template:
+        metadata:
+          labels:
+            app: news-processor
+            component: batch-job
+          annotations:
+            # ACI-specific annotations for spot instances and configuration
+            # Docs: https://learn.microsoft.com/en-us/azure/container-instances/container-instances-spot-containers
+
+            # Use spot instances for cost savings (up to 70% cheaper)
+            # Suitable for batch jobs that can tolerate interruption and retry
+            virtual-kubelet.io/sku-name: "Standard"
+            virtual-kubelet.io/burst-priority: "spot"
+
+            # Restart policy for pod failures
+            virtual-kubelet.io/restart-policy: "Never"
+
+            # Log analytics integration (requires workspace configured)
+            # Uncomment and configure these after setting up Log Analytics workspace
+            # virtual-kubelet.io/log-analytics-workspace-id: "<WORKSPACE_ID>"
+            # virtual-kubelet.io/log-analytics-workspace-key: "<WORKSPACE_KEY>"
+        spec:
+          restartPolicy: Never
+
+          # Use service account with database access
+          serviceAccountName: default
+
+          # Deploy to Azure Container Instances (virtual node) for on-demand capacity
+          # Using spot instances for cost optimization (up to 70% cheaper)
+          nodeSelector:
+            kubernetes.io/role: agent
+            type: virtual-kubelet
+            kubernetes.io/os: linux
+
+          tolerations:
+          - key: virtual-kubelet.io/provider
+            operator: Exists
+          - key: azure.com/aci
+            effect: NoSchedule
+          
+          containers:
+          - name: news-processor
+            image: sentifinancetwo.azurecr.io/news-processor:latest
+            imagePullPolicy: Always
+            
+            # Resource limits optimized for ML workload
+            # Models loaded: spaCy (800MB), FinBERT (400MB), Playwright (300MB)
+            # Estimated total: ~2.5GB base + 1.5GB processing = 4GB
+            resources:
+              requests:
+                memory: "3Gi"      # Reduced from 4Gi - saves cost
+                cpu: "1000m"       # 1 vCPU
+              limits:
+                memory: "5Gi"      # Reduced from 6Gi - sufficient headroom
+                cpu: "2000m"       # 2 vCPU for parallel processing
+            
+            # Environment variables
+            env:
+            - name: FLASK_ENV
+              value: "production"
+
+            - name: LOOKBACK_DAYS
+              value: "2"
+
+            # Logging configuration
+            - name: LOG_LEVEL
+              value: "INFO"
+
+            - name: PYTHONUNBUFFERED
+              value: "1"
+
+            # Optional: Limit max articles per run for cost control
+            # Uncomment to enable throttling (useful for testing or cost limits)
+            # - name: MAX_ARTICLES
+            #   value: "100"
+            
+            # Database configuration (from secrets)
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: database-url
+            
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: db-host
+            
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: db-port
+            
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: db-name
+            
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: db-user
+            
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: db-password
+            
+            # API Keys for sentiment analysis
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: openai-api-key
+
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: gemini-api-key
+
+            # Azure Storage for SHAP HTML uploads
+            - name: AZURE_STORAGE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: azure-storage-connection-string
+
+            # Additional configuration from ConfigMap
+            envFrom:
+            - configMapRef:
+                name: sentifinance-config
+                optional: true
+            
+            # Logging
+            volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+          
+          volumes:
+          - name: logs
+            emptyDir: {}
+          
+          # Image pull secret for ACR
+          imagePullSecrets:
+          - name: acr-secret
+
+---
+# Optional: Manual Job for testing (run immediately)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: news-processor-manual
+  namespace: sentifinance
+  labels:
+    app: news-processor
+    component: batch-job
+    type: manual
+spec:
+  activeDeadlineSeconds: 14400
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  
+  template:
+    metadata:
+      labels:
+        app: news-processor
+        component: batch-job
+        type: manual
+    spec:
+      restartPolicy: Never
+      serviceAccountName: default
+      
+      # Deploy to Azure Container Instances (virtual node) for on-demand capacity
+      nodeSelector:
+        kubernetes.io/role: agent
+        type: virtual-kubelet
+      
+      tolerations:
+      - key: virtual-kubelet.io/provider
+        operator: Exists
+      - key: azure.com/aci
+        effect: NoSchedule
+      
+      containers:
+      - name: news-processor
+        image: sentifinancetwo.azurecr.io/news-processor:latest
+        imagePullPolicy: Always
+        
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1000m"
+          limits:
+            memory: "6Gi"
+            cpu: "2000m"
+        
+        env:
+        - name: FLASK_ENV
+          value: "production"
+        - name: LOOKBACK_DAYS
+          value: "2"
+        - name: MAX_ARTICLES
+          value: "10"  # Limit for testing
+        
+        # Database configuration
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: database-url
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: db-host
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: db-port
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: db-name
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: db-user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: db-password
+        
+        # API Keys
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: openai-api-key
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: gemini-api-key
+
+        # Azure Storage for SHAP HTML uploads
+        - name: AZURE_STORAGE_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: azure-storage-connection-string
+
+        envFrom:
+        - configMapRef:
+            name: sentifinance-config
+            optional: true
+      
+      imagePullSecrets:
+      - name: acr-secret

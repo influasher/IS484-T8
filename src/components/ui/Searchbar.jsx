@@ -1,55 +1,100 @@
 import React from 'react';
-import { FaSearch } from 'react-icons/fa';
+import Paper from "@mui/material/Paper";
+import InputBase from "@mui/material/InputBase";
+import Divider from "@mui/material/Divider";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 
-const SearchBar = ({ searchTerm, onSearchChange }) => {
-  const handleSearchChange = (event) => {
-    const term = event.target.value;
-    onSearchChange(term); // Notify the parent component about the change
+export const Searchbar = ({
+  value,
+  onChange = () => {},
+  onSubmit,
+  placeholder = "Search…",
+  disabled,
+  width = 300,
+  onClear,
+  autoFocus=false,
+  sx,
+}) => {
+  const inputRef = React.useRef(null);
+  const isSubmitFn = typeof onSubmit === "function";
+  
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && isSubmitFn) {
+      e.preventDefault();
+      onSubmit(value);
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      handleClear();
+    }
+  };
+
+  const handleChange = (e) => {
+    onChange(e.target.value);
+  };
+
+  const handleSubmit = (e) => {
+    if (!isSubmitFn) return;
+    e.preventDefault();
+    onSubmit(value);
+  };
+
+  const handleClear = () => {
+    if (onClear) onClear();
+    else onChange("");
   };
 
   return (
-    <div style={styles.searchBar}>
-      <div style={styles.iconSearch}><FaSearch /></div>
-      <input
-        type="text"
-        value={searchTerm} // Use the searchTerm passed from parent
-        onChange={handleSearchChange} // Call the parent callback when the input changes
-        placeholder="Search News..."
-        style={styles.input}
+    <Paper
+      component="form"
+      elevation={0}
+      onSubmit={handleSubmit}
+      role="search"
+      sx={{
+        width,
+        px: 1.5,
+        py: 0.3,
+        display: "flex",
+        alignItems: "center",
+        gap: 1,
+        borderRadius: "9999px",
+        bgcolor: "white",
+        border: 1,
+        borderColor: "divider",
+        "&:focus-within": {
+          boxShadow: (theme) => `0 0 0 3px ${theme.palette.primary.main}33`,
+        },
+      }}
+    >
+      <SearchRoundedIcon sx={{ fontSize: 22, opacity: 0.7 }} />
+
+      <InputBase
+        inputRef={inputRef}
+        value={value}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        autoFocus={autoFocus}
+        placeholder={placeholder}
+        inputProps={{ "aria-label": placeholder }}
+        disabled={disabled}
+        sx={{ flex: 1 }}
       />
-    </div>
+
+      <Tooltip title="Clear (Esc)">
+        <IconButton
+          size="small"
+          aria-label="Clear search"
+          onClick={handleClear}
+          disabled={disabled}
+        >
+          <CloseRoundedIcon />
+        </IconButton>
+      </Tooltip>
+    </Paper>
   );
 };
 
-const styles = {
-  searchBar: {
-    display: 'flex',
-    alignItems: 'center',
-    border: '1px solid #ccc',
-    borderRadius: '10px',
-    padding: '2px', // Adjusted padding for better responsiveness
-    backgroundColor: '#fff',
-    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-    width: '100%', // Take up full width of the parent column
-    maxWidth: 'none', // Remove max-width restriction
-    height: 'auto', // Allow height to adjust dynamically
-    boxSizing: 'border-box', // Ensures padding and border are included in width
-  },
-  iconSearch: {
-    fontSize: 'calc(1rem + 1vw)', // Dynamic font size for responsiveness
-    color: '#ccc',
-    marginLeft: '8px', // Added margin to separate from input
-    marginBottom: '5px', // Adjusted margin for better alignment
-  },
-  input: {
-    border: 'none',
-    outline: 'none',
-    fontSize: 'calc(0.9rem + 0.5vw)', // Dynamic font size for responsiveness
-    color: '#333',
-    flex: 1, // Allow input to grow and take available space
-    padding: '0 8px', // Added padding for better spacing
-    minWidth: '100px', // Minimum width for smaller screens
-  },
-};
-
-export default SearchBar;
+export default Searchbar;

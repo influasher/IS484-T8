@@ -1,0 +1,326 @@
+name: Deploy to Azure Kubernetes (K8s)
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: 'Skip Docker build and reuse existing image?'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      image_tag:
+        description: 'Image tag to use if skipping build (e.g., latest, abc123)'
+        required: false
+        default: 'latest'
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - staging
+  push:
+    branches:
+      - dev  # Only deploy from dev branch
+
+jobs:
+  deploy:
+    # Run when pushing to dev OR manual dispatch (removed workflow_run trigger)
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/dev') || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    needs: []
+    
+    steps:
+    - name: Ensure upstream CI succeeded (guard)
+      if: ${{ github.event_name == 'workflow_run' }}
+      run: |
+        echo "Upstream CI workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
+        if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+          echo "Upstream CI did not succeed. Aborting CD.";
+          exit 1;
+        fi
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: dev  # Explicitly checkout dev branch
+        fetch-depth: 0
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Login to Azure Container Registry
+      uses: azure/docker-login@v1
+      with:
+        login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+    
+    - name: Determine if build is needed
+      id: check_build
+      run: |
+        echo "🔍 Analyzing what needs to be built..."
+
+        # Manual workflow_dispatch can control build behavior
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ inputs.skip_build }}" == "true" ]]; then
+            echo "skip_build=true" >> $GITHUB_OUTPUT
+            echo "skip_news_processor_build=true" >> $GITHUB_OUTPUT
+            echo "skip_frontend=true" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+            echo "⏭️  Manual run: Skipping build, using image tag: ${{ inputs.image_tag }}"
+            exit 0
+          else
+            # Force build when skip_build=false
+            echo "skip_build=false" >> $GITHUB_OUTPUT
+            echo "skip_news_processor_build=false" >> $GITHUB_OUTPUT
+            echo "skip_frontend=false" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "k8s_changed=0" >> $GITHUB_OUTPUT
+            echo "🔨 Manual run: Force building all components"
+            exit 0
+          fi
+        fi
+
+        # Auto-detect changes for push events
+        CHANGED_FILES=$(git diff HEAD~1 --name-only || echo "")
+
+        # Count changes (use grep -c which always returns a number, then trim whitespace)
+        # Separate backend API changes from news-processor changes
+        BACKEND_API_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^Backend/(app|run\.py|Dockerfile|pyproject\.toml|uv\.lock)" | wc -l | tr -d ' ')
+        NEWS_PROCESSOR_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^Backend/(jobs|Dockerfile\.news-processor)" | wc -l | tr -d ' ')
+        FRONTEND_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^(src/|public/|package\.json|package-lock\.json)" | wc -l | tr -d ' ')
+        K8S_CHANGED=$(echo "$CHANGED_FILES" | grep "^k8s/" | wc -l | tr -d ' ')
+
+        # Ensure variables are integers (default to 0 if empty)
+        BACKEND_API_CHANGED=${BACKEND_API_CHANGED:-0}
+        NEWS_PROCESSOR_CHANGED=${NEWS_PROCESSOR_CHANGED:-0}
+        FRONTEND_CHANGED=${FRONTEND_CHANGED:-0}
+        K8S_CHANGED=${K8S_CHANGED:-0}
+
+        echo "📊 Change Detection:"
+        echo "  Backend API changed: $BACKEND_API_CHANGED files"
+        echo "  News Processor changed: $NEWS_PROCESSOR_CHANGED files"
+        echo "  Frontend changed: $FRONTEND_CHANGED files"
+        echo "  K8s manifests changed: $K8S_CHANGED files"
+
+        # Determine if backend API needs rebuild
+        if [[ "$BACKEND_API_CHANGED" -gt 0 ]]; then
+          echo "skip_build=false" >> $GITHUB_OUTPUT
+          echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "🔨 Backend API changed - will build new Docker image"
+        else
+          echo "skip_build=true" >> $GITHUB_OUTPUT
+          echo "image_tag=latest" >> $GITHUB_OUTPUT
+          echo "⏭️  No Backend API changes - reusing existing :latest image (saves ~3-4 min)"
+        fi
+
+        # Determine if news-processor needs rebuild (independent from backend API)
+        if [[ "$NEWS_PROCESSOR_CHANGED" -gt 0 ]]; then
+          echo "skip_news_processor_build=false" >> $GITHUB_OUTPUT
+          echo "🔨 News Processor changed - will build new Docker image (saves ~8-10 min if skipped)"
+        else
+          echo "skip_news_processor_build=true" >> $GITHUB_OUTPUT
+          echo "⏭️  No News Processor changes - reusing existing :latest image (saves ~8-10 min)"
+        fi
+
+        # Determine if frontend needs rebuild
+        # Note: Frontend must be built whenever backend is built (since it's bundled in the Docker image)
+        if [[ "$FRONTEND_CHANGED" -gt 0 ]] || [[ "$BACKEND_API_CHANGED" -gt 0 ]]; then
+          echo "skip_frontend=false" >> $GITHUB_OUTPUT
+          echo "🔨 Frontend will be built (changed or needed for backend Docker image)"
+        else
+          echo "skip_frontend=true" >> $GITHUB_OUTPUT
+          echo "⏭️  No Frontend or Backend changes - skipping frontend build (saves ~2-3 min)"
+        fi
+
+        echo "k8s_changed=$K8S_CHANGED" >> $GITHUB_OUTPUT
+    
+    - name: Set up Node.js for frontend build
+      if: steps.check_build.outputs.skip_frontend == 'false'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Build frontend for production
+      if: steps.check_build.outputs.skip_frontend == 'false'
+      env:
+        REACT_APP_API_BASE_URL: http://${{ secrets.AKS_LOADBALANCER_IP }}
+        REACT_APP_ENV: production
+      run: |
+        echo "🔨 Building frontend..."
+        npm ci
+        npm run build
+    
+    - name: Build and push Docker image (Backend)
+      if: steps.check_build.outputs.skip_build == 'false'
+      run: |
+        echo "🔨 Building Docker image for Backend..."
+        # Copy frontend build into Backend directory for Docker context
+        if [ -d "build" ]; then
+          echo "📦 Copying frontend build to Backend/frontend-build..."
+          cp -r build Backend/frontend-build
+        else
+          echo "⚠️  Frontend build not found - backend will serve error page"
+          mkdir -p Backend/frontend-build
+        fi
+        cd Backend
+        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }} .
+        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest .
+        echo "📤 Pushing images to ACR..."
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:${{ github.sha }}
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:latest
+        echo "✅ Docker build and push complete"
+    
+    # News Processor build temporarily disabled due to disk space constraints on GitHub Actions
+    # The News Processor image is ~1.5GB (Playwright + Chromium + spaCy models)
+    # Build separately on a machine with more resources when needed
+
+    # - name: Free up disk space before News Processor build
+    #   if: steps.check_build.outputs.skip_news_processor_build == 'false'
+    #   run: |
+    #     echo "🧹 Cleaning up disk space before large News Processor build..."
+    #     docker system prune -af --volumes
+    #     df -h
+
+    # - name: Build and push Docker image (News Processor)
+    #   if: steps.check_build.outputs.skip_news_processor_build == 'false'
+    #   continue-on-error: true
+    #   run: |
+    #     echo "🔨 Building Docker image for News Processor..."
+    #     cd Backend
+    #     # Build once and tag twice to save space
+    #     docker build -f Dockerfile.news-processor -t ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:${{ github.sha }} .
+    #     docker tag ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:latest
+    #     echo "📤 Pushing images to ACR..."
+    #     docker push ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:${{ github.sha }}
+    #     docker push ${{ secrets.ACR_LOGIN_SERVER }}/news-processor:latest
+    #     echo "✅ News Processor Docker build and push complete"
+    
+    - name: Verify existing image in ACR
+      if: steps.check_build.outputs.skip_build == 'true'
+      run: |
+        echo "✅ Skipping Docker build - verifying existing image..."
+        IMAGE_TAG="${{ steps.check_build.outputs.image_tag }}"
+        echo "Checking if image exists: ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:$IMAGE_TAG"
+        
+        # Try to pull the image to verify it exists
+        if docker pull ${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:$IMAGE_TAG; then
+          echo "✅ Image verified: $IMAGE_TAG"
+        else
+          echo "❌ Error: Image not found in ACR"
+          echo "Available tags:"
+          az acr repository show-tags --name $(echo "${{ secrets.ACR_LOGIN_SERVER }}" | cut -d'.' -f1) \
+            --repository sentifinance-backend --orderby time_desc --output table | head -10
+          exit 1
+        fi
+    
+    - name: Create Kubernetes secrets from GitHub Actions
+      run: |
+        # Get AKS credentials
+        az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
+        
+        # Create or update secrets from GitHub Actions secrets
+        kubectl create secret generic sentifinance-secrets \
+          --from-literal=secret-key="${{ secrets.SECRET_KEY }}" \
+          --from-literal=database-uri="${{ secrets.DATABASE_URI }}" \
+          --from-literal=database-url="${{ secrets.DATABASE_URL }}" \
+          --from-literal=db-host="${{ secrets.DB_HOST }}" \
+          --from-literal=db-port="${{ secrets.DB_PORT }}" \
+          --from-literal=db-name="${{ secrets.DB_NAME }}" \
+          --from-literal=db-user="${{ secrets.DB_USER }}" \
+          --from-literal=db-password="${{ secrets.DB_PASSWORD }}" \
+          --from-literal=jwt-secret-key="${{ secrets.JWT_SECRET_KEY }}" \
+          --from-literal=gemini-api-key="${{ secrets.GEMINI_API_KEY }}" \
+          --from-literal=gemini-api-key-sw="${{ secrets.GEMINI_API_KEY_SW }}" \
+          --from-literal=openai-api-key="${{ secrets.OPENAI_API_KEY }}" \
+          --from-literal=mail-username="${{ secrets.MAIL_USERNAME }}" \
+          --from-literal=mail-password="${{ secrets.MAIL_PASSWORD }}" \
+          --from-literal=azure-communication-connection-string="${{ secrets.AZURE_COMMUNICATION_CONNECTION_STRING }}" \
+          --from-literal=azure-email-sender="${{ secrets.AZURE_EMAIL_SENDER }}" \
+          --from-literal=azure-storage-connection-string="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
+          --namespace=sentifinance --dry-run=client -o yaml | kubectl apply -f -
+    
+    - name: Deploy to AKS (Hybrid Approach)
+      run: |
+        IMAGE_TAG="${{ steps.check_build.outputs.image_tag }}"
+        K8S_CHANGED="${{ steps.check_build.outputs.k8s_changed }}"
+        SKIP_BUILD="${{ steps.check_build.outputs.skip_build }}"
+        
+        echo "🚀 Deploying to AKS"
+        echo "  Image tag: $IMAGE_TAG"
+        echo "  K8s changed: $K8S_CHANGED files"
+        echo "  Skip build: $SKIP_BUILD"
+        
+        if [[ "$K8S_CHANGED" -gt 0 ]]; then
+          echo "🔧 K8s configuration changes detected - applying full manifests"
+          for file in k8s/*.yaml; do
+            if [[ "$(basename "$file")" != "kustomization.yaml" ]]; then
+              echo "Applying $file..."
+              kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
+            fi
+          done
+        elif [[ "$SKIP_BUILD" == "false" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "⚡ Code or manual deployment - using fast image update"
+          kubectl set image deployment/sentifinance-backend \
+            sentifinance-backend=${{ secrets.ACR_LOGIN_SERVER }}/sentifinance-backend:$IMAGE_TAG \
+            --namespace=sentifinance \
+            || echo "Deployment not found, falling back to full apply..."
+          
+          # Update News Processor CronJob image
+          echo "⚡ Updating News Processor CronJob image..."
+          kubectl set image cronjob/news-processor \
+            news-processor=${{ secrets.ACR_LOGIN_SERVER }}/news-processor:$IMAGE_TAG \
+            --namespace=sentifinance \
+            || echo "CronJob not found, will be created with full apply"
+          
+          # Fallback: If deployment doesn't exist, apply manifests
+          if ! kubectl get deployment sentifinance-backend --namespace=sentifinance > /dev/null 2>&1; then
+            echo "📦 Deployment not found - applying manifests for first-time setup"
+            for file in k8s/*.yaml; do
+              if [[ "$(basename "$file")" != "kustomization.yaml" ]]; then
+                kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
+              fi
+            done
+          fi
+        else
+          echo "❓ No relevant changes detected - applying full manifests to be safe"
+          for file in k8s/*.yaml; do
+            if [[ "$(basename "$file")" != "kustomization.yaml" ]]; then
+              kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
+            fi
+          done
+        fi
+    
+    - name: Health Check
+      run: |
+        echo "Waiting for deployment to be ready..."
+        kubectl rollout status deployment/sentifinance-backend --namespace=sentifinance --timeout=300s  # 5 minutes - much faster with lazy loading
+        
+        # Get service URL (adjust based on your service type)
+        SERVICE_IP=$(kubectl get service sentifinance-service --namespace=sentifinance -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
+        
+        if [ "$SERVICE_IP" != "pending" ] && [ "$SERVICE_IP" != "" ]; then
+          APP_URL="http://$SERVICE_IP"
+          echo "✅ App should be available at: $APP_URL"
+          
+          # Health check with retry
+          for i in {1..5}; do
+            echo "Health check attempt $i..."
+            if curl -f --max-time 30 "$APP_URL/" > /dev/null 2>&1; then
+              echo "✅ Health check passed! App is running at $APP_URL"
+              break
+            else
+              echo "❌ Health check failed, retrying in 10 seconds..."
+              sleep 10
+            fi
+          done
+        else
+          echo "⏳ LoadBalancer IP still pending, check kubectl get services"
+        fi

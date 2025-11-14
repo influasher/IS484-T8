@@ -1,57 +1,51 @@
 import React from 'react';
 import { formatSentimentClassification } from '../../utils/sentimentAnalysis';
-import { OverlayTrigger, Tooltip } from 'react-bootstrap';
+import Tooltip from '@mui/material/Tooltip';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Grid from '@mui/material/Grid';
+import Chip from '@mui/material/Chip';
 
 const SentimentScore = ({ 
   score, 
   sentiment, 
-  confidence, 
   finbertScore,
   secondModelScore, 
   showDetails = false 
 }) => {
   if (!score && score !== 0) {
     return (
-      <div
-        style={{
-          backgroundColor: '#808080',
-          borderRadius: '15px',
-          padding: '5px 15px',
-          color: 'white',
-          fontSize: 'calc(1px + 1vw)',
-          fontWeight: 'bold',
-        }}
-      >
-        No score found
-      </div>
+      <Grid container spacing={1} alignItems="center" justifyContent="flex-end">
+        <Grid item>
+          <Chip
+            label="No Score Found"
+            variant="outlined"
+            sx={{
+              fontSize: "0.8rem",
+              fontWeight: 500,
+              borderRadius: "8px",
+              borderColor: "default",
+              color: "default",
+              backgroundColor: "transparent",
+            }}
+          />
+        </Grid>
+      </Grid>
     );
   }
 
-  // Format the sentiment for display (capitalize first letter)
   const formattedSentiment = formatSentimentClassification(sentiment || 'neutral');
-  console.log(formattedSentiment)
-  // Get background color based on sentiment
-  const getBackgroundColor = (sentiment) => {
-    switch (sentiment?.toLowerCase()) {
-      case 'positive':
-      case 'bullish':
-        return '#28a745'; // Green
-      case 'negative':
-      case 'bearish':
-        return '#dc3545'; // Red
-      case 'neutral':
-        return '#ffc107'; // Yellow
-      default:
-        return '#6c757d'; // Default to grey for unknown sentiment
-    }
-  }; 
-  const bgColor = getBackgroundColor(sentiment);
- 
-  // Normalize score to be between -100 and 100
+  console.log(formattedSentiment);
+
+  const getColor = (score) => {
+    if (score > 0) return 'success';
+    if (score < 0) return 'error';
+    return 'default';
+  };
+
   const displayScore = typeof score === 'number' ? 
     (score > -100 && score < 100) ? score : (score > 0 ? 100 : -100) : 0;
 
-  // Tooltip content
   const getTooltipContent = () => {
     if (sentiment?.toLowerCase() === 'positive' || sentiment?.toLowerCase() === 'bullish') {
       return "Positive sentiment indicates favorable news or outlook for this entity";
@@ -62,59 +56,56 @@ const SentimentScore = ({
     }
   };
 
+  const chipData = [
+    {
+      label: `${displayScore.toFixed(1)} (${formattedSentiment})`,
+      tooltip: getTooltipContent(),
+      value: displayScore,
+    }
+  ];
+
+  // Add additional chips if showDetails is true
+  if (showDetails) {
+    if (finbertScore) {
+      chipData.push({
+        label: `FinBERT: ${finbertScore.toFixed(1)}`,
+        tooltip: "Financial BERT model score",
+        value: finbertScore,
+      });
+    }
+    
+    if (secondModelScore) {
+      chipData.push({
+        label: `Second Model: ${secondModelScore.toFixed(1)}`,
+        tooltip: "Second NLP model score",
+        value: secondModelScore,
+      });
+    }
+  }
+
   return (
-    <div className="sentiment-score-container">
-      <OverlayTrigger
-        placement="top"
-        overlay={<Tooltip id={`sentiment-tooltip-${displayScore}`}>{getTooltipContent()}</Tooltip>}
-      >
-        <div
-          style={{
-            backgroundColor: bgColor,
-            borderRadius: '15px',
-            padding: '5px 15px',
-            color: 'white',
-            fontSize: 'calc(1px + 1vw)',
-            fontWeight: 'bold',
-            display: 'inline-block',
-            cursor: 'pointer',
-          }}
-        >
-          {displayScore.toFixed(1)} ({formattedSentiment})
-        </div>
-      </OverlayTrigger>
-      
-      {showDetails && (
-        <div className="sentiment-details mt-2 text-sm">
-          {confidence && (
-            <OverlayTrigger
-              placement="top"
-              overlay={<Tooltip id="confidence-tooltip">Higher confidence indicates more reliable sentiment analysis</Tooltip>}
-            >
-              <div className="sentiment-confidence">
-                <small className="text-muted" style={{ cursor: 'pointer' }}>
-                  Confidence: {(confidence * 100).toFixed(0)}%
-                </small>
-              </div>
-            </OverlayTrigger>
-          )}
-          
-          {finbertScore && secondModelScore && (
-            <OverlayTrigger
-              placement="top"
-              overlay={<Tooltip id="models-tooltip">Scores from different NLP models used in sentiment analysis</Tooltip>}
-            >
-              <div className="model-scores mt-1">
-                <small className="text-muted" style={{ cursor: 'pointer' }}>
-                  FinBERT: {finbertScore.toFixed(1)} | 
-                  Second Model: {secondModelScore.toFixed(1)}
-                </small>
-              </div>
-            </OverlayTrigger>
-          )}
-        </div>
-      )}
-    </div>
+    <Box className="sentiment-score-container">
+      <Grid container spacing={1} alignItems="center" justifyContent="flex-end">
+        {chipData.map((chip, i) => (
+          <Grid item key={i}>
+            <Tooltip title={chip.tooltip} arrow>
+              <Chip
+                label={chip.label}
+                variant="outlined"
+                sx={{
+                  fontSize: "0.8rem",
+                  fontWeight: 500,
+                  borderRadius: "8px",
+                  borderColor: getColor(chip.value),
+                  color: getColor(chip.value),
+                  backgroundColor: "transparent",
+                }}
+              />
+            </Tooltip>
+          </Grid>
+        ))}
+      </Grid>
+    </Box>
   );
 };
 

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { FaDownload } from 'react-icons/fa'; // Import download icon
 import { postDataBlob } from '../../services/api';
+import DownloadIcon from '@mui/icons-material/Download';
+import { Button } from '@mui/material';
+
 
 const ReportButton = ({ EntityName }) => {
   const [loading, setLoading] = useState(false);
@@ -40,16 +43,15 @@ const ReportButton = ({ EntityName }) => {
 
   return (
     <>
-      {/* Button for downloading the report */}
-      <button
+      <Button 
+        variant="outlined" 
+        startIcon={<DownloadIcon />}
         onClick={generateReport}
-        disabled={loading}
-        style={styles.button}
-        title="Download Report"
+        loading={loading}
+        loadingPosition="start"
       >
-        {/* Displaying only the download icon */}
-        <FaDownload size={20} />
-      </button>
+        Download
+      </Button>
 
       {/* Conditional rendering of the popup */}
       {showPopup && (

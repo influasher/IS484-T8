@@ -1,40 +1,62 @@
-import { Pie } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
-import { useLocation } from 'react-router-dom';
-import useFetch from '../../hooks/useFetch';
+import { useLocation } from "react-router-dom";
+import useFetch from "../../hooks/useFetch";
+import { Box, Typography, CircularProgress } from "@mui/material";
+import { PieChart } from "@mui/x-charts/PieChart";
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-function PieChart({ key }) {
+function VoteChart({ fetchKey }) {
   const location = useLocation();
   const { id } = location.state || { id: null };
-  const { data, loading, error } = useFetch(`feedback/news/${id}`, { key });
 
-  // Fetch the agreement rate
-  const { data: agreementData } = useFetch(`/news/${id}`);  // Assuming a different endpoint
+  // Use the news ID directly - the backend will handle UUID string format
+  const { data, loading, error } = useFetch(`labeling/votes/news/${id}`, {
+    key: fetchKey,
+  });
+
+  // Fetch the agreement rate from news endpoint
+  const { data: agreementData } = useFetch(`/news/id/${id}`);
   const agreementScore = agreementData?.data?.agreement_rate;
-
-
 
   // Handle loading state
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        height="100%"
+      >
+        <CircularProgress />
+      </Box>
+    );
   }
 
-  // Handle error state
+  // Handle error or no data state
   if (error || !data || !data.data) {
-    return <div>Error fetching feedback data.</div>;
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        height="100%"
+      >
+        <Typography color="textSecondary">
+          No feedback data available
+        </Typography>
+      </Box>
+    );
   }
 
-  // Process feedbackData to count sentiments
-  const feedbackData = data.data;
+  const voteData = data.data;
   let bearishCount = 0,
     neutralCount = 0,
     bullishCount = 0;
 
-  feedbackData.forEach((item) => {
-    switch (item.assessment) {
+  voteData.forEach((item) => {
+    switch (item.vote) {
       case "bearish":
         bearishCount++;
         break;
@@ -49,45 +71,65 @@ function PieChart({ key }) {
     }
   });
 
-  // Calculate the total number of feedback entries
+  // Calculate the total number of votes
   const totalCount = bearishCount + neutralCount + bullishCount;
+  const chartData = [
+    { id: 0, value: bullishCount, label: "Bullish" },
+    { id: 1, value: neutralCount, label: "Neutral" },
+    { id: 2, value: bearishCount, label: "Bearish" },
+  ];
 
-  // Calculate percentages for each sentiment (out of 100)
-  const bearishPercentage = totalCount > 0 ? (bearishCount / totalCount) * 100 : 0;
-  // const neutralPercentage = totalCount > 0 ? (neutralCount / totalCount) * 100 : 0;
-  const bullishPercentage = totalCount > 0 ? (bullishCount / totalCount) * 100 : 0;
+  console.log("Chart Data:", chartData);
 
-  // Pie chart data
-  const chartData = {
-    labels: ["Bearish", "Bullish"],
-    datasets: [
-      {
-        data: [bearishPercentage, bullishPercentage], // Percentages for each segment
-        backgroundColor: ["red", "green"], // Colors for each segment
-        borderColor: "black", // Border color for all segments
-        borderWidth: 3, // Border width
-      },
-    ],
-  };
+  // Show message if no votes yet
+  if (totalCount === 0) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        height="100%"
+      >
+        <Typography color="textSecondary" fontStyle="italic">
+          No user feedback submitted yet
+        </Typography>
+      </Box>
+    );
+  }
 
-  // Options for the pie chart
+  // Calculate percentages
+  const bearishPercentage = (bearishCount / totalCount) * 100;
+  const neutralPercentage = (neutralCount / totalCount) * 100;
+  const bullishPercentage = (bullishCount / totalCount) * 100;
+
+  // // Pie chart data
+  // const chartData = {
+  //   labels: ["Bearish", "Neutral", "Bullish"],
+  //   datasets: [
+  //     {
+  //       data: [bearishPercentage, neutralPercentage, bullishPercentage],
+  //       backgroundColor: ["#dc3545", "#6c757d", "#28a745"],
+  //       borderColor: "black",
+  //       borderWidth: 3,
+  //     },
+  //   ],
+  // };
+
   const options = {
     responsive: true,
     plugins: {
       legend: {
-        position: "bottom", // Move the legend to the bottom
-        labels: {
-          font: {
-            size: 15, // Font size for legend labels
-          },
-        },
+        position: "bottom",
+        labels: { font: { size: 15 } },
       },
       tooltip: {
         callbacks: {
           label: (context) => {
             const label = context.label || "";
             const value = context.raw || 0;
-            return `${label}: ${value.toFixed(1)}%`; // Format tooltip to show percentage
+            const count = Math.round((value / 100) * totalCount);
+            // REMOVED: confidence display from tooltip
+            return `${label}: ${value.toFixed(1)}% (${count} votes)`;
           },
         },
       },
@@ -95,25 +137,36 @@ function PieChart({ key }) {
   };
 
   // Disable the pie if agreementScore is 1
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (error) {
-    return <div>Error fetching news data.</div>;
-  }
-
   if (!agreementData || agreementScore === 1) {
-    return <div style={{ color: 'white', fontStyle: 'italic' }}>No feedback required</div>;
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        height="100%"
+      >
+        <Typography color="textSecondary" fontStyle="italic">
+          No feedback required
+        </Typography>
+      </Box>
+    );
   }
 
   return (
-    
-    <div style={{ width: "55%", margin: "0 auto" }}>
-      <h3 >Feedback Based on Users</h3>
-      <Pie data={chartData} options={options} />
-    </div>
+    <Box
+    >
+      <PieChart
+        series={[
+          {
+            data: chartData,
+          },
+        ]}
+        height={250}
+        width={300}
+        margin={{ right: 5 }}
+      />
+    </Box>
   );
 }
 
-export default PieChart;
+export default VoteChart;
