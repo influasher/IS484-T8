@@ -305,7 +305,8 @@ jobs:
     - name: Health Check
       run: |
         echo "Waiting for deployment to be ready..."
-        kubectl rollout status deployment/sentifinance-backend --namespace=sentifinance --timeout=300s  # 5 minutes - much faster with lazy loading
+        # Increased timeout to 15 minutes to match K8s progressDeadlineSeconds
+        kubectl rollout status deployment/sentifinance-backend --namespace=sentifinance --timeout=900s
         
         # Get service URL (adjust based on your service type)
         SERVICE_IP=$(kubectl get service sentifinance-service --namespace=sentifinance -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
@@ -328,3 +329,55 @@ jobs:
         else
           echo "⏳ LoadBalancer IP still pending, check kubectl get services"
         fi
+
+    - name: Verify Deployment Health
+      run: |
+        echo "🔍 Verifying deployment health and migrations..."
+
+        # Check pod status
+        kubectl get pods -n sentifinance -l app=sentifinance-backend
+
+        # Get pod logs to check for errors
+        POD_NAME=$(kubectl get pods -n sentifinance -l app=sentifinance-backend -o jsonpath='{.items[0].metadata.name}')
+        echo "Checking logs from pod: $POD_NAME"
+
+        # Check for migration errors in logs
+        if kubectl logs -n sentifinance "$POD_NAME" --tail=100 | grep -i "error.*migration"; then
+          echo "❌ Migration errors detected in pod logs!"
+          echo "Full logs:"
+          kubectl logs -n sentifinance "$POD_NAME"
+          exit 1
+        fi
+
+        # Verify migrations completed successfully
+        if kubectl logs -n sentifinance "$POD_NAME" --tail=100 | grep -q "Running database migrations..."; then
+          if kubectl logs -n sentifinance "$POD_NAME" --tail=100 | grep -q "Starting gunicorn..."; then
+            echo "✅ Database migrations completed successfully"
+          else
+            echo "❌ Migrations started but gunicorn did not start - pod may have crashed"
+            kubectl logs -n sentifinance "$POD_NAME"
+            exit 1
+          fi
+        fi
+
+        # Check deployment status
+        READY_REPLICAS=$(kubectl get deployment sentifinance-backend -n sentifinance -o jsonpath='{.status.readyReplicas}')
+        DESIRED_REPLICAS=$(kubectl get deployment sentifinance-backend -n sentifinance -o jsonpath='{.spec.replicas}')
+
+        if [[ "$READY_REPLICAS" == "$DESIRED_REPLICAS" ]]; then
+          echo "✅ Deployment is healthy: $READY_REPLICAS/$DESIRED_REPLICAS replicas ready"
+        else
+          echo "❌ Deployment is not healthy: $READY_REPLICAS/$DESIRED_REPLICAS replicas ready"
+          exit 1
+        fi
+
+    - name: Rollback on Failure
+      if: failure()
+      run: |
+        echo "❌ Deployment failed - rolling back to previous version"
+        kubectl rollout undo deployment/sentifinance-backend -n sentifinance
+
+        echo "Waiting for rollback to complete..."
+        kubectl rollout status deployment/sentifinance-backend -n sentifinance --timeout=300s
+
+        echo "⚠️ Rollback completed - check logs for details"
