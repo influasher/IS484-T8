@@ -8,7 +8,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: sentifinance-backend
-  minReplicas: 1
+  minReplicas: 2  # Maintain high availability - never scale below 2 pods
   maxReplicas: 3
   metrics:
   - type: Resource

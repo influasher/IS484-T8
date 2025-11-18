@@ -1,0 +1,103 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration-${GITHUB_SHA:0:8}  # Will be replaced by CD pipeline
+  namespace: sentifinance
+  labels:
+    app: sentifinance-backend
+    component: migration
+spec:
+  backoffLimit: 2  # Retry twice on failure
+  activeDeadlineSeconds: 600  # 10 minute timeout
+  template:
+    metadata:
+      labels:
+        app: sentifinance-backend
+        component: migration
+    spec:
+      restartPolicy: Never
+      serviceAccountName: sentifinance-sa
+
+      containers:
+      - name: db-migration
+        image: ${ACR_LOGIN_SERVER}/sentifinance-backend:${IMAGE_TAG}  # Replaced by pipeline
+
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e  # Exit on error
+
+          echo "=================================="
+          echo "Database Migration Job"
+          echo "Image: ${ACR_LOGIN_SERVER}/sentifinance-backend:${IMAGE_TAG}"
+          echo "=================================="
+
+          # Wait for database to be ready
+          echo "Testing database connectivity..."
+          for i in {1..30}; do
+            if .venv/bin/python -c "from app import create_app; app = create_app(); print('DB connected')" 2>/dev/null; then
+              echo "✅ Database connection successful"
+              break
+            fi
+            echo "Waiting for database... ($i/30)"
+            sleep 2
+          done
+
+          # Show current migration state
+          echo "Current migration status:"
+          .venv/bin/flask db current || echo "No migrations applied yet"
+
+          # Run migrations
+          echo "Running database migrations..."
+          .venv/bin/flask db upgrade
+
+          # Validate migration success
+          echo "Validating migration..."
+          CURRENT_MIGRATION=$(.venv/bin/flask db current)
+          echo "Current migration: $CURRENT_MIGRATION"
+
+          # Test database with a simple query
+          echo "Testing database access..."
+          .venv/bin/python -c "
+from app import create_app
+app = create_app()
+with app.app_context():
+    from app.extensions import db
+    result = db.session.execute(db.text('SELECT 1')).scalar()
+    assert result == 1, 'Database query failed'
+print('✅ Database validation successful')
+"
+
+          echo "=================================="
+          echo "✅ Migration completed successfully"
+          echo "=================================="
+
+        env:
+        - name: DATABASE_URI
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: database-uri
+        - name: FLASK_APP
+          value: "run.py"
+        - name: FLASK_ENV
+          value: "production"
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: secret-key
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: jwt-secret-key
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

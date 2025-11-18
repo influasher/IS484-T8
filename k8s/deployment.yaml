@@ -6,8 +6,17 @@ metadata:
   labels:
     app: sentifinance-backend
 spec:
-  replicas: 1
+  replicas: 2  # High availability - zero downtime deployments
   progressDeadlineSeconds: 900  # 15 minutes for slow starts
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1          # Allow 1 extra pod during update (total 3 pods max)
+      maxUnavailable: 0    # Ensure zero downtime - always keep all pods running during update
+
+  minReadySeconds: 30      # Wait 30s after pod ready before considering it available
+
   selector:
     matchLabels:
       app: sentifinance-backend
