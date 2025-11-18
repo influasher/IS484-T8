@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Typography, Box, Card, CardContent, Stack, Grid, Divider, useTheme, useMediaQuery } from '@mui/material';
-import { AccountBalanceWallet, TrendingUp } from '@mui/icons-material';
-import Watchlist from '../../components/ui/Watchlist';
 import ClientRecc from '../../components/clients/ClientRecc';
 import ClientPortfolio from '../../components/clients/ClientPortfolio';
 import useAuth from '../../hooks/useAuth';
+import { getData} from '../../services/api';
 
 function ClientHomePage() {
   const { user, getUserFullName } = useAuth();
@@ -23,12 +22,9 @@ function ClientHomePage() {
       if (!clientId) return;
 
       try {
-        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-        const response = await fetch(`${API_BASE_URL}/api/transactions/client/${clientId}`);
+        const result = await getData(`/transactions/client/${clientId}`);
 
-        if (response.ok) {
-          const result = await response.json();
-
+        if (result) {
           // Calculate wallet balance from transactions
           let deposits = 0;
           let withdrawals = 0;

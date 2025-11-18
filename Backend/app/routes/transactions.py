@@ -7,12 +7,13 @@ from app.services.data_ingestion_yfinance import get_stock_price
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 import uuid
-from app.utils.decorators import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 transactions_bp = Blueprint('transactions', __name__)
 
 
 @transactions_bp.route('/add_transaction', methods=['POST'])
+@jwt_required()
 def add_transaction():
     print("add_transaction")
     """Add a new transaction"""
@@ -76,6 +77,7 @@ def add_transaction():
 
 
 @transactions_bp.route('/', methods=['GET'])
+@jwt_required()
 def get_all_transactions():
     print("entered get transactions")
     """Retrieve all transactions"""
@@ -90,6 +92,7 @@ def get_all_transactions():
 
 
 @transactions_bp.route('/client', methods=['GET'])
+@jwt_required()
 def get_transactions_by_client():
     """Retrieve all transactions for a specific client"""
     try:
@@ -118,6 +121,7 @@ def get_transactions_by_client():
 
 # Alternative route using query parameters instead of request body
 @transactions_bp.route('/client/<client_id>', methods=['GET'])
+@jwt_required()
 def get_transactions_by_client_param(client_id):
     """Retrieve all transactions for a specific client using URL parameter"""
     try:

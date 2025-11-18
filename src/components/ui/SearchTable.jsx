@@ -20,6 +20,8 @@ import {
   Collapse,
   Button,
   IconButton,
+  ToggleButtonGroup,
+  ToggleButton,
 } from "@mui/material";
 import { Search, Sort, FilterList, Close } from "@mui/icons-material";
 import { useState } from "react";
@@ -44,6 +46,8 @@ function SearchTable({
   itemsPerPage = 5,
   entityType = "items",
   enableAdvancedFilter = false,
+  timePeriod = 7,
+  onTimePeriodChange,
 }) {
   const [internalSearchTerm, setInternalSearchTerm] = useState(searchTerm);
   const [internalSortOrder, setInternalSortOrder] = useState(sortOrder);
@@ -257,6 +261,50 @@ function SearchTable({
                     </IconButton>
                   )}
                 </Stack>
+
+                {/* Time Period Selection */}
+                {onTimePeriodChange && (
+                  <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'grey.300' }}>
+                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+                      Sentiment Analysis Period:
+                    </Typography>
+                    <ToggleButtonGroup
+                      value={timePeriod}
+                      exclusive
+                      onChange={onTimePeriodChange}
+                      aria-label="sentiment analysis time period"
+                      size="small"
+                      sx={{
+                        "& .MuiToggleButton-root": {
+                          px: 2,
+                          py: 0.5,
+                          fontSize: "0.875rem",
+                          fontWeight: 600,
+                          color: "#666",
+                          "&.Mui-selected": {
+                            bgcolor: "#1976d2",
+                            color: "white",
+                            "&:hover": { bgcolor: "#1565c0" },
+                          },
+                          "&:hover": { bgcolor: "#f5f5f5" },
+                        },
+                      }}
+                    >
+                      <ToggleButton value={1} aria-label="1 day">
+                        1D
+                      </ToggleButton>
+                      <ToggleButton value={7} aria-label="7 days">
+                        7D
+                      </ToggleButton>
+                      <ToggleButton value={15} aria-label="15 days">
+                        15D
+                      </ToggleButton>
+                      <ToggleButton value={30} aria-label="30 days">
+                        30D
+                      </ToggleButton>
+                    </ToggleButtonGroup>
+                  </Box>
+                )}
               </Box>
             </Collapse>
           </Grid>

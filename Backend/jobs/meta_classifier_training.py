@@ -23,13 +23,18 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask
+
+# Import config directly to avoid triggering app/__init__.py at module level
 from app.config import config
 from app.models import db
-from app.models.active_learning import LabelingQueue, AggregatedLabel, QueueStatus, ModelRun
 
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -43,16 +48,19 @@ class MetaClassifierTrainer:
         self.app = app
         self.model = None
         self.model_type = "RandomForest"
-        self.archive_after_training = archive_after_training  # NEW
+        self.archive_after_training = archive_after_training
         
     def load_training_data(self) -> pd.DataFrame:
         """
-        Load labeled data from database
+        Load labeled data from database with automatic sanitization:
+        - drops list/dict features
+        - coerces values to float where possible
         """
         with self.app.app_context():
-            logger.info("Loading training data from database...")
+            from app.models.active_learning import LabelingQueue, AggregatedLabel, QueueStatus
             
-            # Query completed items with human labels
+            logger.info("Loading training data from database...")
+
             query = db.session.query(
                 LabelingQueue.id,
                 LabelingQueue.finbert_score,
@@ -75,35 +83,56 @@ class MetaClassifierTrainer:
             if not query:
                 logger.warning("No training data available")
                 return pd.DataFrame()
-            
-            # Convert to DataFrame
+
             data = []
             for row in query:
-                # Parse features
                 features_json = row.features_json or []
                 feature_names = row.feature_names_json or []
-                
-                # Create feature dict
-                features_dict = dict(zip(feature_names, features_json))
-                
-                # Add core features
-                features_dict['finbert_score'] = row.finbert_score
-                features_dict['llm_score'] = row.llm_score
-                features_dict['disagreement_score'] = row.disagreement_score
-                features_dict['uncertainty_score'] = row.uncertainty_score
-                features_dict['vote_count'] = row.vote_count
-                features_dict['agreement_rate'] = row.agreement_rate
-                
-                # Add label (convert enum to numeric: bullish=1, neutral=0, bearish=-1)
+
+                clean_features = {}
+
+                # Clean each feature
+                for name, value in zip(feature_names, features_json):
+
+                    # Drop list or dict features (e.g., embeddings)
+                    if isinstance(value, (list, dict)):
+                        continue
+
+                    # Coerce booleans → int
+                    if isinstance(value, bool):
+                        clean_features[name] = int(value)
+                        continue
+
+                    # Coerce None → 0
+                    if value is None:
+                        clean_features[name] = 0
+                        continue
+
+                    # Try converting strings to float
+                    try:
+                        clean_features[name] = float(value)
+                    except Exception:
+                        # If value cannot be converted, drop it
+                        continue
+
+                # Add core engineered features
+                clean_features['finbert_score'] = row.finbert_score
+                clean_features['llm_score'] = row.llm_score
+                clean_features['disagreement_score'] = row.disagreement_score
+                clean_features['uncertainty_score'] = row.uncertainty_score
+                clean_features['vote_count'] = row.vote_count
+                clean_features['agreement_rate'] = row.agreement_rate
+
+                # Add label
                 label_map = {'bullish': 1, 'neutral': 0, 'bearish': -1}
-                features_dict['human_label'] = label_map.get(row.final_label.value, 0)
-                
-                data.append(features_dict)
-            
+                clean_features['human_label'] = label_map.get(row.final_label.value, 0)
+
+                data.append(clean_features)
+
             df = pd.DataFrame(data)
             logger.info(f"Loaded {len(df)} training samples")
             logger.info(f"Label distribution:\n{df['human_label'].value_counts()}")
-            
+
             return df
     
     def prepare_features(self, df: pd.DataFrame):
@@ -234,6 +263,9 @@ class MetaClassifierTrainer:
         Save trained model and metadata
         """
         with self.app.app_context():
+            # Import ModelRun INSIDE app context
+            from app.models.active_learning import ModelRun
+            
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
             # Create models directory
@@ -255,7 +287,7 @@ class MetaClassifierTrainer:
             
             logger.info(f"Model saved to: {model_path}")
             
-            # NEW: Archive training data
+            # Archive training data
             archive_path = None
             if self.archive_after_training and training_df is not None:
                 archive_path = self.archive_training_data(training_df, model_version)
@@ -266,7 +298,7 @@ class MetaClassifierTrainer:
                 artifact_path=model_path,
                 training_samples=len(training_df) if training_df is not None else 0,
                 performance_metrics=metrics,
-                is_active=True  # Mark as active model
+                is_active=True
             )
             
             # Deactivate previous models
@@ -323,11 +355,16 @@ class MetaClassifierTrainer:
 
 
 def create_app():
-    """Create Flask app for job context"""
+    """Create Flask app for job context - same pattern as other jobs"""
     app = Flask(__name__)
+    
+    # Load configuration - import directly to avoid triggering app/__init__.py
     env = os.getenv('FLASK_ENV', 'development')
     app.config.from_object(config[env])
+    
+    # Initialize only database
     db.init_app(app)
+    
     return app
 
 
@@ -348,3 +385,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

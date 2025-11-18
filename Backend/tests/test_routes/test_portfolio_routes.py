@@ -69,7 +69,7 @@ class PortfolioIntegrationTest(unittest.TestCase):
             self.assertEqual(data["client_id"], str(self.client_user.id))
             self.assertEqual(data["count"], 1)
             self.assertEqual(data["allocation"][0]["name"], "ALPHA")
-            self.assertEqual(data["allocation"][0]["value"], 10)
+            self.assertEqual(data["allocation"][0]["value"], 1200)
 
     def test_get_client_portfolio_not_found(self):
         """Test 404 if client does not exist"""

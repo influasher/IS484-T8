@@ -52,9 +52,11 @@ describe("PortfolioDashboard", () => {
     );
 
     // ✅ Check allocations dynamically
+    const totalAllocation = mockData.allocation.reduce((sum, item) => sum + item.value, 0);
     mockData.allocation.forEach(({ name, value }) => {
       expect(screen.getByText(name)).toBeInTheDocument();
-      expect(screen.getByText(value.toString())).toBeInTheDocument();
+      const percentage = totalAllocation > 0 ? ((value / totalAllocation) * 100).toFixed(1) : 0;
+      expect(screen.getByText(`${percentage}%`)).toBeInTheDocument();
     });
   });
 

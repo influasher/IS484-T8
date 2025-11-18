@@ -1,0 +1,290 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: entity-sentiment-prices
+  namespace: sentifinance
+  labels:
+    app: entity-sentiment-prices
+    component: batch-job
+spec:
+  # Schedule: Every day at 7 AM UTC (after portfolio refresh)
+  # Format: minute hour day-of-month month day-of-week
+  # "0 7 * * *" = At 07:00 daily
+  schedule: "0 7 * * *"
+
+  # Timezone (optional, defaults to UTC)
+  # timeZone: "Asia/Singapore"
+
+  # Keep last 3 successful and 1 failed job for debugging
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+
+  # Start deadline - if job doesn't start within 2 hours, skip it
+  startingDeadlineSeconds: 7200
+
+  # Concurrency policy - don't run multiple instances simultaneously
+  concurrencyPolicy: Forbid
+
+  jobTemplate:
+    metadata:
+      labels:
+        app: entity-sentiment-prices
+        component: batch-job
+    spec:
+      # Job will be marked as failed if not completed within 2 hours
+      activeDeadlineSeconds: 7200
+
+      # Retry failed jobs up to 1 time
+      backoffLimit: 1
+
+      # Clean up completed jobs after 1 day
+      ttlSecondsAfterFinished: 86400
+
+      template:
+        metadata:
+          labels:
+            app: entity-sentiment-prices
+            component: batch-job
+          annotations:
+            # ACI-specific annotations for spot instances and configuration
+            virtual-kubelet.io/sku-name: "Standard"
+            virtual-kubelet.io/burst-priority: "spot"
+            virtual-kubelet.io/restart-policy: "Never"
+        spec:
+          restartPolicy: Never
+
+          # Use service account with database access
+          serviceAccountName: default
+
+          # Deploy to Azure Container Instances (virtual node) for on-demand capacity
+          nodeSelector:
+            kubernetes.io/role: agent
+            type: virtual-kubelet
+            kubernetes.io/os: linux
+
+          tolerations:
+          - key: virtual-kubelet.io/provider
+            operator: Exists
+          - key: azure.com/aci
+            effect: NoSchedule
+
+          containers:
+          - name: entity-sentiment-prices
+            image: sentifinancetwo.azurecr.io/news-processor:latest
+            imagePullPolicy: Always
+
+            # Override the default command to run entity sentiment & prices job
+            command: ["python"]
+            args: ["/app/jobs/entity_sentiment_prices_job.py"]
+
+            # Resource limits optimized for price fetching and light sentiment processing
+            # Moderate workload - API calls to yfinance and sentiment calculations
+            resources:
+              requests:
+                memory: "1.5Gi"    # Moderate memory for data processing
+                cpu: "750m"        # 0.75 vCPU
+              limits:
+                memory: "3Gi"      # Buffer for sentiment processing
+                cpu: "1500m"       # 1.5 vCPU max
+
+            # Environment variables
+            env:
+            - name: JOB_TYPE
+              value: "entity_sentiment_prices"
+
+            - name: FLASK_ENV
+              value: "production"
+
+            # Logging configuration
+            - name: LOG_LEVEL
+              value: "INFO"
+
+            - name: PYTHONUNBUFFERED
+              value: "1"
+
+            # Optional: Limit number of entities processed per run
+            # Uncomment to enable throttling for testing
+            # - name: MAX_ENTITIES
+            #   value: "50"
+
+            # Batch processing configuration
+            - name: BATCH_SIZE
+              value: "20"
+
+            - name: API_RATE_LIMIT_DELAY
+              value: "0.1"  # Delay between API calls (seconds)
+
+            # Sentiment aggregation configuration
+            - name: SENTIMENT_LOOKBACK_DAYS
+              value: "7"  # Number of days to look back for sentiment analysis
+
+            # Database configuration (from secrets)
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: database-url
+
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: db-host
+
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: db-port
+
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: db-name
+
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: db-user
+
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sentifinance-secrets
+                  key: db-password
+
+
+            # Additional configuration from ConfigMap
+            envFrom:
+            - configMapRef:
+                name: sentifinance-config
+                optional: true
+
+            # Logging
+            volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+
+          volumes:
+          - name: logs
+            emptyDir: {}
+
+          # Image pull secret for ACR
+          imagePullSecrets:
+          - name: acr-secret
+
+---
+# Optional: Manual Job for testing entity sentiment/prices update (run immediately)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: entity-sentiment-prices-manual
+  namespace: sentifinance
+  labels:
+    app: entity-sentiment-prices
+    component: batch-job
+    type: manual
+spec:
+  activeDeadlineSeconds: 7200
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+
+  template:
+    metadata:
+      labels:
+        app: entity-sentiment-prices
+        component: batch-job
+        type: manual
+    spec:
+      restartPolicy: Never
+      serviceAccountName: default
+
+      # Deploy to Azure Container Instances (virtual node) for on-demand capacity
+      nodeSelector:
+        kubernetes.io/role: agent
+        type: virtual-kubelet
+
+      tolerations:
+      - key: virtual-kubelet.io/provider
+        operator: Exists
+      - key: azure.com/aci
+        effect: NoSchedule
+
+      containers:
+      - name: entity-sentiment-prices
+        image: sentifinancetwo.azurecr.io/news-processor:latest
+        imagePullPolicy: Always
+
+        # Override the default command to run entity sentiment & prices job
+        command: ["python"]
+        args: ["/app/jobs/entity_sentiment_prices_job.py"]
+
+        resources:
+          requests:
+            memory: "1.5Gi"
+            cpu: "750m"
+          limits:
+            memory: "3Gi"
+            cpu: "1500m"
+
+        env:
+        - name: JOB_TYPE
+          value: "entity_sentiment_prices"
+        - name: FLASK_ENV
+          value: "production"
+        - name: MAX_ENTITIES
+          value: "10"  # Limit for testing
+        - name: BATCH_SIZE
+          value: "5"
+        - name: SENTIMENT_LOOKBACK_DAYS
+          value: "7"
+
+        # Database configuration
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: database-url
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: db-host
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: db-port
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: db-name
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: db-user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: db-password
+
+        # API Keys
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sentifinance-secrets
+              key: gemini-api-key
+
+        envFrom:
+        - configMapRef:
+            name: sentifinance-config
+            optional: true
+
+      imagePullSecrets:
+      - name: acr-secret

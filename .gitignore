@@ -12,6 +12,8 @@ venv/
 # Environment variables and secrets
 .env
 *.env
+Backend/jobs/.env
+Backend/jobs/.env.test
 
 # IDEs and Editors
 .vscode/

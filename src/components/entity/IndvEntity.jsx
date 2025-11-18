@@ -47,7 +47,7 @@ const IndvEntity = () => {
   const [selectedNews, setSelectedNews] = useState(null); // State to track selected news
 
   // Construct API URL with pagination parameters
-  const newsUrl = `/news/entity/${EntityName}?page=${currentPage}&per_page=${newsPerPage}`;
+  const newsUrl = `/news/entity/${ticker}?page=${currentPage}&per_page=${newsPerPage}`;
   const {
     data: newsRawData,
     loading: newsLoading,
@@ -259,10 +259,9 @@ const IndvEntity = () => {
   const profiles = [
     { label: "Symbol", value: data.data.ticker },
     { label: "Name", value: data.data.name },
-    { label: "Asset Type", value: data.data.AssetType ?? "-" },
+    { label: "Asset Type", value: data.data["asset_type"] ?? "-" },
     { label: "Description", value: data.data.summary ?? "-" },
-    { label: "Sector", value: data.data.Sector ?? "-" },
-    { label: "Industry", value: data.data.Industry ?? "-" },
+    { label: "Sector", value: data.data.sector ?? "-" },
   ];
 
   const sentimentTypes = {

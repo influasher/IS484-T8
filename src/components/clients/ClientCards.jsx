@@ -1,5 +1,5 @@
 import React from "react";
-import { apiClient } from "../../services/api";
+import { postData } from "../../services/api";
 import {
     Box,
     Paper,
@@ -245,29 +245,19 @@ const ClientCards = () => {
         };
 
         try {
-            const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
-            const res = await fetch(`${API_BASE_URL}/api/user/create-clients`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-            });
+            const result = await postData("/user/create-clients", payload);
 
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.message || "Failed to add client");
+            if (!result) {
+                throw new Error("Failed to add client");
             }
 
-            const result = await res.json();
             const newClient = normalize(result.data);
-
 
             setClients((prev) => [newClient, ...prev]);
             setPage(1);
             handleCloseAdd();
         } catch (err) {
-            setSubmitError(err.message);
+            setSubmitError(err.message || "An error occurred while adding the client");
         }
     };
 

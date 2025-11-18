@@ -11,6 +11,7 @@ def news_by_ticker(ticker, page=1, per_page=3, sort_order="desc", filter_time="a
     """Get paginated, filtered, and sorted news by ticker"""
 
     query = News.query.filter(News.entities.any(ticker))
+    print(">>>", query)
 
     # Apply time filtering
     if filter_time != "all":

@@ -1,7 +1,7 @@
 from flask import Blueprint, request
 import time
 from app.services.news_services import (
-    news_by_name,
+    news_by_ticker,
     news_by_id,
     all_news,
     resync_news_data,
@@ -389,7 +389,7 @@ def get_news(entity):
     sort_order = request.args.get("sort_order", "desc")  # Default to ascending
     filter_time = request.args.get("filter", "all")  # Default to all-time
 
-    news_list = news_by_name(entity, page, per_page, sort_order, filter_time)
+    news_list = news_by_ticker(entity, page, per_page, sort_order, filter_time)
     if not news_list:
         return format_response([], "News not found", 404)
 
