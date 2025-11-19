@@ -16,7 +16,9 @@ spec:
         component: migration
     spec:
       restartPolicy: Never
-      serviceAccountName: sentifinance-sa
+      serviceAccountName: default
+      imagePullSecrets:
+      - name: acr-secret
 
       containers:
       - name: db-migration
