@@ -59,15 +59,7 @@ spec:
 
           # Test database with a simple query
           echo "Testing database access..."
-          .venv/bin/python -c "
-from app import create_app
-app = create_app()
-with app.app_context():
-    from app.extensions import db
-    result = db.session.execute(db.text('SELECT 1')).scalar()
-    assert result == 1, 'Database query failed'
-print('✅ Database validation successful')
-"
+          .venv/bin/python -c 'from app import create_app; app = create_app(); exec("with app.app_context():\n    from app.extensions import db\n    result = db.session.execute(db.text(\"SELECT 1\")).scalar()\n    assert result == 1\nprint(\"✅ Database validation successful\")")'
 
           echo "=================================="
           echo "✅ Migration completed successfully"
