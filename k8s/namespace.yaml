@@ -6,4 +6,3 @@ metadata:
   labels:
     name: sentifinance
     environment: production
----
