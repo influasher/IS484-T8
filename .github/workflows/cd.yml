@@ -503,6 +503,26 @@ jobs:
         echo "App URL: $APP_URL"
         echo "============================================"
 
+    - name: Deployment Summary
+      if: always()
+      run: |
+        echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ steps.smoke_tests.outcome }}" == "success" ]; then
+          echo "✅ **Status:** Deployment Successful" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Status:** Deployment Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "- **Environment:** Production (AKS)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+
+        SERVICE_IP=$(kubectl get service sentifinance-service -n sentifinance -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "N/A")
+        if [ "$SERVICE_IP" != "N/A" ]; then
+          echo "- **App URL:** http://$SERVICE_IP" >> $GITHUB_STEP_SUMMARY
+        fi
+
     - name: Rollback on Failure
       if: failure() && steps.smoke_tests.outcome == 'failure'
       run: |

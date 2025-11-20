@@ -29,10 +29,18 @@ jobs:
         cd Backend
         uv sync
     
-    - name: Run backend tests
+    - name: Run backend tests with coverage
       run: |
         cd Backend
-        uv run pytest tests/ --verbose
+        uv run pytest tests/ --verbose --cov=app --cov-report=term-missing --cov-report=html
+
+    - name: Upload backend coverage report
+      uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+      if: always()
+      with:
+        name: backend-coverage-report
+        path: Backend/htmlcov/
+        retention-days: 7
 
     - name: Validate database migrations
       env:
@@ -99,12 +107,20 @@ jobs:
     - name: Install frontend dependencies
       run: npm ci
     
-    - name: Run frontend tests
+    - name: Run frontend tests with coverage
       env:
         REACT_APP_API_BASE_URL: http://localhost:5001
         REACT_APP_ENV: testing
-      run: npm test -- --watchAll=false --passWithNoTests
-    
+      run: npm test -- --watchAll=false --passWithNoTests --coverage --coverageReporters=html --coverageReporters=text
+
+    - name: Upload frontend coverage report
+      uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+      if: always()
+      with:
+        name: frontend-coverage-report
+        path: coverage/
+        retention-days: 7
+
     - name: Build frontend
       env:
         REACT_APP_API_BASE_URL: http://localhost:5001
