@@ -13,7 +13,27 @@ jobs:
   # Backend Job
   backend-test:
     runs-on: ubuntu-latest
-    
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URI: postgresql://test_user:test_password@localhost:5432/test_db
+      SECRET_KEY: test-secret-key-for-ci
+      JWT_SECRET_KEY: test-jwt-secret-for-ci
+      
     steps:
     - name: Checkout code
       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
@@ -28,25 +48,30 @@ jobs:
       run: |
         cd Backend
         uv sync
+
+    - name: Wait for Postgres to be ready
+      run: |
+        until pg_isready -h localhost -p 5432 -U test_user; do
+          echo "Waiting for Postgres..."
+          sleep 2
+        done
     
     - name: Run backend tests with coverage
       run: |
         cd Backend
-        uv run pytest tests/ --verbose --cov=app --cov-report=term-missing --cov-report=html
+        uv run python -m tests.run_tests
+    #     uv run pytest tests/ --verbose --cov=app --cov-report=term-missing --cov-report=html
 
-    - name: Upload backend coverage report
-      uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
-      if: always()
-      with:
-        name: backend-coverage-report
-        path: Backend/htmlcov/
-        retention-days: 7
+    # - name: Upload backend coverage report
+    #   uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+    #   if: always()
+    #   with:
+    #     name: backend-coverage-report
+    #     path: Backend/htmlcov/
+    #     retention-days: 7
+        
 
     - name: Validate database migrations
-      env:
-        DATABASE_URI: sqlite:///test.db
-        SECRET_KEY: test-secret-key-for-ci
-        JWT_SECRET_KEY: test-jwt-secret-for-ci
       run: |
         cd Backend
         echo "Checking migration consistency..."
@@ -82,10 +107,6 @@ jobs:
         "
 
     - name: Test Flask app startup
-      env:
-        DATABASE_URI: sqlite:///test.db  # Temporary test database for CI
-        SECRET_KEY: test-secret-key-for-ci
-        JWT_SECRET_KEY: test-jwt-secret-for-ci
       run: |
         cd Backend
         uv run python -c "from app import create_app; app = create_app(); print('Flask app created successfully')"
