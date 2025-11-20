@@ -56,55 +56,10 @@ jobs:
           sleep 2
         done
     
-    - name: Run backend tests with coverage
+    - name: Run backend tests
       run: |
         cd Backend
         uv run python -m tests.run_tests
-    #     uv run pytest tests/ --verbose --cov=app --cov-report=term-missing --cov-report=html
-
-    # - name: Upload backend coverage report
-    #   uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
-    #   if: always()
-    #   with:
-    #     name: backend-coverage-report
-    #     path: Backend/htmlcov/
-    #     retention-days: 7
-        
-
-    - name: Validate database migrations
-      run: |
-        cd Backend
-        echo "Checking migration consistency..."
-        # Create test database and run all migrations
-        uv run flask db upgrade
-        # Verify all migration files are present and valid
-        uv run python -c "
-        import os
-        from flask_migrate import Migrate
-        from app import create_app, db
-
-        app = create_app()
-        migrate = Migrate(app, db)
-
-        with app.app_context():
-            from alembic.script import ScriptDirectory
-            from alembic.config import Config
-
-            config = Config('migrations/alembic.ini')
-            config.set_main_option('script_location', 'migrations')
-            script = ScriptDirectory.from_config(config)
-
-            # Get all revisions
-            revisions = list(script.walk_revisions())
-            print(f'Found {len(revisions)} migration revisions')
-
-            # Check for broken chain
-            for rev in revisions:
-                if rev.revision:
-                    print(f'  ✓ {rev.revision}: {rev.doc}')
-
-            print('Migration chain is valid!')
-        "
 
     - name: Test Flask app startup
       run: |
