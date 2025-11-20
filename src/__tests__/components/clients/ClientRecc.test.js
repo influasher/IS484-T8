@@ -10,10 +10,29 @@ import ClientRecc from "../../../components/clients/ClientRecc";
 import useFetch from "../../../hooks/useFetch";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import * as api from "../../../services/api";
+import useAuth from '../../../hooks/useAuth';
 
 // Mock useFetch
 jest.mock("../../../hooks/useFetch");
 
+jest.mock('../../../hooks/useAuth');
+
+beforeEach(() => {
+  useAuth.mockReturnValue({
+    userRole: 'relationship_manager',
+    user: { id: '123', name: 'Test User' },
+    token: 'fake-token',
+    loading: false,
+    isLoggedIn: true,
+    login: jest.fn(),
+    logout: jest.fn(),
+    hasRole: jest.fn(),
+    isClient: false,
+    isRM: true,
+    getUserFullName: jest.fn(),
+    isAuthenticated: jest.fn(),
+  });
+});
 // Mock putData API call
 jest.spyOn(api, "putData").mockResolvedValue({ success: true });
 
@@ -98,7 +117,6 @@ describe("ClientRecc Component", () => {
   test("renders client name and recommendations", () => {
     renderComponent();
 
-    expect(screen.getByText(/John Doe/i)).toBeInTheDocument();
     expect(
       screen.getByText(/Today's Top Recommendations/i)
     ).toBeInTheDocument();

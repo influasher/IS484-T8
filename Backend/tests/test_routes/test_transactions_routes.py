@@ -5,6 +5,7 @@ from app.models.user import User
 from app.models.entity import Entity
 from app.models.transactions import Transactions, TransactionType, Currency
 import uuid
+from flask_jwt_extended import create_access_token
 
 class TransactionsIntegrationTest(unittest.TestCase):
     def _create_sample_data(self):
@@ -42,6 +43,9 @@ class TransactionsIntegrationTest(unittest.TestCase):
         db.session.add(c)
         db.session.commit()
 
+        # Generate a valid JWT token
+        self.access_token = create_access_token(identity=str(rm.id))
+
     def test_add_transaction_success(self):
         """Test creating a new DEPOSIT transaction"""
         with test_db() as client:
@@ -56,7 +60,7 @@ class TransactionsIntegrationTest(unittest.TestCase):
             }
 
             response = client.post("/api/transactions/add_transaction",
-                                        json=payload)
+                                        json=payload, headers={"Authorization": f"Bearer {self.access_token}"})
             data = response.get_json()
 
             self.assertEqual(response.status_code, 201)
@@ -76,7 +80,7 @@ class TransactionsIntegrationTest(unittest.TestCase):
             }
 
             response = client.post("/api/transactions/add_transaction",
-                                        json=payload)
+                                        json=payload, headers={"Authorization": f"Bearer {self.access_token}"})
             data = response.get_json()
             print(data)
 
@@ -101,7 +105,7 @@ class TransactionsIntegrationTest(unittest.TestCase):
             db.session.add(txn)
             db.session.commit()
 
-            response = client.get("/api/transactions/")
+            response = client.get("/api/transactions/", headers={"Authorization": f"Bearer {self.access_token}"})
             data = response.get_json()
 
             self.assertEqual(response.status_code, 200)
@@ -123,7 +127,7 @@ class TransactionsIntegrationTest(unittest.TestCase):
             db.session.add(txn)
             db.session.commit()
 
-            response = client.get(f"/api/transactions/client/{self.client_id}")
+            response = client.get(f"/api/transactions/client/{self.client_id}", headers={"Authorization": f"Bearer {self.access_token}"})
             data = response.get_json()
 
             self.assertEqual(response.status_code, 200)
@@ -134,7 +138,8 @@ class TransactionsIntegrationTest(unittest.TestCase):
     def test_get_transactions_missing_client(self):
         """Test 404 when client does not exist"""
         with test_db() as client:
+            self._create_sample_data()
             fake_client_id = uuid.uuid4()
-            response = client.get(f"/api/transactions/client/{fake_client_id}")
+            response = client.get(f"/api/transactions/client/{fake_client_id}", headers={"Authorization": f"Bearer {self.access_token}"})
             self.assertEqual(response.status_code, 404)
             self.assertIn("Client not found", response.get_json()["error"])

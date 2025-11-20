@@ -1,51 +1,41 @@
 // test-utils/mockFetch.js
-export function mockFetchPortfolioAndTransactions({
+import { apiClient } from '../services/api';
+
+export function mockApiClient({
   transactions = [],
   allocation = [],
   performance = [],
 } = {}) {
-  global.fetch = jest.fn((url) => {
+  // Mock the apiClient.get method
+  jest.spyOn(apiClient, 'get').mockImplementation((url) => {
     // Transactions API
     if (url.includes("/transactions/")) {
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ transactions }),
-      });
+      return Promise.resolve({ data: { transactions } });
     }
 
     // Portfolio allocation API
-    if (url.includes("/portfolio/")) {
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ allocation }),
-      });
+    if (url.includes("/portfolio/") && !url.includes("/performance/")) {
+      return Promise.resolve({ data: { allocation } });
     }
 
     // Portfolio performance API
     if (url.includes("/portfolio/performance/")) {
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ performance }),
-      });
+      return Promise.resolve({ data: { performance } });
     }
 
-    // ✅ Handle IRX benchmark fetch
+    // IRX benchmark API
     if (url.includes("/entities/ticker=^IRX/chart")) {
       return Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            data: {
-              stock_chart: {
-                dates: ["2024-01-01", "2024-06-01"],
-                prices: [5, 7],
-              },
-            },
-          }),
+        data: {
+          stock_chart: {
+            dates: ["2024-01-01", "2024-06-01"],
+            prices: [5, 7],
+          },
+        },
       });
     }
 
-    // Default fallback for unknown endpoints
-    return Promise.reject(new Error(`Unhandled fetch URL: ${url}`));
+    // Default: unknown endpoint
+    return Promise.reject(new Error(`Unhandled API URL: ${url}`));
   });
 }
