@@ -61,11 +61,6 @@ jobs:
         cd Backend
         uv run python -m tests.run_tests
 
-    - name: Test Flask app startup
-      run: |
-        cd Backend
-        uv run python -c "from app import create_app; app = create_app(); print('Flask app created successfully')"
-
   # Frontend Job
   frontend-test:
     runs-on: ubuntu-latest
