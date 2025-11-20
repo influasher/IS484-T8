@@ -225,12 +225,81 @@ jobs:
             --repository sentifinance-backend --orderby time_desc --output table | head -10
           exit 1
         fi
-    
+
+    - name: Get AKS Credentials
+      run: |
+        echo "🔐 Getting AKS credentials..."
+        az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
+        kubectl cluster-info
+        echo "✅ Connected to AKS cluster"
+
+    - name: Install Helm
+      run: |
+        echo "📦 Checking Helm installation..."
+        if ! command -v helm &> /dev/null; then
+          echo "Installing Helm..."
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        else
+          echo "✅ Helm already installed: $(helm version --short)"
+        fi
+
+    - name: Install External Secrets Operator
+      run: |
+        echo "============================================"
+        echo "Installing External Secrets Operator (ESO)"
+        echo "============================================"
+
+        # Add External Secrets Helm repository
+        echo "Adding ESO Helm repository..."
+        helm repo add external-secrets https://charts.external-secrets.io
+        helm repo update
+
+        # Check if ESO is already installed
+        if helm list -n external-secrets-system 2>/dev/null | grep -q external-secrets; then
+          echo "ESO already installed, upgrading..."
+          helm upgrade external-secrets \
+            external-secrets/external-secrets \
+            --namespace external-secrets-system \
+            --set installCRDs=true \
+            --wait \
+            --timeout 5m
+          echo "✅ ESO upgraded successfully"
+        else
+          echo "Installing ESO for the first time..."
+          helm install external-secrets \
+            external-secrets/external-secrets \
+            --namespace external-secrets-system \
+            --create-namespace \
+            --set installCRDs=true \
+            --wait \
+            --timeout 5m
+          echo "✅ ESO installed successfully"
+        fi
+
+        # Verify installation
+        echo ""
+        echo "Verifying ESO installation..."
+        kubectl get pods -n external-secrets-system
+        kubectl get crd | grep external-secrets || echo "⚠️  CRDs not found yet, waiting..."
+
+        # Wait for ESO to be ready
+        echo "Waiting for ESO pods to be ready..."
+        kubectl wait --for=condition=Ready \
+          pod -l app.kubernetes.io/name=external-secrets \
+          -n external-secrets-system \
+          --timeout=300s || echo "⚠️  Timeout waiting for ESO pods"
+
+        echo "✅ External Secrets Operator is ready"
+
+    - name: Create Namespace
+      run: |
+        echo "📂 Creating sentifinance namespace..."
+        # Apply namespace without --namespace flag (it's self-defining)
+        kubectl apply -f k8s/namespace.yaml
+        echo "✅ Namespace ready"
+
     - name: Deploy External Secrets Configuration
       run: |
-        # Get AKS credentials
-        az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
-
         # Apply external secrets configuration
         kubectl apply -f k8s/external-secrets.yaml --namespace=sentifinance
 
@@ -332,8 +401,12 @@ jobs:
           echo "🔧 K8s configuration changes detected - applying full manifests"
           for file in k8s/*.yaml; do
             BASENAME="$(basename "$file")"
-            # Skip kustomization.yaml and db-migration-job.yaml (migration job is templated and applied separately)
-            if [[ "$BASENAME" != "kustomization.yaml" ]] && [[ "$BASENAME" != "db-migration-job.yaml" ]]; then
+            # Skip namespace (applied separately), external-secrets (applied separately),
+            # kustomization, and db-migration-job (migration job is templated and applied separately)
+            if [[ "$BASENAME" != "namespace.yaml" ]] && \
+               [[ "$BASENAME" != "external-secrets.yaml" ]] && \
+               [[ "$BASENAME" != "kustomization.yaml" ]] && \
+               [[ "$BASENAME" != "db-migration-job.yaml" ]]; then
               echo "Applying $file..."
               kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
             fi
@@ -361,8 +434,12 @@ jobs:
             echo "📦 Deployment not found - applying manifests for first-time setup"
             for file in k8s/*.yaml; do
               BASENAME="$(basename "$file")"
-              # Skip kustomization.yaml and db-migration-job.yaml (migration job is templated and applied separately)
-              if [[ "$BASENAME" != "kustomization.yaml" ]] && [[ "$BASENAME" != "db-migration-job.yaml" ]]; then
+              # Skip namespace (applied separately), external-secrets (applied separately),
+              # kustomization, and db-migration-job (migration job is templated and applied separately)
+              if [[ "$BASENAME" != "namespace.yaml" ]] && \
+                 [[ "$BASENAME" != "external-secrets.yaml" ]] && \
+                 [[ "$BASENAME" != "kustomization.yaml" ]] && \
+                 [[ "$BASENAME" != "db-migration-job.yaml" ]]; then
                 kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
               fi
             done
@@ -371,8 +448,12 @@ jobs:
           echo "❓ No relevant changes detected - applying full manifests to be safe"
           for file in k8s/*.yaml; do
             BASENAME="$(basename "$file")"
-            # Skip kustomization.yaml and db-migration-job.yaml (migration job is templated and applied separately)
-            if [[ "$BASENAME" != "kustomization.yaml" ]] && [[ "$BASENAME" != "db-migration-job.yaml" ]]; then
+            # Skip namespace (applied separately), external-secrets (applied separately),
+            # kustomization, and db-migration-job (migration job is templated and applied separately)
+            if [[ "$BASENAME" != "namespace.yaml" ]] && \
+               [[ "$BASENAME" != "external-secrets.yaml" ]] && \
+               [[ "$BASENAME" != "kustomization.yaml" ]] && \
+               [[ "$BASENAME" != "db-migration-job.yaml" ]]; then
               kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
             fi
           done
