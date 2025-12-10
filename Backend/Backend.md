@@ -151,13 +151,27 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 ```
 
-3. **Configure Environment Variables:**
+3. **Database Setup:**
+
+   **Prerequisites:**
+   - PostgreSQL 12+ installed and running
+   - Database user with CREATE DATABASE privileges
+
+   **Create Database:**
+   ```sql
+   -- Connect to PostgreSQL as superuser and run:
+   CREATE DATABASE sentifinance;
+   CREATE USER sentifinance_user WITH PASSWORD 'your_password';
+   GRANT ALL PRIVILEGES ON DATABASE sentifinance TO sentifinance_user;
+   ```
+
+4. **Configure Environment Variables:**
    - Create a `.env` file in the Backend directory:
    ```env
    FLASK_ENV=development
    FLASK_APP=run.py
    SECRET_KEY=your_secret_key
-   DATABASE_URI=postgresql+psycopg2://username:password@localhost:5432/your_database
+   DATABASE_URI=postgresql+psycopg2://sentifinance_user:your_password@localhost:5432/sentifinance
    JWT_SECRET_KEY=your_jwt_secret_key
    LOG_LEVEL=DEBUG
    APP_DEBUG=True
@@ -176,16 +190,67 @@ uv sync
    AZURE_STORAGE_CONNECTION_STRING=your_azure_storage_connection_string
    ```
 
-4. **Run Database Migrations:**
-```bash
-# Create a new migration (if needed)
-uv run flask db migrate -m "Description of migration"
+5. **Database Migrations:**
 
-# Apply migrations to database
-uv run flask db upgrade
-```
+   We use `Flask-Migrate` (Alembic) to manage database schema versions. This ensures schema changes are tracked and reproducible across environments.
 
-5. **Run the Application:**
+   **Important Notes:**
+   - `Flask-Migrate` compares the current database schema with SQLAlchemy models to detect differences
+   - Changes to the database in development **must** be done through migrations
+   - Alembic cannot detect all changes automatically - see [limitations here](https://alembic.sqlalchemy.org/en/latest/autogenerate.html#what-does-autogenerate-detect-and-what-does-it-not-detect)
+
+   **Initial Setup:**
+   ```bash
+   # Apply migrations to create all tables
+   uv run flask db upgrade
+   ```
+
+   **Working with Migrations:**
+   ```bash
+   # View current migration version
+   uv run flask db current
+
+   # Update to latest version
+   uv run flask db upgrade
+
+   # Generate new migration (when you modify models)
+   uv run flask db migrate -m "Description of changes"
+
+   # Generate blank migration (if alembic doesn't detect changes)
+   uv run flask db revision
+
+   # Rollback migrations
+   uv run flask db downgrade               # Previous version
+   uv run flask db downgrade <version_id>  # Specific version
+   ```
+
+6. **Database Utility Scripts:**
+
+   Use these scripts for seeding and managing database data:
+
+   ```bash
+   # Seed entities (companies/stocks)
+   uv run python -c "from app.utils.db_scripts.seed_entities import seed_entities; seed_entities()"
+
+   # Seed S&P 500 entities
+   uv run python -c "from app.utils.db_scripts.seed_sp500_entities import seed_sp500_entities; seed_sp500_entities()"
+
+   # Seed sample users
+   uv run python -c "from app.utils.db_scripts.seed_users import seed_users; seed_users()"
+
+   # Seed sample news data
+   uv run python -c "from app.utils.db_scripts.seed_news import seed_news; seed_news()"
+
+   # Create missing user preferences
+   uv run python -c "from app.utils.db_scripts.create_missing_preferences import create_missing_preferences; create_missing_preferences()"
+
+   # Clear data (for development/testing)
+   uv run python -c "from app.utils.db_scripts.clear_entities import clear_entities; clear_entities()"
+   uv run python -c "from app.utils.db_scripts.clear_users import clear_users; clear_users()"
+   uv run python -c "from app.utils.db_scripts.clear_news import clear_news; clear_news()"
+   ```
+
+7. **Run the Application:**
 ```bash
 # Run the Flask backend API
 uv run python run.py
@@ -235,6 +300,213 @@ uv run python news_processing_job.py
 8. Updates SentimentHistory with entity-level aggregated sentiment
 
 **Note:** The job requires significant memory (4-6GB) due to heavy ML models. For production, it runs as a Kubernetes CronJob. See [jobs/README.md](jobs/README.md) for deployment details.
+
+## Azure Communication Services Setup
+
+The application uses Azure Communication Services (ACS) for sending OTP emails during passwordless authentication. Follow these steps to set up ACS:
+
+### 1. Create Azure Communication Services Resource
+
+**Using Azure Portal:**
+1. Go to [Azure Portal](https://portal.azure.com)
+2. Click "Create a resource" → Search "Communication Services"
+3. Fill in the details:
+   - **Subscription**: Your Azure subscription
+   - **Resource Group**: Use existing (e.g., `sentifinance.azurecr.io`)
+   - **Resource Name**: `sentifinance-communication`
+   - **Region**: Same as your other resources (e.g., East US)
+4. Click "Review + Create" → "Create"
+
+**Using Azure CLI:**
+```bash
+# Create Communication Services resource
+az communication create \
+  --name sentifinance-communication \
+  --resource-group sentifinance.azurecr.io \
+  --location eastus
+```
+
+### 2. Get Connection String
+
+**Via Azure Portal:**
+1. Go to your Communication Services resource
+2. Navigate to "Settings" → "Keys"
+3. Copy the "Primary connection string"
+
+**Via Azure CLI:**
+```bash
+# Get connection string
+az communication list-key \
+  --name sentifinance-communication \
+  --resource-group sentifinance.azurecr.io
+```
+
+### 3. Set Up Email Domain
+
+**Option A: Use Azure-managed domain (Quick Start)**
+1. In your Communication Services resource, go to "Email" → "Provision domains"
+2. Select "Add a free Azure subdomain"
+3. Choose a subdomain (e.g., `sentifinance-12345.azurecomm.net`)
+4. Wait for provisioning to complete
+5. Your sender email will be: `DoNotReply@sentifinance-12345.azurecomm.net`
+
+**Option B: Use custom domain (Production)**
+1. Go to "Email" → "Provision domains" → "Add a custom domain"
+2. Enter your domain (e.g., `notifications.yourdomain.com`)
+3. Add required DNS records to your domain:
+   ```
+   Type: TXT
+   Name: @
+   Value: ms-domain-verification=<verification-code>
+
+   Type: TXT
+   Name: @
+   Value: v=spf1 include:spf.protection.outlook.com -all
+
+   Type: CNAME
+   Name: selector1._domainkey
+   Value: <dkim-value-1>
+
+   Type: CNAME
+   Name: selector2._domainkey
+   Value: <dkim-value-2>
+   ```
+4. Click "Verify" after DNS propagation
+5. Your sender email will be: `noreply@notifications.yourdomain.com`
+
+### 4. Connect Email Domain to Communication Services
+
+1. In Communication Services resource, go to "Email" → "Manage domains"
+2. Click on your domain → "Connect domain"
+3. Select your Communication Services resource
+4. Save the configuration
+
+### 5. Configure Environment Variables
+
+Add these variables to your `.env` file:
+
+```env
+# Azure Communication Services
+AZURE_COMMUNICATION_CONNECTION_STRING=endpoint=https://sentifinance-communication.communication.azure.com/;accesskey=your-access-key
+AZURE_EMAIL_SENDER=DoNotReply@sentifinance-12345.azurecomm.net
+```
+
+### 6. Test Email Configuration
+
+**Test via Backend:**
+```bash
+# Start the backend
+uv run python run.py
+
+# Test OTP email (replace with valid user email)
+curl -X POST http://localhost:5001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com"}'
+```
+
+**Test via Azure CLI:**
+```bash
+# Send test email
+az communication email send \
+  --connection-string "$AZURE_COMMUNICATION_CONNECTION_STRING" \
+  --sender "DoNotReply@sentifinance-12345.azurecomm.net" \
+  --to "test@example.com" \
+  --subject "Test Email" \
+  --body "This is a test email from ACS"
+```
+
+### 7. Production Considerations
+
+**Security:**
+- Store connection string in Azure Key Vault (not plain text)
+- Use managed identities when possible
+- Implement rate limiting for email sending
+
+**Monitoring:**
+- Enable logging in Communication Services
+- Set up alerts for email delivery failures
+- Monitor email quota usage
+
+**DNS Configuration for Custom Domains:**
+- Use a subdomain (e.g., `mail.yourdomain.com`) for better deliverability
+- Implement DMARC policy for email authentication
+- Monitor SPF/DKIM alignment
+
+**Troubleshooting Common Issues:**
+
+| Issue | Solution |
+|-------|----------|
+| DNS verification fails | Wait up to 24 hours for DNS propagation |
+| Emails not delivered | Check spam folders, verify sender reputation |
+| Connection string invalid | Regenerate keys in Azure Portal |
+| Domain verification pending | Ensure all DNS records are correctly configured |
+| Rate limiting errors | Implement exponential backoff in email service |
+
+### 8. Bypass OTP for Testing (Development Only)
+
+For local development when you don't want to set up ACS, you can enable console logging of OTP codes:
+
+**Modify `app/services/email_service.py`:**
+
+```python
+class EmailService:
+    def __init__(self):
+        # Check for development bypass mode
+        self.development_mode = (
+            os.getenv('FLASK_ENV') == 'development' and
+            os.getenv('BYPASS_OTP_EMAIL', 'false').lower() == 'true'
+        )
+
+        if self.development_mode:
+            print("⚠️  EMAIL BYPASS MODE ENABLED - OTPs will be logged to console")
+            return
+
+        # Original ACS configuration
+        connection_string = os.getenv('AZURE_COMMUNICATION_CONNECTION_STRING')
+        # ... rest of existing __init__ code
+
+    def send_otp_email(self, recipient_email: str, otp_code: str, user_name: str = None) -> bool:
+        if self.development_mode:
+            print(f"""
+            ===============================================
+            🔑 DEVELOPMENT OTP (NOT SENT TO EMAIL)
+            ===============================================
+            Recipient: {recipient_email}
+            User: {user_name or 'Unknown'}
+            OTP Code: {otp_code}
+            Expires: 24 hours
+            ===============================================
+            """)
+            return True
+
+        # Original email sending logic continues here...
+```
+
+**Add to your `.env` file:**
+
+```env
+# For development testing without ACS
+BYPASS_OTP_EMAIL=true
+```
+
+**Testing workflow:**
+
+```bash
+# 1. Start backend with bypass enabled
+uv run python run.py
+
+# 2. Request OTP (check console for the code)
+curl -X POST http://localhost:5001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "existing-user@example.com"}'
+
+# 3. Use the OTP from console output to verify
+curl -X POST http://localhost:5001/auth/verify-otp \
+  -H "Content-Type: application/json" \
+  -d '{"otp_code": "123456"}'
+```
+
+**⚠️ Important:** Remove `BYPASS_OTP_EMAIL=true` before production deployment.
 
 ## Development Commands
 
