@@ -1,0 +1,21 @@
+# Gitleaks Ignore File for SentiFinance
+# Last updated: 2025-11-18
+#
+# Instructions:
+# - Add CVE IDs or file paths that are false positives
+# - Include comment explaining reason for each exclusion
+# - Review monthly and remove entries that are no longer needed
+#
+# Format examples:
+# - Ignore specific commit: <commit-sha>:<rule-id>:<file>
+# - Ignore specific file: <file-path>
+# - Ignore by fingerprint: gitleaks:allow
+
+# Example entries (remove if not applicable):
+# migrate-secrets-to-keyvault.sh
+# This is a helper script for migrating secrets, not actual secrets
+migrate-secrets-to-keyvault.sh
+
+# migrate-secrets-gh-to-kv.sh
+# This is a helper script that explains how to migrate secrets, contains no actual secrets
+migrate-secrets-gh-to-kv.sh

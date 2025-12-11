@@ -27,6 +27,11 @@ on:
     branches:
       - dev  # Only deploy from dev branch
 
+permissions:
+  contents: read
+  packages: write
+  security-events: write  # For Trivy results
+
 jobs:
   deploy:
     # Run when pushing to dev OR manual dispatch (removed workflow_run trigger)
@@ -44,20 +49,20 @@ jobs:
           exit 1;
         fi
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
       with:
         ref: dev  # Explicitly checkout dev branch
         fetch-depth: 0
     
     - name: Azure Login
-      uses: azure/login@v1
+      uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5  # v2.3.0
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
     
     - name: Login to Azure Container Registry
-      uses: azure/docker-login@v1
+      uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef  # v3.6.0
       with:
-        login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+        registry: ${{ secrets.ACR_LOGIN_SERVER }}
         username: ${{ secrets.ACR_USERNAME }}
         password: ${{ secrets.ACR_PASSWORD }}
     
@@ -143,7 +148,7 @@ jobs:
     
     - name: Set up Node.js for frontend build
       if: steps.check_build.outputs.skip_frontend == 'false'
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903  # v6.0.0
       with:
         node-version: '18'
         cache: 'npm'
@@ -221,31 +226,30 @@ jobs:
           exit 1
         fi
     
-    - name: Create Kubernetes secrets from GitHub Actions
+    - name: Deploy External Secrets Configuration
       run: |
         # Get AKS credentials
         az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
-        
-        # Create or update secrets from GitHub Actions secrets
-        kubectl create secret generic sentifinance-secrets \
-          --from-literal=secret-key="${{ secrets.SECRET_KEY }}" \
-          --from-literal=database-uri="${{ secrets.DATABASE_URI }}" \
-          --from-literal=database-url="${{ secrets.DATABASE_URL }}" \
-          --from-literal=db-host="${{ secrets.DB_HOST }}" \
-          --from-literal=db-port="${{ secrets.DB_PORT }}" \
-          --from-literal=db-name="${{ secrets.DB_NAME }}" \
-          --from-literal=db-user="${{ secrets.DB_USER }}" \
-          --from-literal=db-password="${{ secrets.DB_PASSWORD }}" \
-          --from-literal=jwt-secret-key="${{ secrets.JWT_SECRET_KEY }}" \
-          --from-literal=gemini-api-key="${{ secrets.GEMINI_API_KEY }}" \
-          --from-literal=gemini-api-key-sw="${{ secrets.GEMINI_API_KEY_SW }}" \
-          --from-literal=openai-api-key="${{ secrets.OPENAI_API_KEY }}" \
-          --from-literal=mail-username="${{ secrets.MAIL_USERNAME }}" \
-          --from-literal=mail-password="${{ secrets.MAIL_PASSWORD }}" \
-          --from-literal=azure-communication-connection-string="${{ secrets.AZURE_COMMUNICATION_CONNECTION_STRING }}" \
-          --from-literal=azure-email-sender="${{ secrets.AZURE_EMAIL_SENDER }}" \
-          --from-literal=azure-storage-connection-string="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
-          --namespace=sentifinance --dry-run=client -o yaml | kubectl apply -f -
+
+        # Apply external secrets configuration
+        kubectl apply -f k8s/external-secrets.yaml --namespace=sentifinance
+
+        echo "✅ External Secrets configured - secrets will sync from Azure Key Vault"
+
+        # Wait for secret to be created
+        echo "Waiting for ExternalSecret to sync..."
+        kubectl wait --for=condition=Ready \
+          externalsecret/sentifinance-external-secret \
+          --namespace=sentifinance \
+          --timeout=120s
+
+        # Verify secret exists
+        if kubectl get secret sentifinance-secrets --namespace=sentifinance >/dev/null 2>&1; then
+          echo "✅ Secret successfully synced from Key Vault"
+        else
+          echo "❌ Failed to sync secret from Key Vault"
+          exit 1
+        fi
     
     - name: Deploy to AKS (Hybrid Approach)
       run: |

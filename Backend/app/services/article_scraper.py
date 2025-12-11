@@ -66,6 +66,98 @@ def _ensure_deps_loaded():
         ) from e
 
 
+def _classify_error(error_msg, url):
+    """
+    Classify scraping errors to make intelligent retry decisions.
+
+    STRICT retry policy: Only retry truly transient errors.
+    Max retries reduced to 2 to keep scraping fast.
+
+    Returns:
+        tuple: (error_category, should_retry, suggested_action)
+
+    Error categories:
+    - 'timeout': Page took too long to load
+    - 'navigation': Failed to navigate to page (ACS-GOTO, etc.)
+    - 'bot_detection': CAPTCHA or bot blocking detected
+    - 'network': Network connectivity issues
+    - 'not_found': 404, access denied, page doesn't exist
+    - 'server_error': 5xx server errors
+    - 'browser_crash': Browser/target closed
+    - 'unknown': Unclassified errors
+    """
+    error_lower = str(error_msg).lower()
+    domain = url.split('/')[2] if len(url.split('/')) > 2 else url
+
+    # Timeout errors - ONLY retry if it's a first-time timeout
+    if 'timeout' in error_lower or 'exceeded' in error_lower or 'timed out' in error_lower:
+        # Don't suggest increasing timeout, just try once more
+        return ('timeout', True, f'Timeout on {domain}, retry once')
+
+    # Navigation failures - retry once (often transient)
+    if 'acs-goto' in error_lower or 'navigation' in error_lower or 'goto' in error_lower:
+        return ('navigation', True, f'Navigation failed on {domain}, retry once')
+
+    # Bot detection - NO RETRY (won't help)
+    if 'blocked' in error_lower or 'captcha' in error_lower:
+        return ('bot_detection', False, f'Bot detected on {domain}, skip')
+
+    # Access denied - NO RETRY
+    if 'access denied' in error_lower or 'forbidden' in error_lower:
+        return ('access_denied', False, f'Access denied on {domain}, skip')
+
+    # Network errors - retry once
+    if 'network' in error_lower or 'connection refused' in error_lower or 'connection reset' in error_lower:
+        return ('network', True, 'Network error, retry once')
+
+    # Not found - NO RETRY
+    if '404' in error_lower or 'not found' in error_lower:
+        return ('not_found', False, 'Page not found, skip')
+
+    # Server errors (503, 502) - retry once (might be temporary overload)
+    if '502' in error_lower or '503' in error_lower or 'service unavailable' in error_lower or 'bad gateway' in error_lower:
+        return ('server_error', True, 'Server temporarily unavailable, retry once')
+
+    # 500 errors - NO RETRY (likely permanent server issue)
+    if '500' in error_lower or 'internal server error' in error_lower:
+        return ('server_error_500', False, 'Internal server error, skip')
+
+    # Browser crashed - retry once
+    if 'target closed' in error_lower or 'browser closed' in error_lower:
+        return ('browser_crash', True, 'Browser crashed, retry once')
+
+    # Unknown errors - NO RETRY (to keep things fast)
+    return ('unknown', False, f'Unknown error on {domain}, skip to save time')
+
+
+# Global error tracking (for analytics)
+_error_stats = {}
+
+
+def get_error_statistics():
+    """
+    Get error statistics by domain and error type.
+    Useful for identifying problematic sources.
+
+    Returns:
+        dict: Error statistics with counts by domain and error type
+    """
+    return dict(_error_stats)
+
+
+def _track_error(url, error_category):
+    """Track error for analytics purposes"""
+    try:
+        domain = url.split('/')[2] if len(url.split('/')) > 2 else url
+        if domain not in _error_stats:
+            _error_stats[domain] = {}
+        if error_category not in _error_stats[domain]:
+            _error_stats[domain][error_category] = 0
+        _error_stats[domain][error_category] += 1
+    except Exception:
+        pass  # Don't let analytics break the scraping
+
+
 def _detect_premium_site(url):
     """Detect if URL is from a premium/difficult site that needs special handling"""
     SITE_CONFIGS = {
@@ -78,11 +170,11 @@ def _detect_premium_site(url):
         'seekingalpha.com': {'timeout': 45000, 'wait': 'domcontentloaded', 'skip': True},
         'morningstar.com': {'timeout': 40000, 'wait': 'domcontentloaded', 'skip': True},
         'nikkei.com': {'timeout': 45000, 'wait': 'domcontentloaded', 'skip': True},
+        'investing.com': {'timeout': 30000, 'wait': 'domcontentloaded', 'skip': True},  
 
         # ✓ TOP TIER - Fast, reliable sites
         'reuters.com': {'timeout': 35000, 'wait': 'networkidle', 'skip': False},
         'cnbc.com': {'timeout': 30000, 'wait': 'networkidle', 'skip': False},
-        'investing.com': {'timeout': 30000, 'wait': 'networkidle', 'skip': False},
         'businessinsider.com': {'timeout': 35000, 'wait': 'networkidle', 'skip': False},
         'theguardian.com': {'timeout': 35000, 'wait': 'networkidle', 'skip': False},
 
@@ -106,15 +198,20 @@ def _detect_premium_site(url):
     return {'timeout': 30000, 'wait': 'networkidle', 'skip': False}
 
 
-async def scrape_article_async(url, retries=3, base_delay=3):
+async def scrape_article_async(url, retries=2, base_delay=3):
     """
-    Scrape article content asynchronously with enhanced retry mechanism and anti-bot features.
+    Scrape article content asynchronously with smart retry mechanism.
 
-    Improvements:
+    FAST scraping mode:
+    - Max 2 retries (3 total attempts) to keep scraping fast
+    - Only retries truly transient errors (timeouts, navigation, network)
+    - Skips non-retriable errors immediately (bot detection, 404, 500)
+
+    Features:
+    - Error classification with intelligent retry decisions
     - Exponential backoff for retries
     - Random delays to mimic human behavior
     - Per-request user agent rotation
-    - Better error handling for bot detection
     - Premium site detection with adjusted timeouts
     """
     # Check if this is a difficult premium site
@@ -184,48 +281,72 @@ async def scrape_article_async(url, retries=3, base_delay=3):
                 result = await crawler.arun(url=url, config=run_config)
 
                 if result.success:
-                    logger.info(f"✓ Successfully scraped: {url}")
+                    logger.info(f"Successfully scraped: {url}")
                     return result.cleaned_html
                 else:
+                    # Classify the error to make intelligent retry decisions
+                    error_category, should_retry, suggestion = _classify_error(result.error_message, url)
+                    _track_error(url, error_category)
+
                     logger.warning(
                         f"[Attempt {attempt+1}/{retries+1}] Scrape failed: {result.error_message}"
                     )
+                    logger.info(f"Error type: {error_category} | Should retry: {should_retry} | Suggestion: {suggestion}")
 
-                    # Check if it's a bot detection error
-                    if "blocked" in str(result.error_message).lower() or "captcha" in str(result.error_message).lower():
-                        logger.warning(f"Bot detection suspected for {url}")
+                    # Decide whether to retry based on error classification
+                    if not should_retry:
+                        logger.warning(f"Error type '{error_category}' is not retriable, skipping retries for {url}")
+                        return None
 
                     if attempt < retries:
-                        # Exponential backoff: 3s, 6s, 12s
+                        # Fast retry with standard exponential backoff (2x)
+                        # First retry: 3-5s, Second retry: 6-8s
                         delay = base_delay * (2 ** attempt) + random.uniform(0, 2)
                         logger.info(f"Retrying in {delay:.1f}s...")
                         await asyncio.sleep(delay)
                     else:
+                        logger.warning(f"Max retries ({retries}) reached for {url}, final error: {error_category}")
                         return None
 
         except (TargetClosedError, TimeoutError) as e:
-            error_msg = str(e)
-            is_timeout = "timeout" in error_msg.lower() or "30000ms" in error_msg or "exceeded" in error_msg.lower()
+            # Classify the exception error
+            error_category, should_retry, suggestion = _classify_error(str(e), url)
+            _track_error(url, error_category)
 
-            if is_timeout:
-                domain = url.split('/')[2] if len(url.split('/')) > 2 else url
-                logger.warning(f"[Attempt {attempt+1}] Timeout error for {domain}: page took too long to load")
+            logger.warning(f"[Attempt {attempt+1}/{retries+1}] Exception caught: {e}")
+            logger.info(f"Error type: {error_category} | Should retry: {should_retry} | Suggestion: {suggestion}")
+
+            # Decide whether to retry
+            if not should_retry:
+                logger.warning(f"Error type '{error_category}' is not retriable for {url}")
+                return None
+
+            if attempt < retries:
+                # Fast standard exponential backoff
+                delay = base_delay * (2 ** attempt) + random.uniform(0, 2)
+                logger.info(f"Retrying in {delay:.1f}s...")
+                await asyncio.sleep(delay)
             else:
-                logger.warning(f"[Attempt {attempt+1}] Retriable browser error: {e}")
+                logger.error(f"Max retries ({retries}) reached for {url}, final error: {error_category}")
+                return None
+        except Exception as e:
+            # Classify unknown exceptions
+            error_category, should_retry, suggestion = _classify_error(str(e), url)
+            _track_error(url, error_category)
+
+            logger.exception(f"Unhandled exception while scraping {url}: {e}")
+            logger.info(f"Error type: {error_category} | Should retry: {should_retry} | Suggestion: {suggestion}")
+
+            if not should_retry:
+                logger.warning(f"Error type '{error_category}' is not retriable for {url}")
+                return None
 
             if attempt < retries:
                 delay = base_delay * (2 ** attempt) + random.uniform(0, 2)
                 logger.info(f"Retrying in {delay:.1f}s...")
                 await asyncio.sleep(delay)
             else:
-                logger.error(f"✗ Max retry limit reached for {url} - giving up")
-                return None
-        except Exception as e:
-            logger.exception(f"Unhandled exception while scraping {url}: {e}")
-            if attempt < retries:
-                delay = base_delay * (2 ** attempt)
-                await asyncio.sleep(delay)
-            else:
+                logger.error(f"Max retries ({retries}) reached for {url}, final error: {error_category}")
                 return None
 
     return None
