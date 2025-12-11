@@ -301,6 +301,506 @@ uv run python news_processing_job.py
 
 **Note:** The job requires significant memory (4-6GB) due to heavy ML models. For production, it runs as a Kubernetes CronJob. See [jobs/README.md](jobs/README.md) for deployment details.
 
+## Web Scraping Implementation
+
+The application uses advanced web scraping techniques to extract full article content from news URLs. This section explains how the scraping system works.
+
+### Overview
+
+The web scraping system is built on top of two main technologies:
+- **Crawl4AI**: A Python library optimized for LLM-friendly web scraping
+- **Playwright**: A browser automation framework that handles JavaScript-heavy websites
+
+### How It Works
+
+**File Location:** `app/services/article_scraper.py`
+
+The scraper is designed to handle various website types, from simple static HTML to complex JavaScript-rendered pages.
+
+#### Basic Flow
+
+1. **URL Validation**: Checks if URL is valid and accessible
+2. **Content Extraction**: Uses Crawl4AI with Playwright to fetch article content
+3. **HTML Cleaning**: Removes ads, navigation, and other non-article content
+4. **Text Extraction**: Extracts clean text suitable for NLP analysis
+5. **Quality Check**: Validates that extracted content meets minimum quality standards
+
+#### Implementation Details
+
+```python
+from crawl4ai import AsyncWebCrawler
+from app.services.article_scraper import scrape_article
+
+# Basic usage
+article_data = await scrape_article(url="https://example.com/news-article")
+
+# Returns:
+# {
+#     'url': 'https://example.com/news-article',
+#     'title': 'Article Title',
+#     'content': 'Full article text...',
+#     'published_date': '2024-01-15',
+#     'success': True
+# }
+```
+
+### Configuration
+
+**Playwright Browser Setup:**
+
+The scraper requires Playwright's Chromium browser to be installed:
+
+```bash
+# Install Playwright browsers
+uv run playwright install chromium
+
+# Or install all browsers
+uv run playwright install
+```
+
+**Scraping Parameters:**
+
+The scraper can be configured with various parameters:
+
+```python
+# In app/services/article_scraper.py
+SCRAPER_CONFIG = {
+    'timeout': 30000,           # Max wait time (ms)
+    'wait_for': 'networkidle',  # Wait until network is idle
+    'headless': True,           # Run browser in headless mode
+    'user_agent': 'Mozilla/5.0...',  # Custom user agent
+}
+```
+
+### Quality Assurance
+
+**File Location:** `app/utils/scraping_quality.py`
+
+The system includes quality checks to ensure scraped content is usable:
+
+1. **Length Validation**: Article must have minimum word count
+2. **Content Ratio**: Text-to-HTML ratio must exceed threshold
+3. **Noise Detection**: Filters out navigation, ads, and boilerplate text
+4. **Language Detection**: Ensures content is in expected language
+
+```python
+from app.utils.scraping_quality import validate_scraped_content
+
+is_valid, quality_score = validate_scraped_content(
+    content=article_text,
+    min_words=100,
+    min_quality_score=0.6
+)
+```
+
+### Handling Different Website Types
+
+**Static HTML Sites:**
+- Fast extraction using HTML parsing
+- No JavaScript rendering needed
+- Example: Traditional news sites, blogs
+
+**JavaScript-Heavy Sites:**
+- Full browser rendering with Playwright
+- Waits for dynamic content to load
+- Example: Modern SPAs, React-based news sites
+
+**Paywalled Content:**
+- Detects paywall presence
+- Extracts available preview text
+- Marks article as partial content
+
+### Error Handling
+
+The scraper implements robust error handling:
+
+```python
+# Common error scenarios
+try:
+    article = await scrape_article(url)
+except TimeoutError:
+    # Site took too long to load
+    logger.warning(f"Timeout scraping {url}")
+except InvalidURLError:
+    # URL is malformed or inaccessible
+    logger.error(f"Invalid URL: {url}")
+except ScrapingQualityError:
+    # Content quality too low
+    logger.info(f"Low quality content from {url}")
+```
+
+### Performance Optimization
+
+**Concurrency:**
+The news processing job scrapes multiple articles in parallel:
+
+```python
+# In jobs/news_processing_job.py
+async def process_articles_batch(urls):
+    async with AsyncWebCrawler() as crawler:
+        tasks = [scrape_article(url, crawler) for url in urls]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+    return results
+```
+
+**Rate Limiting:**
+Built-in delays prevent overwhelming target websites:
+- Respects robots.txt directives
+- Implements exponential backoff on failures
+- Randomizes request timing
+
+**Caching:**
+Successfully scraped articles are cached to avoid re-scraping:
+- Stored in PostgreSQL News table
+- TTL-based invalidation
+- Cache key includes URL + scrape timestamp
+
+### Troubleshooting
+
+**Issue: Playwright not installed**
+```bash
+# Solution
+uv run playwright install chromium
+```
+
+**Issue: Scraping timeouts**
+```python
+# Increase timeout in article_scraper.py
+SCRAPER_CONFIG['timeout'] = 60000  # 60 seconds
+```
+
+**Issue: JavaScript not rendering**
+```python
+# Force wait for specific selector
+await crawler.wait_for_selector('.article-content')
+```
+
+**Issue: Getting blocked by websites**
+```python
+# Rotate user agents, add delays
+SCRAPER_CONFIG['user_agent'] = 'Custom-Bot/1.0'
+await asyncio.sleep(random.uniform(1, 3))
+```
+
+## SHAP Explainability Implementation
+
+The application uses SHAP (SHapley Additive exPlanations) to provide interpretable explanations for sentiment analysis predictions. This helps users understand why a particular sentiment score was assigned to an article.
+
+### Overview
+
+**What is SHAP?**
+
+SHAP is a game-theoretic approach to explain machine learning model predictions. It calculates how much each feature (word/phrase) contributes to the final sentiment prediction.
+
+- **Red values**: Features pushing sentiment toward negative
+- **Blue values**: Features pushing sentiment toward positive
+- **Magnitude**: How strongly the feature influences the prediction
+
+### How It Works
+
+**File Location:** `app/services/sentiment_analysis.py`
+
+The SHAP implementation is integrated into the sentiment analysis pipeline:
+
+1. **Model Prediction**: Ensemble model generates sentiment score
+2. **SHAP Calculation**: Compute feature importance for the prediction
+3. **Visualization**: Generate interactive HTML chart
+4. **Storage**: Upload HTML to Azure Blob Storage
+5. **Database**: Store URL reference in News table
+
+### Implementation Details
+
+#### SHAP Value Generation
+
+```python
+from transformers import pipeline
+import shap
+
+# Initialize sentiment model
+sentiment_pipeline = pipeline(
+    "sentiment-analysis",
+    model="ProsusAI/finbert",
+    tokenizer="ProsusAI/finbert"
+)
+
+# Create SHAP explainer
+explainer = shap.Explainer(sentiment_pipeline)
+
+# Generate SHAP values
+article_text = "The company reported strong earnings..."
+shap_values = explainer([article_text])
+
+# SHAP values array shows contribution of each token
+# Shape: (1, num_tokens, num_classes)
+```
+
+#### Visualization Creation
+
+```python
+import shap
+
+# Create SHAP force plot (shows token-level contributions)
+shap.plots.text(shap_values[0])
+
+# Or create waterfall plot (shows cumulative contributions)
+shap.plots.waterfall(shap_values[0])
+
+# Save to HTML file
+html_output = shap.plots.text(shap_values[0], display=False)
+with open('shap_explanation.html', 'w') as f:
+    f.write(html_output)
+```
+
+### Azure Blob Storage Integration
+
+SHAP visualizations are stored in Azure Blob Storage for efficient delivery:
+
+**File Location:** `jobs/news_processing_job.py`
+
+```python
+from azure.storage.blob import BlobServiceClient
+
+# Initialize Azure client
+connection_string = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+container_name = "shap-explanations"
+
+# Upload SHAP HTML
+blob_name = f"shap_{news_id}_{timestamp}.html"
+blob_client = blob_service_client.get_blob_client(
+    container=container_name,
+    blob=blob_name
+)
+
+with open('shap_explanation.html', 'rb') as data:
+    blob_client.upload_blob(data, overwrite=True)
+
+# Get public URL
+shap_url = blob_client.url
+
+# Store in database
+news.shap_url = shap_url
+db.session.commit()
+```
+
+### Configuration
+
+**Environment Variables:**
+
+```env
+# Required for SHAP upload
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net
+```
+
+**Azure Storage Setup:**
+
+```bash
+# Create storage account (if not exists)
+az storage account create \
+  --name sentifinancestorage \
+  --resource-group sentifinance-rg \
+  --location eastus \
+  --sku Standard_LRS
+
+# Create container for SHAP files
+az storage container create \
+  --name shap-explanations \
+  --account-name sentifinancestorage \
+  --public-access blob
+
+# Get connection string
+az storage account show-connection-string \
+  --name sentifinancestorage \
+  --resource-group sentifinance-rg
+```
+
+### Model-Specific SHAP Implementation
+
+The application uses an ensemble of three models, each with SHAP explanations:
+
+#### 1. FinBERT SHAP
+```python
+# Financial domain-specific BERT model
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+
+# SHAP for transformer models
+explainer = shap.Explainer(model, tokenizer)
+shap_values = explainer([article_text])
+```
+
+#### 2. Gemini SHAP (Proxy Method)
+```python
+# For API-based models, use perturbation method
+import google.generativeai as genai
+
+def gemini_predict(texts):
+    model = genai.GenerativeModel('gemini-pro')
+    results = []
+    for text in texts:
+        response = model.generate_content(f"Analyze sentiment: {text}")
+        # Parse sentiment score from response
+        score = parse_sentiment_score(response.text)
+        results.append(score)
+    return results
+
+# Use masker for perturbation-based SHAP
+masker = shap.maskers.Text(tokenizer=r'\W+')
+explainer = shap.Explainer(gemini_predict, masker=masker)
+shap_values = explainer([article_text])
+```
+
+#### 3. OpenAI SHAP (Proxy Method)
+```python
+# Similar to Gemini, use perturbation
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+
+def openai_predict(texts):
+    results = []
+    for text in texts:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{
+                "role": "user",
+                "content": f"Rate sentiment from -1 (negative) to 1 (positive): {text}"
+            }]
+        )
+        score = float(response.choices[0].message.content)
+        results.append(score)
+    return results
+
+masker = shap.maskers.Text(tokenizer=r'\W+')
+explainer = shap.Explainer(openai_predict, masker=masker)
+shap_values = explainer([article_text])
+```
+
+### Ensemble SHAP Aggregation
+
+The final SHAP visualization combines all three models:
+
+```python
+# Average SHAP values across models
+finbert_shap = explainer_finbert([text])
+gemini_shap = explainer_gemini([text])
+openai_shap = explainer_openai([text])
+
+# Align token positions (models may tokenize differently)
+aligned_shap = align_shap_values([finbert_shap, gemini_shap, openai_shap])
+
+# Weighted average based on model confidence
+ensemble_shap = (
+    0.4 * aligned_shap['finbert'] +
+    0.3 * aligned_shap['gemini'] +
+    0.3 * aligned_shap['openai']
+)
+
+# Generate final visualization
+shap.plots.text(ensemble_shap)
+```
+
+### Optimization & Caching
+
+SHAP calculation is computationally expensive. Optimizations include:
+
+**Background Processing:**
+```python
+# SHAP generation happens in async job, not in API request
+# See jobs/news_processing_job.py
+async def generate_shap_async(news_id, article_text):
+    shap_values = await compute_shap(article_text)
+    html = generate_shap_html(shap_values)
+    url = await upload_to_azure(html, news_id)
+    await update_database(news_id, shap_url=url)
+```
+
+**Token Limiting:**
+```python
+# Truncate long articles to reduce computation
+MAX_TOKENS = 512  # FinBERT max input length
+
+def truncate_for_shap(text, max_tokens=512):
+    tokens = tokenizer.encode(text, truncation=True, max_length=max_tokens)
+    return tokenizer.decode(tokens)
+```
+
+**Batch Processing:**
+```python
+# Process multiple articles in batch
+explainer = shap.Explainer(model, tokenizer)
+shap_values = explainer(list_of_articles)  # Vectorized computation
+```
+
+### Accessing SHAP Visualizations
+
+**Via API:**
+```bash
+# Get news with SHAP URL
+curl http://localhost:5001/news/123
+
+# Response includes:
+{
+  "id": 123,
+  "title": "Company Reports Earnings",
+  "sentiment": 0.85,
+  "shap_url": "https://sentifinancestorage.blob.core.windows.net/shap-explanations/shap_123_20240115.html",
+  ...
+}
+```
+
+**Frontend Integration:**
+```javascript
+// Display SHAP in iframe
+<iframe
+  src={news.shap_url}
+  width="100%"
+  height="400px"
+  title="SHAP Explanation"
+/>
+```
+
+### Troubleshooting
+
+**Issue: SHAP computation takes too long**
+```python
+# Solution: Reduce max tokens or use sampling
+explainer = shap.Explainer(model, tokenizer, max_evals=100)
+```
+
+**Issue: Azure upload fails**
+```python
+# Check connection string and container permissions
+az storage container show-permission \
+  --name shap-explanations \
+  --account-name sentifinancestorage
+```
+
+**Issue: SHAP values inconsistent**
+```python
+# Ensure consistent random seed
+import numpy as np
+np.random.seed(42)
+```
+
+**Issue: Out of memory during SHAP**
+```python
+# Process in smaller batches
+batch_size = 5
+for i in range(0, len(articles), batch_size):
+    batch = articles[i:i+batch_size]
+    shap_values = explainer(batch)
+    save_shap_results(shap_values)
+```
+
+### Further Reading
+
+- [SHAP Documentation](https://shap.readthedocs.io/)
+- [SHAP for Transformers](https://shap.readthedocs.io/en/latest/example_notebooks/api_examples/models/Transformers.html)
+- [Azure Blob Storage Python SDK](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-python)
+
 ## Azure Communication Services Setup
 
 The application uses Azure Communication Services (ACS) for sending OTP emails during passwordless authentication. Follow these steps to set up ACS:
