@@ -1317,5 +1317,3 @@ cat diagnostic-report.txt
 ---
 
 **Last Updated:** December 11, 2025
-**Maintained By:** SentiFinance Team
-**Version:** 1.0
