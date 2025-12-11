@@ -225,12 +225,81 @@ jobs:
             --repository sentifinance-backend --orderby time_desc --output table | head -10
           exit 1
         fi
-    
+
+    - name: Get AKS Credentials
+      run: |
+        echo "🔐 Getting AKS credentials..."
+        az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
+        kubectl cluster-info
+        echo "✅ Connected to AKS cluster"
+
+    - name: Install Helm
+      run: |
+        echo "📦 Checking Helm installation..."
+        if ! command -v helm &> /dev/null; then
+          echo "Installing Helm..."
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        else
+          echo "✅ Helm already installed: $(helm version --short)"
+        fi
+
+    - name: Install External Secrets Operator
+      run: |
+        echo "============================================"
+        echo "Installing External Secrets Operator (ESO)"
+        echo "============================================"
+
+        # Add External Secrets Helm repository
+        echo "Adding ESO Helm repository..."
+        helm repo add external-secrets https://charts.external-secrets.io
+        helm repo update
+
+        # Check if ESO is already installed
+        if helm list -n external-secrets-system 2>/dev/null | grep -q external-secrets; then
+          echo "ESO already installed, upgrading..."
+          helm upgrade external-secrets \
+            external-secrets/external-secrets \
+            --namespace external-secrets-system \
+            --set installCRDs=true \
+            --wait \
+            --timeout 5m
+          echo "✅ ESO upgraded successfully"
+        else
+          echo "Installing ESO for the first time..."
+          helm install external-secrets \
+            external-secrets/external-secrets \
+            --namespace external-secrets-system \
+            --create-namespace \
+            --set installCRDs=true \
+            --wait \
+            --timeout 5m
+          echo "✅ ESO installed successfully"
+        fi
+
+        # Verify installation
+        echo ""
+        echo "Verifying ESO installation..."
+        kubectl get pods -n external-secrets-system
+        kubectl get crd | grep external-secrets || echo "⚠️  CRDs not found yet, waiting..."
+
+        # Wait for ESO to be ready
+        echo "Waiting for ESO pods to be ready..."
+        kubectl wait --for=condition=Ready \
+          pod -l app.kubernetes.io/name=external-secrets \
+          -n external-secrets-system \
+          --timeout=300s || echo "⚠️  Timeout waiting for ESO pods"
+
+        echo "✅ External Secrets Operator is ready"
+
+    - name: Create Namespace
+      run: |
+        echo "📂 Creating sentifinance namespace..."
+        # Apply namespace without --namespace flag (it's self-defining)
+        kubectl apply -f k8s/namespace.yaml
+        echo "✅ Namespace ready"
+
     - name: Deploy External Secrets Configuration
       run: |
-        # Get AKS credentials
-        az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
-
         # Apply external secrets configuration
         kubectl apply -f k8s/external-secrets.yaml --namespace=sentifinance
 
@@ -250,7 +319,73 @@ jobs:
           echo "❌ Failed to sync secret from Key Vault"
           exit 1
         fi
-    
+
+    - name: Run Database Migrations
+      run: |
+        echo "============================================"
+        echo "Running Pre-Deployment Database Migrations"
+        echo "============================================"
+
+        IMAGE_TAG="${{ steps.check_build.outputs.image_tag }}"
+        echo "Using image tag: $IMAGE_TAG"
+
+        # Prepare migration job manifest with actual values
+        sed -e "s|\${GITHUB_SHA:0:8}|${GITHUB_SHA:0:8}|g" \
+            -e "s|\${ACR_LOGIN_SERVER}|${{ secrets.ACR_LOGIN_SERVER }}|g" \
+            -e "s|\${IMAGE_TAG}|${IMAGE_TAG}|g" \
+            k8s/db-migration-job.yaml > /tmp/db-migration-job.yaml
+
+        echo "Generated migration job manifest:"
+        cat /tmp/db-migration-job.yaml
+
+        # Delete old migration jobs (cleanup)
+        echo "Cleaning up old migration jobs..."
+        kubectl delete job -n sentifinance -l component=migration --ignore-not-found=true
+
+        # Apply migration job
+        echo "Creating migration job..."
+        kubectl apply -f /tmp/db-migration-job.yaml --namespace=sentifinance
+
+        # Wait for migration to complete
+        echo "Waiting for migration to complete (timeout: 10 minutes)..."
+        if kubectl wait --for=condition=complete \
+            --timeout=600s \
+            job/db-migration-${GITHUB_SHA:0:8} \
+            --namespace=sentifinance; then
+          echo "✅ Migration completed successfully"
+        else
+          echo "❌ Migration failed or timed out"
+
+          # Show migration logs
+          echo ""
+          echo "Migration job logs:"
+          kubectl logs job/db-migration-${GITHUB_SHA:0:8} --namespace=sentifinance || true
+
+          # Check if job failed
+          FAILED_PODS=$(kubectl get pods -n sentifinance -l job-name=db-migration-${GITHUB_SHA:0:8} \
+            --field-selector=status.phase=Failed -o name)
+
+          if [ -n "$FAILED_PODS" ]; then
+            echo ""
+            echo "Failed pod logs:"
+            echo "$FAILED_PODS" | xargs -I {} kubectl logs {} -n sentifinance || true
+          fi
+
+          echo ""
+          echo "❌ DEPLOYMENT ABORTED - Migration must succeed before deploying pods"
+          exit 1
+        fi
+
+        # Show final migration state
+        echo ""
+        echo "Final migration logs:"
+        kubectl logs job/db-migration-${GITHUB_SHA:0:8} --namespace=sentifinance
+
+        echo ""
+        echo "============================================"
+        echo "✅ Pre-Deployment Migrations Complete"
+        echo "============================================"
+
     - name: Deploy to AKS (Hybrid Approach)
       run: |
         IMAGE_TAG="${{ steps.check_build.outputs.image_tag }}"
@@ -265,11 +400,21 @@ jobs:
         if [[ "$K8S_CHANGED" -gt 0 ]]; then
           echo "🔧 K8s configuration changes detected - applying full manifests"
           for file in k8s/*.yaml; do
-            if [[ "$(basename "$file")" != "kustomization.yaml" ]]; then
+            BASENAME="$(basename "$file")"
+            # Skip namespace (applied separately), external-secrets (applied separately),
+            # kustomization, and db-migration-job (migration job is templated and applied separately)
+            if [[ "$BASENAME" != "namespace.yaml" ]] && \
+               [[ "$BASENAME" != "external-secrets.yaml" ]] && \
+               [[ "$BASENAME" != "kustomization.yaml" ]] && \
+               [[ "$BASENAME" != "db-migration-job.yaml" ]]; then
               echo "Applying $file..."
               kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
             fi
           done
+
+          # Verify PDB is applied
+          echo "Verifying PodDisruptionBudget..."
+          kubectl get pdb -n sentifinance || echo "No PDB found"
         elif [[ "$SKIP_BUILD" == "false" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           echo "⚡ Code or manual deployment - using fast image update"
           kubectl set image deployment/sentifinance-backend \
@@ -288,7 +433,13 @@ jobs:
           if ! kubectl get deployment sentifinance-backend --namespace=sentifinance > /dev/null 2>&1; then
             echo "📦 Deployment not found - applying manifests for first-time setup"
             for file in k8s/*.yaml; do
-              if [[ "$(basename "$file")" != "kustomization.yaml" ]]; then
+              BASENAME="$(basename "$file")"
+              # Skip namespace (applied separately), external-secrets (applied separately),
+              # kustomization, and db-migration-job (migration job is templated and applied separately)
+              if [[ "$BASENAME" != "namespace.yaml" ]] && \
+                 [[ "$BASENAME" != "external-secrets.yaml" ]] && \
+                 [[ "$BASENAME" != "kustomization.yaml" ]] && \
+                 [[ "$BASENAME" != "db-migration-job.yaml" ]]; then
                 kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
               fi
             done
@@ -296,35 +447,211 @@ jobs:
         else
           echo "❓ No relevant changes detected - applying full manifests to be safe"
           for file in k8s/*.yaml; do
-            if [[ "$(basename "$file")" != "kustomization.yaml" ]]; then
+            BASENAME="$(basename "$file")"
+            # Skip namespace (applied separately), external-secrets (applied separately),
+            # kustomization, and db-migration-job (migration job is templated and applied separately)
+            if [[ "$BASENAME" != "namespace.yaml" ]] && \
+               [[ "$BASENAME" != "external-secrets.yaml" ]] && \
+               [[ "$BASENAME" != "kustomization.yaml" ]] && \
+               [[ "$BASENAME" != "db-migration-job.yaml" ]]; then
               kubectl apply -f "$file" --namespace=sentifinance || echo "Warning: failed to apply $file"
             fi
           done
         fi
     
-    - name: Health Check
+    - name: Comprehensive Deployment Validation
+      id: smoke_tests
       run: |
-        echo "Waiting for deployment to be ready..."
-        kubectl rollout status deployment/sentifinance-backend --namespace=sentifinance --timeout=300s  # 5 minutes - much faster with lazy loading
-        
-        # Get service URL (adjust based on your service type)
-        SERVICE_IP=$(kubectl get service sentifinance-service --namespace=sentifinance -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
-        
-        if [ "$SERVICE_IP" != "pending" ] && [ "$SERVICE_IP" != "" ]; then
-          APP_URL="http://$SERVICE_IP"
-          echo "✅ App should be available at: $APP_URL"
-          
-          # Health check with retry
-          for i in {1..5}; do
-            echo "Health check attempt $i..."
-            if curl -f --max-time 30 "$APP_URL/" > /dev/null 2>&1; then
-              echo "✅ Health check passed! App is running at $APP_URL"
-              break
-            else
-              echo "❌ Health check failed, retrying in 10 seconds..."
-              sleep 10
-            fi
-          done
-        else
-          echo "⏳ LoadBalancer IP still pending, check kubectl get services"
+        echo "============================================"
+        echo "Deployment Validation & Smoke Tests"
+        echo "============================================"
+
+        # Step 1: Wait for rollout to complete
+        echo "Step 1: Waiting for deployment rollout..."
+        if ! kubectl rollout status deployment/sentifinance-backend \
+            --namespace=sentifinance \
+            --timeout=300s; then
+          echo "❌ Deployment rollout failed"
+          exit 1
         fi
+        echo "✅ Rollout completed"
+
+        # Step 2: Verify pods are running
+        echo ""
+        echo "Step 2: Checking pod status..."
+        READY_PODS=$(kubectl get pods -n sentifinance -l app=sentifinance-backend \
+          -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' | wc -w)
+        TOTAL_PODS=$(kubectl get pods -n sentifinance -l app=sentifinance-backend \
+          --no-headers | wc -l)
+
+        echo "Ready pods: $READY_PODS / $TOTAL_PODS"
+
+        if [ "$READY_PODS" -eq 0 ]; then
+          echo "❌ No pods are running"
+          kubectl get pods -n sentifinance -l app=sentifinance-backend
+          exit 1
+        fi
+        echo "✅ Pods are running"
+
+        # Step 3: Get service endpoint
+        echo ""
+        echo "Step 3: Getting service endpoint..."
+        SERVICE_IP=$(kubectl get service sentifinance-service \
+          --namespace=sentifinance \
+          -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+        if [ -z "$SERVICE_IP" ] || [ "$SERVICE_IP" == "null" ]; then
+          echo "❌ LoadBalancer IP not available"
+          kubectl describe service sentifinance-service --namespace=sentifinance
+          exit 1
+        fi
+
+        APP_URL="http://$SERVICE_IP"
+        echo "✅ App URL: $APP_URL"
+
+        # Step 4: Wait for service to be ready (pods might be running but not ready)
+        echo ""
+        echo "Step 4: Waiting for service to respond..."
+        for i in {1..30}; do
+          if curl -f --max-time 10 "$APP_URL/" >/dev/null 2>&1; then
+            echo "✅ Service is responding"
+            break
+          fi
+          echo "Attempt $i/30: Service not ready yet..."
+          sleep 5
+        done
+
+        # Step 5: Test root endpoint
+        echo ""
+        echo "Step 5: Testing root endpoint (/)..."
+        if ! curl -f --max-time 30 "$APP_URL/" > /tmp/root_response.txt 2>&1; then
+          echo "❌ Root endpoint test failed"
+          cat /tmp/root_response.txt
+          exit 1
+        fi
+        echo "✅ Root endpoint responding"
+
+        # Step 6: Test API health endpoint
+        echo ""
+        echo "Step 6: Testing API health endpoint (/api)..."
+        if ! HEALTH_RESPONSE=$(curl -f --max-time 30 "$APP_URL/api" 2>/dev/null); then
+          echo "❌ API health endpoint test failed"
+          exit 1
+        fi
+        echo "API Response: $HEALTH_RESPONSE"
+        echo "✅ API health endpoint responding"
+
+        # Step 7: Test database connectivity (via entities endpoint)
+        echo ""
+        echo "Step 7: Testing database connectivity (/api/entities)..."
+        if ! curl -f --max-time 30 "$APP_URL/api/entities" >/dev/null 2>&1; then
+          echo "❌ Database connectivity test failed (entities endpoint)"
+          # Non-fatal - might be empty table
+          echo "⚠️  Warning: Entities endpoint failed, but continuing"
+        else
+          echo "✅ Database connectivity confirmed"
+        fi
+
+        # Step 8: Check application logs for errors
+        echo ""
+        echo "Step 8: Checking application logs for errors..."
+        RECENT_LOGS=$(kubectl logs -n sentifinance -l app=sentifinance-backend \
+          --tail=100 --since=2m 2>/dev/null || echo "")
+
+        ERROR_COUNT=$(echo "$RECENT_LOGS" | grep -i "error\|exception\|traceback" | wc -l)
+
+        if [ "$ERROR_COUNT" -gt 0 ]; then
+          echo "⚠️  Found $ERROR_COUNT error/exception log lines:"
+          echo "$RECENT_LOGS" | grep -i "error\|exception\|traceback" | head -20
+          echo ""
+          echo "⚠️  Errors detected but not failing deployment (check logs)"
+        else
+          echo "✅ No errors found in recent logs"
+        fi
+
+        # Step 9: Verify deployment revision
+        echo ""
+        echo "Step 9: Verifying deployment revision..."
+        CURRENT_REVISION=$(kubectl get deployment sentifinance-backend -n sentifinance \
+          -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
+        echo "Current deployment revision: $CURRENT_REVISION"
+        echo "✅ Deployment revision recorded"
+
+        echo ""
+        echo "============================================"
+        echo "✅ All smoke tests passed!"
+        echo "Deployment: SUCCESSFUL"
+        echo "App URL: $APP_URL"
+        echo "============================================"
+
+    - name: Deployment Summary
+      if: always()
+      run: |
+        echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ steps.smoke_tests.outcome }}" == "success" ]; then
+          echo "✅ **Status:** Deployment Successful" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Status:** Deployment Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "- **Environment:** Production (AKS)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+
+        SERVICE_IP=$(kubectl get service sentifinance-service -n sentifinance -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "N/A")
+        if [ "$SERVICE_IP" != "N/A" ]; then
+          echo "- **App URL:** http://$SERVICE_IP" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Rollback on Failure
+      if: failure() && steps.smoke_tests.outcome == 'failure'
+      run: |
+        echo "============================================"
+        echo "❌ DEPLOYMENT FAILED - Initiating Rollback"
+        echo "============================================"
+
+        # Get previous revision
+        CURRENT_REVISION=$(kubectl get deployment sentifinance-backend -n sentifinance \
+          -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
+        echo "Current (failed) revision: $CURRENT_REVISION"
+
+        # Rollback to previous version
+        echo "Rolling back to previous revision..."
+        kubectl rollout undo deployment/sentifinance-backend --namespace=sentifinance
+
+        # Wait for rollback to complete
+        echo "Waiting for rollback to complete..."
+        kubectl rollout status deployment/sentifinance-backend \
+          --namespace=sentifinance \
+          --timeout=300s
+
+        # Verify rollback
+        NEW_REVISION=$(kubectl get deployment sentifinance-backend -n sentifinance \
+          -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
+        echo "Rolled back to revision: $NEW_REVISION"
+
+        # Quick health check
+        SERVICE_IP=$(kubectl get service sentifinance-service -n sentifinance \
+          -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        APP_URL="http://$SERVICE_IP"
+
+        echo "Testing rolled-back version..."
+        sleep 10  # Give it a moment
+
+        if curl -f --max-time 30 "$APP_URL/" >/dev/null 2>&1; then
+          echo "✅ Rollback successful - application responding"
+        else
+          echo "❌ Rollback completed but application not responding"
+          echo "Manual intervention required!"
+        fi
+
+        echo ""
+        echo "============================================"
+        echo "Rollback Complete"
+        echo "Failed deployment SHA: ${{ github.sha }}"
+        echo "Please investigate logs and fix issues"
+        echo "============================================"
+
+        # Exit with error to fail the workflow
+        exit 1

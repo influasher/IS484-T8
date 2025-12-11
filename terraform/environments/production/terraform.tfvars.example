@@ -1,0 +1,39 @@
+# Copy this to terraform.tfvars and fill in your actual values
+# terraform.tfvars is gitignored to protect sensitive data
+
+environment         = "production"
+location            = "southeastasia"
+resource_group_name = "sentifinance.azurecr.io"
+project_name        = "sentifinance"
+
+# Azure Resources (actual names from your infrastructure)
+aks_cluster_name       = "sentifinance-k8"
+acr_name               = "sentifinancetwo"  # Actual ACR name
+keyvault_name          = "sentifinance-key-vault"
+postgresql_server_name = "psql-sentifinance-dev"  # In separate subscription
+
+# Storage Account
+storage_account_name = "sentifinanceblob"
+storage_location     = "eastus"  # Different location from main resources
+
+# Virtual Network
+vnet_name          = "sentifinance.azurecr.io-vnet"
+vnet_address_space = ["10.224.0.0/12"]
+
+# Managed Identities
+eso_identity_name = "sentifinance-secrets-identity"
+additional_identity_name = "ua-id-ba65"
+
+# Application Gateway for Containers
+app_gateway_name = "sentifinance-app-gateway"
+
+# PostgreSQL (for documentation - actual DB in separate subscription)
+# Connection string should be stored in Key Vault
+# Format: postgresql+psycopg2://user:password@host:5432/database
+
+tags = {
+  Environment = "production"
+  Project     = "SentiFinance"
+  ManagedBy   = "Terraform"
+  CreatedBy   = "DevOps Team"
+}

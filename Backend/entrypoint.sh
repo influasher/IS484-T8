@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
 
-echo "Running database migrations..."
-.venv/bin/flask db upgrade
+# Database migrations now handled by pre-deployment job (k8s/db-migration-job.yaml)
+# This ensures migrations run before any pods start, preventing crash loops on migration failures
+# echo "Running database migrations..."
+# .venv/bin/flask db upgrade
 
 echo "Starting gunicorn..."
 exec .venv/bin/gunicorn \

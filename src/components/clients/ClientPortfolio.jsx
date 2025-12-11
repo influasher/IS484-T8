@@ -507,6 +507,7 @@ const PortfolioDashboard = ({ clientId }) => {
                   <Stack direction="column" spacing={3} sx={{ width: "100%", minWidth: { xs: 300, sm: "100%" } }}>
                     {hasPerformanceData ? (
                       <LineChart
+                        data-testid="portfolio-line-chart"
                         height={400}
                         xAxis={[
                           {
@@ -672,6 +673,7 @@ const PortfolioDashboard = ({ clientId }) => {
                     }}>
                       <Box sx={{ position: 'relative', display: 'inline-block' }}>
                         <PieChart
+                          data-testid="allocation-pie-chart"
                           series={[
                             {
                               data: allocationWithPercentages,

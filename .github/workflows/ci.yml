@@ -13,7 +13,27 @@ jobs:
   # Backend Job
   backend-test:
     runs-on: ubuntu-latest
-    
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      TEST_DATABASE_URI: postgresql://test_user:test_password@localhost:5432/test_db
+      SECRET_KEY: test-secret-key-for-ci
+      JWT_SECRET_KEY: test-jwt-secret-for-ci
+      
     steps:
     - name: Checkout code
       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
@@ -28,20 +48,18 @@ jobs:
       run: |
         cd Backend
         uv sync
+
+    - name: Wait for Postgres to be ready
+      run: |
+        until pg_isready -h localhost -p 5432 -U test_user; do
+          echo "Waiting for Postgres..."
+          sleep 2
+        done
     
     - name: Run backend tests
       run: |
         cd Backend
-        uv run pytest tests/ --verbose
-    
-    - name: Test Flask app startup
-      env:
-        DATABASE_URI: sqlite:///test.db  # Temporary test database for CI
-        SECRET_KEY: test-secret-key-for-ci
-        JWT_SECRET_KEY: test-jwt-secret-for-ci
-      run: |
-        cd Backend
-        uv run python -c "from app import create_app; app = create_app(); print('Flask app created successfully')"
+        uv run python -m tests.run_tests
 
   # Frontend Job
   frontend-test:
@@ -60,12 +78,20 @@ jobs:
     - name: Install frontend dependencies
       run: npm ci
     
-    - name: Run frontend tests
+    - name: Run frontend tests with coverage
       env:
         REACT_APP_API_BASE_URL: http://localhost:5001
         REACT_APP_ENV: testing
-      run: npm test -- --watchAll=false --passWithNoTests
-    
+      run: npm test -- --watchAll=false --passWithNoTests --coverage --coverageReporters=html --coverageReporters=text
+
+    - name: Upload frontend coverage report
+      uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+      if: always()
+      with:
+        name: frontend-coverage-report
+        path: coverage/
+        retention-days: 7
+
     - name: Build frontend
       env:
         REACT_APP_API_BASE_URL: http://localhost:5001

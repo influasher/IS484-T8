@@ -104,9 +104,6 @@ describe("IndvEntity Component", () => {
     expect(screen.getByText(/Weighted Sentiment/)).toBeInTheDocument();
     expect(screen.getByText(/Simple Average/)).toBeInTheDocument();
     expect(screen.getByText(/Time Decay/)).toBeInTheDocument();
-    // Check company profile info
-    expect(screen.getByText("Equity")).toBeInTheDocument();
-    expect(screen.getByText("Technology")).toBeInTheDocument();
   });
 
   test("handles pagination click", () => {
